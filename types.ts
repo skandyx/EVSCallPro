@@ -20,7 +20,8 @@ export type FeatureId =
   | 'monitoring'
   | 'help'
   | 'module-settings'
-  | 'sites-config';
+  | 'sites-config'
+  | 'system-connection';
 
 export type FeatureCategory = 'Agent' | 'Outbound' | 'Inbound' | 'Sound' | 'Configuration' | 'Supervision & Reporting' | 'Système' | 'Paramètres';
 
@@ -380,4 +381,21 @@ export interface PersonalCallback {
     contactNumber: string;
     scheduledTime: string; // ISO String
     notes: string;
+}
+
+export interface SystemConnectionSettings {
+    database: {
+        host: string;
+        port: number;
+        user: string;
+        password?: string;
+        database: string;
+    };
+    asterisk: {
+        amiHost: string;
+        amiPort: number;
+        amiUser: string;
+        amiPassword?: string;
+        agiPort: number;
+    };
 }

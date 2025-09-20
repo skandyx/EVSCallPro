@@ -82,8 +82,8 @@ const Sidebar: React.FC<SidebarProps> = ({ features, activeFeatureId, onSelectFe
                                     <div className="mt-1 space-y-1 pl-4">
                                         {featuresInCategory
                                             .filter(feature => {
-                                                // Special rule for 'Gestion des Modules'
-                                                if (feature.id === 'module-settings') {
+                                                // Special rules for SuperAdmin-only features
+                                                if (feature.id === 'module-settings' || feature.id === 'system-connection') {
                                                     return currentUser?.role === 'SuperAdmin';
                                                 }
                                                 // Default rule for all other features

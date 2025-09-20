@@ -20,6 +20,7 @@ import HelpCenter from '../components/HelpCenter.tsx';
 import PlanningManager from '../components/PlanningManager.tsx';
 import ModuleSettingsManager from '../components/ModuleSettingsManager.tsx';
 import SiteManager from '../components/SiteManager.tsx';
+import SystemConnectionManager from '../components/SystemConnectionManager.tsx';
 
 export const features: Feature[] = [
     {
@@ -501,6 +502,37 @@ export const features: Feature[] = [
         simplificationTip: {
             title: 'Conseil de Simplification',
             content: "Même si vous n'avez qu'un seul emplacement physique, créez un site 'Principal'. Cela prépare votre configuration pour une future expansion et garantit le bon fonctionnement du Click-to-Call."
+        }
+    },
+    {
+        id: 'system-connection',
+        title: 'Connexion Système',
+        category: 'Paramètres',
+        description: 'Configurer les connexions à la base de données et au serveur de téléphonie Asterisk.',
+        component: SystemConnectionManager,
+        userJourney: {
+            title: 'Parcours: Configuration initiale du système',
+            steps: [
+                "L'administrateur se rend dans 'Connexion Système'.",
+                "Dans la section 'Base de Données', il renseigne l'hôte, le port et les identifiants.",
+                "Il clique sur 'Tester la connexion' et attend l'indicateur de succès.",
+                "Dans la section 'Téléphonie', il configure les accès à l'interface de management (AMI) d'Asterisk.",
+                "Il teste également cette connexion.",
+                "Une fois les deux connexions validées, il sauvegarde les paramètres."
+            ],
+        },
+        specs: {
+            title: 'Spécifications Techniques',
+            points: [
+                "Stocke les informations de connexion de manière sécurisée (dans une application réelle).",
+                "Valide la connectivité réseau et l'authentification pour chaque service.",
+                "Ces paramètres sont utilisés par le backend pour interagir avec les services externes.",
+                "Le port AGI est affiché à titre informatif et correspond à la configuration du backend."
+            ],
+        },
+        simplificationTip: {
+            title: 'Conseil de Simplification',
+            content: "Pour une installation locale (tout sur la même machine), utilisez 'localhost' comme hôte pour les deux services et les ports standards (5432 pour PostgreSQL, 5038 pour l'AMI Asterisk)."
         }
     },
     {

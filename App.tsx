@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { features } from './data/features.ts';
 import { mockData } from './data/mockData.ts';
 // Fix: Added missing types for call history and agent sessions which are now part of the app's state.
-import type { Feature, User, SavedScript, IvrFlow, Campaign, Qualification, QualificationGroup, UserGroup, Trunk, Did, BackupLog, BackupSchedule, SystemLog, VersionInfo, ConnectivityService, Contact, CallHistoryRecord, AgentSession, AudioFile, PlanningEvent, ActivityType, ModuleVisibility, FeatureCategory, FeatureId, Site, PersonalCallback } from './types.ts';
+import type { Feature, User, SavedScript, IvrFlow, Campaign, Qualification, QualificationGroup, UserGroup, Trunk, Did, BackupLog, BackupSchedule, SystemLog, VersionInfo, ConnectivityService, Contact, CallHistoryRecord, AgentSession, AudioFile, PlanningEvent, ActivityType, ModuleVisibility, FeatureCategory, FeatureId, Site, PersonalCallback, SystemConnectionSettings } from './types.ts';
 import Sidebar from './components/Sidebar.tsx';
 import FeatureDetail from './components/FeatureDetail.tsx';
 import LoginScreen from './components/LoginScreen.tsx';
@@ -37,6 +37,8 @@ const App: React.FC = () => {
     const [activityTypes] = useState<ActivityType[]>(mockData.activityTypes);
     const [sites, setSites] = useState<Site[]>(mockData.sites);
     const [personalCallbacks, setPersonalCallbacks] = useState<PersonalCallback[]>(mockData.personalCallbacks);
+    const [systemConnectionSettings, setSystemConnectionSettings] = useState<SystemConnectionSettings>(mockData.systemConnectionSettings);
+
     // Fix: Added state for call history and agent sessions for the reporting dashboard.
     const [callHistory] = useState<CallHistoryRecord[]>(mockData.callHistory);
     const [agentSessions] = useState<AgentSession[]>(mockData.agentSessions);
@@ -364,6 +366,10 @@ const App: React.FC = () => {
         setModuleVisibility(newVisibility);
     };
 
+    const handleSaveSystemConnectionSettings = (settings: SystemConnectionSettings) => {
+        setSystemConnectionSettings(settings);
+    };
+
 
     // --- RENDER LOGIC ---
     if (!currentUser) {
@@ -404,6 +410,7 @@ const App: React.FC = () => {
         activityTypes,
         moduleVisibility,
         features,
+        systemConnectionSettings,
         // Fix: Pass callHistory and agentSessions to feature components.
         callHistory,
         agentSessions,
@@ -439,6 +446,7 @@ const App: React.FC = () => {
         onSavePlanningEvent: handleSavePlanningEvent,
         onDeletePlanningEvent: handleDeletePlanningEvent,
         onSaveVisibilitySettings: handleSaveVisibilitySettings,
+        onSaveSystemConnectionSettings: handleSaveSystemConnectionSettings,
         currentUser
     };
 

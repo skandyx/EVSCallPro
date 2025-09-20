@@ -1,159 +1,261 @@
-# Guide d'Installation du Backend
+# Guide d'Installation Complet pour un VPS Debian
 
-Ce document décrit les étapes pour installer et configurer l'environnement serveur nécessaire au fonctionnement de l'Architecte de Solutions de Centre de Contact.
+Ce document décrit les étapes complètes pour installer, configurer et lancer l'environnement serveur de l'Architecte de Solutions de Centre de Contact sur un serveur de production (VPS) sous Debian ou Ubuntu.
 
 ## Prérequis
 
-*   Un serveur ou une machine virtuelle sous Debian/Ubuntu.
-*   Des droits `sudo` sur la machine.
+- Un VPS (Virtual Private Server) avec un accès root ou un utilisateur avec des droits `sudo`.
+- Le système d'exploitation Debian 11/12 ou Ubuntu 20.04/22.04.
+- Un nom de domaine ou une adresse IP fixe pour votre serveur.
+- Les identifiants de votre Trunk SIP fournis par votre opérateur.
 
-## Étape 1 : Installation de PostgreSQL
+---
 
-PostgreSQL servira de base de données pour stocker toutes les configurations.
+## Vue d'ensemble de l'Installation
 
-1.  **Mettre à jour les paquets et installer PostgreSQL :**
+1.  **Préparation du Système** : Mise à jour du serveur.
+2.  **Configuration du Pare-feu** : Sécurisation des ports.
+3.  **Installation de PostgreSQL** : La base de données.
+4.  **Installation d'Asterisk** : Le moteur de téléphonie.
+5.  **Installation de Node.js & PM2** : L'environnement d'exécution du backend.
+6.  **Déploiement du Backend** : Récupération du code et installation des dépendances.
+7.  **Configuration Finale** : Liaison de tous les services.
+8.  **Lancement de l'Application** : Démarrage du backend en tant que service persistant.
+9.  **Vérification & Dépannage** : Commandes pour s'assurer que tout fonctionne.
+
+---
+
+## Étape 1 : Préparation du Système
+
+Mettez à jour la liste des paquets et les paquets installés sur votre serveur.
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+## Étape 2 : Configuration du Pare-feu (UFW)
+
+Nous allons utiliser `UFW` (Uncomplicated Firewall) pour sécuriser le serveur.
+
+1.  **Installer UFW (s'il n'est pas déjà présent) :**
     ```bash
-    sudo apt update
+    sudo apt install ufw
+    ```
+
+2.  **Autoriser les ports nécessaires :**
+    ```bash
+    # Autoriser SSH (Très important pour ne pas perdre l'accès !)
+    sudo ufw allow OpenSSH
+
+    # Autoriser les ports pour Asterisk (SIP & RTP)
+    sudo ufw allow 5060/udp     # Port SIP standard
+    sudo ufw allow 10000:20000/udp # Plage de ports RTP pour l'audio
+
+    # Autoriser l'accès local pour l'AGI (le backend communique avec Asterisk)
+    # Remplacer 127.0.0.1 par l'IP du serveur si le backend est sur une autre machine
+    sudo ufw allow from 127.0.0.1 to any port 4573 proto tcp
+
+    # (Optionnel) Autoriser le port HTTP/HTTPS si le frontend est sur le même serveur
+    # sudo ufw allow http
+    # sudo ufw allow https
+    ```
+
+3.  **Activer le pare-feu :**
+    ```bash
+    sudo ufw enable
+    ```
+    Confirmez avec `y` lorsque demandé. Vérifiez le statut avec `sudo ufw status`.
+
+## Étape 3 : Installation de la Base de Données (PostgreSQL)
+
+1.  **Installer PostgreSQL :**
+    ```bash
     sudo apt install postgresql postgresql-contrib
     ```
 
-2.  **Se connecter à PostgreSQL et créer la base de données :**
+2.  **Se connecter et créer l'utilisateur et la base de données :**
     ```bash
     sudo -u postgres psql
     ```
 
 3.  **Dans l'invite `psql`, exécutez les commandes suivantes :**
-    *   Créez un utilisateur (remplacez `mon_mot_de_passe_securise` par un mot de passe robuste) :
-        ```sql
-        CREATE USER contact_center_user WITH PASSWORD 'mon_mot_de_passe_securise';
-        ```
-    *   Créez la base de données :
-        ```sql
-        CREATE DATABASE contact_center_db OWNER contact_center_user;
-        ```
-    *   Quittez `psql` :
-        ```sql
-        \q
-        ```
+    *Remplacez `votre_mot_de_passe_securise` par un mot de passe robuste.*
+    ```sql
+    CREATE USER contact_center_user WITH PASSWORD 'votre_mot_de_passe_securise';
+    CREATE DATABASE contact_center_db OWNER contact_center_user;
+    \q
+    ```
 
-## Étape 2 : Installation d'Asterisk
+4.  **Vérifier la création :**
+    ```bash
+    sudo -u postgres psql -c "\l"
+    ```
+    Vous devriez voir `contact_center_db` dans la liste.
 
-Asterisk est le moteur de téléphonie qui gérera les appels SIP.
+## Étape 4 : Installation du Moteur de Téléphonie (Asterisk)
 
 1.  **Installer Asterisk :**
     ```bash
-    sudo apt update
     sudo apt install asterisk
     ```
 
-2.  **Démarrer et activer le service Asterisk :**
+2.  **Vérifier qu'Asterisk est bien en cours d'exécution :**
     ```bash
-    sudo systemctl start asterisk
-    sudo systemctl enable asterisk
+    sudo systemctl status asterisk
     ```
+    Vous devriez voir `active (running)`. Appuyez sur `q` pour quitter.
 
-3.  **Fichiers de configuration clés :**
-    *   `/etc/asterisk/sip.conf`: Pour configurer la connexion à votre Trunk SIP (`alloncloud.com`).
-    *   `/etc/asterisk/extensions.conf`: Pour définir le plan de numérotation (dialplan) qui transférera le contrôle des appels à notre backend Node.js via AGI.
-    *   `/etc/asterisk/manager.conf`: Pour configurer l'accès à l'AMI (Asterisk Manager Interface) si nécessaire.
+## Étape 5 : Installation de l'Environnement Backend (Node.js & PM2)
 
-## Étape 3 : Installation de Node.js
-
-Le backend est une application Node.js. Nous recommandons d'utiliser la version LTS (Long Term Support).
-
-1.  **Installer Node.js (exemple avec NodeSource pour Node.js 20.x) :**
+1.  **Installer Node.js v20.x (LTS recommandée) :**
     ```bash
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
     sudo apt-get install -y nodejs
     ```
 
-2.  **Vérifier l'installation :**
+2.  **Installer PM2**, un gestionnaire de processus pour Node.js qui maintiendra notre application en ligne :
     ```bash
-    node -v  # Doit afficher une version v20.x.x
-    npm -v
+    sudo npm install pm2 -g
     ```
 
-## Étape 4 : Initialisation de la Base de Données
+## Étape 6 : Déploiement du Backend de l'Application
 
-1.  **Assurez-vous d'avoir le fichier `database.sql` à la racine du projet.**
-
-2.  **Exécutez le script pour créer les tables :**
-    Remplacez `contact_center_db` par le nom de votre base de données si vous l'avez changé.
+1.  **Récupérez le code de l'application.** La méthode la plus courante est d'utiliser `git`.
     ```bash
-    psql -U contact_center_user -d contact_center_db -f database.sql
+    # Installer git si nécessaire
+    sudo apt install git
+
+    # Clonez votre projet (remplacez l'URL par celle de votre dépôt)
+    git clone https://votre-depot-git.com/evscallpro.git
+    cd evscallpro/backend
     ```
-    Vous serez invité à entrer le mot de passe de `contact_center_user`.
 
-## Étape 5 : Mise en Place du Backend Node.js
-
-Le code du backend est maintenant disponible dans le dossier `backend/`.
-
-1.  **Naviguez dans le dossier du backend :**
-    ```bash
-    cd backend
-    ```
-    
-2.  **Installer les dépendances :**
+2.  **Installer les dépendances du projet :**
     ```bash
     npm install
     ```
 
-3.  **Créer le fichier de configuration :**
-    Copiez le fichier d'exemple `.env.example` vers un nouveau fichier nommé `.env`.
+3.  **Configurer les variables d'environnement :**
     ```bash
     cp .env.example .env
+    sudo nano .env
     ```
-
-4.  **Modifier le fichier `.env` :**
-    Ouvrez le fichier `.env` avec un éditeur de texte et assurez-vous que les informations de connexion à la base de données (`DB_USER`, `DB_PASSWORD`, `DB_NAME`) correspondent à celles que vous avez créées à l'Étape 1.
+    Modifiez le fichier `.env` avec les informations de votre base de données (le mot de passe que vous avez défini à l'étape 3).
     ```env
-    # Fichier .env
     DB_HOST=localhost
     DB_PORT=5432
     DB_USER=contact_center_user
-    DB_PASSWORD=mon_mot_de_passe_securise
+    DB_PASSWORD=votre_mot_de_passe_securise
     DB_NAME=contact_center_db
-
     AGI_PORT=4573
     ```
 
-## Étape 6 : Lier Asterisk au Backend
+## Étape 7 : Configuration Finale et Liaison des Services
 
-La communication entre Asterisk et Node.js se fait via **AGI (Asterisk Gateway Interface)**. Nous devons configurer Asterisk pour qu'il transfère le contrôle des appels entrants à notre serveur backend.
+### 7.1 Configuration d'Asterisk
 
-1.  **Modifier le plan de numérotation d'Asterisk :**
-    Ouvrez le fichier `/etc/asterisk/extensions.conf` avec des droits `sudo`.
-    ```bash
-    sudo nano /etc/asterisk/extensions.conf
+Modifiez les fichiers de configuration d'Asterisk avec `sudo nano`.
+
+1.  **`/etc/asterisk/sip.conf` - Connexion à votre Trunk SIP**
+    Ajoutez ceci à la fin du fichier, en remplaçant les valeurs par celles de votre fournisseur :
+    ```ini
+    [general]
+    register => VOTRE_LOGIN:VOTRE_MOT_DE_PASSE@VOTRE_FOURNISSEUR_SIP/VOTRE_LOGIN
+
+    [from-trunk](!)
+    type=friend
+    context=from-trunk-context ; Contexte pour les appels entrants
+    host=VOTRE_FOURNISSEUR_SIP
+    insecure=port,invite
+    qualify=yes
+
+    [VOTRE_FOURNISSEUR_SIP](from-trunk)
+    defaultuser=VOTRE_LOGIN
+    secret=VOTRE_MOT_DE_PASSE
+    fromuser=VOTRE_LOGIN
+    fromdomain=VOTRE_FOURNISSEUR_SIP
     ```
 
-2.  **Ajoutez le contexte suivant à la fin du fichier.** Ce contexte interceptera les appels entrants et les enverra à notre script AGI. Assurez-vous d'adapter `[from-sip-provider]` au nom du contexte utilisé par votre Trunk SIP.
+2.  **`/etc/asterisk/manager.conf` - Accès pour l'API (Supervision)**
+    Modifiez ce fichier pour permettre au CRM de communiquer avec Asterisk.
     ```ini
-    [from-sip-provider]
+    [general]
+    enabled = yes
+    port = 5038
+    bindaddr = 0.0.0.0
+
+    [ami_user] ; Doit correspondre à ce qui est configuré dans le CRM
+    secret = ami_password ; Doit correspondre
+    deny=0.0.0.0/0.0.0.0
+    permit=127.0.0.1/255.255.255.0 ; Autorise uniquement le serveur local à se connecter
+    read = all
+    write = all
+    ```
+
+3.  **`/etc/asterisk/extensions.conf` - Redirection des appels vers le Backend**
+    Ajoutez ce contexte. Il doit correspondre au `context` défini dans `sip.conf`.
+    ```ini
+    [from-trunk-context]
     exten => _X.,1,Answer()
     exten => _X.,n,Verbose(1, "--- Appel transféré au script AGI Node.js ---")
-    ; Pointe vers le serveur AGI du backend sur le port 4573
     exten => _X.,n,AGI(agi://127.0.0.1:4573)
     exten => _X.,n,Hangup()
     ```
-    *Note : Si votre backend tourne sur une machine différente d'Asterisk, remplacez `127.0.0.1` par l'adresse IP du serveur backend.*
 
-3.  **Recharger la configuration d'Asterisk :**
+4.  **Appliquer les changements :**
     ```bash
-    sudo asterisk -rx "dialplan reload"
+    sudo asterisk -rx "core reload"
     ```
 
-## Étape 7 : Lancer le Système et Tester
+### 7.2 Initialisation du Schéma de la Base de Données
 
-1.  **Lancez le serveur backend :**
-    Dans le répertoire `backend/`, exécutez :
+En supposant qu'un fichier `database.sql` existe à la racine du projet pour créer les tables nécessaires.
+
+```bash
+# Assurez-vous d'être dans le dossier racine du projet 'evscallpro'
+# psql -U contact_center_user -d contact_center_db -f ./database.sql
+# Remarque : Le fichier database.txt fourni est vide. Cette étape suppose un fichier de schéma SQL.
+```
+
+## Étape 8 : Lancement de l'Application en tant que Service
+
+1.  **Démarrez le backend avec PM2 :**
+    *Depuis le dossier `backend/`*
     ```bash
-    npm start
+    pm2 start server.js --name evscallpro-backend
     ```
-    Vous devriez voir le message `AGI Server listening on port 4573`.
 
-2.  **Peuplez la base de données :**
-    Assurez-vous qu'au moins un flux SVI existe dans la table `ivr_flows`. Vous pouvez l'insérer manuellement via `psql` ou utiliser un script si disponible. Le backend est configuré pour récupérer le tout premier flux SVI qu'il trouve pour ce test initial.
+2.  **Configurez PM2 pour démarrer automatiquement au redémarrage du serveur :**
+    ```bash
+    pm2 startup
+    ```
+    Copiez-collez et exécutez la commande que PM2 vous donne.
 
-3.  **Passez un appel :**
-    Appelez l'un de vos numéros configurés sur votre Trunk SIP. Surveillez la console d'Asterisk (`sudo asterisk -rvvv`) et la console où tourne votre backend Node.js. Vous devriez voir les logs de l'exécution du script AGI.
+3.  **Sauvegardez la configuration de PM2 :**
+    ```bash
+    pm2 save
+    ```
+
+## Étape 9 : Vérification et Dépannage
+
+1.  **Vérifier le statut de tous les services :**
+    ```bash
+    sudo systemctl status postgresql
+    sudo systemctl status asterisk
+    pm2 status
+    ```
+    Tous devraient être `active` ou `online`.
+
+2.  **Consulter les journaux (logs) en cas de problème :**
+    ```bash
+    # Logs du backend
+    pm2 logs evscallpro-backend
+
+    # Logs d'Asterisk
+    sudo journalctl -u asterisk -f
+
+    # Console live d'Asterisk (très utile pour voir les appels en direct)
+    sudo asterisk -rvvv
+    ```
+
+Votre application est maintenant installée, configurée et fonctionne de manière persistante sur votre VPS. Vous pouvez maintenant configurer vos Trunks, Numéros et SVI depuis l'interface web.

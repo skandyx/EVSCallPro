@@ -22,7 +22,8 @@ import type {
     ActivityType,
     PlanningEvent,
     Site,
-    PersonalCallback
+    PersonalCallback,
+    SystemConnectionSettings
 } from '../types.ts';
 
 const sites: Site[] = [
@@ -433,6 +434,23 @@ const personalCallbacks: PersonalCallback[] = [
     }
 ];
 
+const systemConnectionSettings: SystemConnectionSettings = {
+    database: {
+        host: 'localhost',
+        port: 5432,
+        user: 'contact_center_user',
+        password: 'your_secure_password',
+        database: 'contact_center_db',
+    },
+    asterisk: {
+        amiHost: 'localhost',
+        amiPort: 5038,
+        amiUser: 'ami_user',
+        amiPassword: 'ami_password',
+        agiPort: 4573,
+    },
+};
+
 
 export const mockData = {
     sites,
@@ -455,5 +473,6 @@ export const mockData = {
     audioFiles,
     activityTypes,
     planningEvents,
-    personalCallbacks
+    personalCallbacks,
+    systemConnectionSettings
 };
