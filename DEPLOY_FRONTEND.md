@@ -15,7 +15,7 @@ Nous utiliserons **Nginx** comme serveur web, ce qui est la solution standard, p
 ## Le Processus en 2 Étapes Clés
 
 1.  **"Compiler" l'application React** : Le code source de votre interface (les fichiers `.tsx`) doit être transformé en un ensemble de fichiers statiques (HTML, CSS, JavaScript) que n'importe quel navigateur peut comprendre. C'est ce qu'on appelle le "build".
-2.  **Configurer Nginx pour servir ces fichiers** : Nous allons installer Nginx et lui dire de montrer ces fichiers statiques à quiconque visite l'adresse IP de votre serveur.
+2.  **Configurer Nginx pour servir ces fichiers ET servir de proxy pour l'API** : Nous allons installer Nginx et lui dire de montrer les fichiers statiques à quiconque visite l'adresse IP de votre serveur, et de rediriger les appels API vers notre backend Node.js.
 
 ---
 
@@ -57,12 +57,12 @@ Cette étape transforme votre code de développement en fichiers optimisés pour
 3.  **Installez Nginx** :
     ```bash
     sudo apt update
-    sudo apt install nginx
+    sudo apt install -y nginx
     ```
 
 4.  **Configurez le Pare-feu** pour autoriser le trafic web :
     ```bash
-    sudo ufw allow 'Nginx HTTP'
+    sudo ufw allow 'Nginx Full'
     sudo ufw reload
     ```
 
@@ -79,14 +79,24 @@ Cette étape transforme votre code de développement en fichiers optimisés pour
         listen 80;
         server_name votre_adresse_ip_vps;
 
-        # Chemin vers les fichiers que vous avez transférés
-        root /var/www/evscallpro;
-        index index.html;
+        # --- Partie API Backend ---
+        # Toutes les requêtes commençant par /api/ sont redirigées
+        # vers le serveur backend Node.js qui écoute sur le port 3001.
+        location /api/ {
+            proxy_pass http://127.0.0.1:3001;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
 
+        # --- Partie Frontend React ---
+        # Toutes les autres requêtes sont servies par les fichiers statiques.
         location / {
-            # Cette ligne est CRUCIALE pour les applications React.
-            # Elle assure que toutes les URL sont gérées par React Router
-            # et évite les erreurs 404 lors du rafraîchissement de la page.
+            root /var/www/evscallpro;
+            index index.html;
             try_files $uri /index.html;
         }
 
@@ -96,10 +106,16 @@ Cette étape transforme votre code de développement en fichiers optimisés pour
     }
     ```
 
+    **Explication de cette configuration :**
+    - `location /api/ { ... }` : Ce bloc intercepte toutes les requêtes dont l'URL commence par `/api/` (par exemple, `/api/users`). Au lieu de chercher un fichier sur le disque, Nginx transmet la requête au serveur Node.js qui tourne localement sur le port 3001. C'est le **reverse proxy**.
+    - `location / { ... }` : Ce bloc intercepte **toutes les autres requêtes**. Il sert les fichiers de votre interface React. La ligne `try_files` est essentielle pour que le routage interne de React fonctionne correctement.
+
+
 7.  **Activez la configuration** en créant un lien symbolique :
     ```bash
     sudo ln -s /etc/nginx/sites-available/evscallpro /etc/nginx/sites-enabled/
     ```
+    *Il est conseillé de supprimer le site par défaut : `sudo rm /etc/nginx/sites-enabled/default`*
 
 8.  **Vérifiez que la syntaxe de votre configuration est correcte** :
     ```bash
@@ -120,8 +136,9 @@ Ouvrez votre navigateur web et rendez-vous à l'adresse de votre serveur :
 
 `http://votre_adresse_ip_vps`
 
-Vous devriez maintenant voir l'écran de connexion de votre application "EVSCallPro".
+Vous devriez maintenant voir l'écran de connexion de votre application "EVSCallPro". Les appels à l'API fonctionneront car ils seront correctement redirigés par Nginx.
 
 ### Dépannage
-- **Page blanche ou erreur 404** : Vérifiez le chemin (`root`) dans votre fichier de configuration Nginx. Assurez-vous qu'il pointe bien vers le dossier contenant `index.html`. Consultez les logs d'erreur de Nginx avec `sudo tail -f /var/log/nginx/evscallpro.error.log`.
+- **Erreur 502 Bad Gateway** : Cela signifie que Nginx ne parvient pas à joindre votre backend. Vérifiez que le service backend est bien en cours d'exécution avec `pm2 status`. Consultez les logs de Nginx `sudo tail -f /var/log/nginx/evscallpro.error.log`.
+- **Page blanche ou erreur 404** : Vérifiez le chemin (`root`) dans votre configuration Nginx. Assurez-vous qu'il pointe bien vers le dossier contenant `index.html`.
 - **Le site ne charge pas du tout** : Vérifiez que Nginx est bien en cours d'exécution (`sudo systemctl status nginx`) et que votre pare-feu autorise le port 80 (`sudo ufw status`).

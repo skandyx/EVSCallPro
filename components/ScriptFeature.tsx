@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
-// Fix: added .ts extension to import path
 import type { Feature, SavedScript, Page } from '../types.ts';
-// Fix: added .tsx extension to import path
 import ScriptBuilder from './ScriptBuilder.tsx';
-// Fix: added .tsx extension to import path
 import AgentPreview from './AgentPreview.tsx';
-// Fix: added .tsx extension to import path
 import { EditIcon, DuplicateIcon, TrashIcon, PlusIcon } from './Icons.tsx';
 
 interface ScriptFeatureProps {
@@ -64,8 +60,6 @@ const ScriptFeature: React.FC<ScriptFeatureProps> = ({
     }
 
     if (view === 'editor' && activeScript) {
-        // Fix: Removed the `savedScripts` prop from the `ScriptBuilder` component.
-        // This prop is not defined in `ScriptBuilderProps` and was causing a TypeScript error.
         return (
             <ScriptBuilder
                 script={activeScript}

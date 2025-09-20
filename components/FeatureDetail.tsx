@@ -1,7 +1,5 @@
 import React from 'react';
-// Fix: added .ts extension to import path
 import type { Feature } from '../types.ts';
-// Fix: added .tsx extension to import path
 import { UserJourneyIcon, SpecsIcon, LightbulbIcon } from './Icons.tsx';
 
 interface FeatureDetailProps {

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { Feature, Qualification, QualificationGroup } from '../types.ts';
 import { PlusIcon, EditIcon, TrashIcon, ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './Icons.tsx';
@@ -251,18 +252,18 @@ interface QualificationsManagerProps {
     qualificationGroups: QualificationGroup[];
     onSaveQualification: (qualification: Qualification) => void;
     onDeleteQualification: (qualificationId: string) => void;
-    onSaveQualificationGroup: (group: QualificationGroup) => void;
+    // Fix: Updated prop signature to correctly handle saving group name and assigned qualifications together.
+    onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => void;
     onDeleteQualificationGroup: (groupId: string) => void;
-    onUpdateGroupQualifications: (groupId: string, assignedQualIds: string[]) => void;
 }
 
-const QualificationsManager: React.FC<QualificationsManagerProps> = ({ feature, qualifications, qualificationGroups, onSaveQualification, onDeleteQualification, onSaveQualificationGroup, onDeleteQualificationGroup, onUpdateGroupQualifications }) => {
+const QualificationsManager: React.FC<QualificationsManagerProps> = ({ feature, qualifications, qualificationGroups, onSaveQualification, onDeleteQualification, onSaveQualificationGroup, onDeleteQualificationGroup }) => {
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState<QualificationGroup | null>(null);
 
+    // Fix: Updated handler to pass both group and assigned IDs, simplifying logic and removing redundant calls.
     const handleSaveGroup = (group: QualificationGroup, assignedQualIds: string[]) => {
-        onSaveQualificationGroup(group);
-        onUpdateGroupQualifications(group.id, assignedQualIds);
+        onSaveQualificationGroup(group, assignedQualIds);
         setIsGroupModalOpen(false);
     };
     

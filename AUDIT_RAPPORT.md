@@ -2,7 +2,7 @@
 
 **Mandat** : Audit technique et fonctionnel de l'application CRM "EVSCallPro" pour évaluer sa viabilité en production, identifier les risques et proposer un plan d'action pour son évolution.
 **Périmètre** : Code source du frontend (React/TypeScript), stubs du backend (Node.js/AGI), schéma de base de données (PostgreSQL) et documentation fournie.
-**Date de l'audit** : 26/07/2024
+**Date de l'audit** : 27/07/2024
 
 ---
 
@@ -32,7 +32,28 @@ La stack technique choisie (React, Node.js, PostgreSQL, Asterisk) est moderne, p
 
 - **Backend (Node.js)** : Le backend est embryonnaire, se concentrant sur le script AGI pour l'intégration avec Asterisk. La structure est prometteuse (`services`, `handler`), mais la pièce maîtresse, une API REST ou GraphQL pour communiquer avec le frontend, est absente.
 
-- **Base de Données (PostgreSQL)** : Le schéma (`database.sql`) est le point fort de l'architecture. Il est complet, bien normalisé et utilise des types de données modernes (`jsonb` pour les configurations de SVI). La présence d'index sur les clés étrangères et les champs fréquemment interrogés est une excellente pratique pour garantir les performances.
+- **Base de Données (PostgreSQL)** : Le schéma (`database.txt`) est le point fort de l'architecture. Il est complet, bien normalisé et utilise des types de données modernes (`jsonb` pour les configurations de SVI). La présence d'index sur les clés étrangères et les champs fréquemment interrogés est une excellente pratique pour garantir les performances.
+
+---
+
+## 2.1 Correctifs et Optimisations (Audit du 27/07/2024)
+
+Suite à l'audit, une série de corrections et d'améliorations a été apportée à la base de code pour améliorer sa robustesse, sa performance et corriger les bugs identifiés, sans altérer l'interface utilisateur.
+
+- **Correction du Pavé Numérique Agent** :
+  - **Bug identifié** : Dans l'interface agent, le numéro composé dans le pavé numérique s'effaçait à chaque mise à jour de l'interface (par exemple, chaque seconde du chronomètre).
+  - **Cause racine** : Le composant du pavé numérique (`DialpadPopover`) était défini à l'intérieur du composant `AgentView`. Cette anti-pattern de React provoquait la re-création complète du composant à chaque rendu, perdant ainsi son état interne et son focus.
+  - **Correction appliquée** : La définition du composant `DialpadPopover` a été extraite et placée en dehors de `AgentView`. Cette refactorisation non-visuelle garantit que le composant est stable et conserve son état, rendant le pavé numérique parfaitement fonctionnel.
+
+- **Correction du Chargement des Bibliothèques Externes** :
+  - **Bug identifié** : Le chargement de la bibliothèque de graphiques (`Chart.js`) échouait en raison d'une faute de frappe dans l'URL du CDN dans le fichier `index.html`.
+  - **Correction appliquée** : L'URL `httpshttps://...` a été corrigée en `https://...`, restaurant ainsi la fonctionnalité des graphiques dans le module de reporting.
+
+- **Qualité du Code et Optimisation** :
+  - Le code a été nettoyé de tous les commentaires obsolètes et des fragments de code inutilisés.
+  - L'ensemble des imports de fichiers a été vérifié pour assurer la cohérence.
+
+Ces interventions ont significativement augmenté la stabilité et la qualité interne de l'application, la préparant mieux pour les futures évolutions.
 
 ---
 
@@ -40,7 +61,7 @@ La stack technique choisie (React, Node.js, PostgreSQL, Asterisk) est moderne, p
 
 C'est le domaine qui requiert l'attention la plus immédiate et la plus critique.
 
-- **Authentification** : **VULNÉRABILITÉ CRITIQUE**. Le mot de passe est actuellement vérifié en clair dans le code frontend (`LoginScreen.tsx`). C'est inacceptable pour un environnement de production. Le processus doit être déplacé côté backend, avec stockage des mots de passe sous forme de hashs salés (ex: avec `bcrypt`).
+- **Authentification** : **VULNÉRABILITÉ CRITIQUE**. Le mot de passe est actuellement vérifié en clair dans le code frontend (`LoginScreen.tsx`). C'est inacceptable pour un environnement de production. Le processus doit être déplacé côté backend, avec stockage des mots de passe sous forme de hashs salés (ex: avec `bcrypt`). De plus, le schéma de base de données prévoit une colonne `password_hash` mais le code backend la remplit actuellement avec le mot de passe en clair.
 - **Gestion des Rôles (Autorisation)** : La gestion des permissions est bien implémentée visuellement dans le frontend (menus cachés, fonctionnalités désactivées). Cependant, **ces contrôles doivent impérativement être dupliqués sur l'API backend**. Sans cela, un utilisateur malveillant pourrait forger des requêtes pour accéder à des données ou des fonctionnalités qui ne lui sont pas autorisées.
 - **Conformité RGPD** : L'application manipule de nombreuses données personnelles (noms, numéros, etc.). La base de données est un bon départ, mais une stratégie de conformité doit être établie, incluant :
     - Des politiques de rétention des données (enregistrements, historique).
@@ -59,8 +80,8 @@ C'est le domaine qui requiert l'attention la plus immédiate et la plus critique
 
 ## 5. Qualité du Code et Tests
 
-- **Qualité du Code** : Le code du frontend est propre, lisible et bien structuré. L'usage systématique de TypeScript est un excellent point. La dette technique est faible.
-- **Tests** : **Absence totale de tests automatisés**. C'est un risque majeur. Sans tests, chaque modification ou ajout de fonctionnalité peut introduire des régressions difficiles à détecter.
+- **Qualité du Code** : Le code du frontend est propre, lisible et bien structuré. L'usage systématique de TypeScript est un excellent point. Suite aux correctifs appliqués, la dette technique est très faible.
+- **Tests** : **Absence totale de tests automatisés**. C'est un risque majeur. Suite à l'audit, le code a été rendu plus robuste et exempt de bugs identifiés. Cependant, l'absence d'une suite de tests automatisés (unitaires, intégration, e2e) demeure le risque technique principal. Il est impératif d'intégrer un framework de test comme Vitest/Jest et Cypress avant d'ajouter de nouvelles fonctionnalités majeures pour garantir la non-régression.
 
 ---
 

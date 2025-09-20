@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-// Fix: added .ts extension to import path
 import type { Feature, User, UserRole, Campaign, UserGroup, Site } from '../types.ts';
-// Fix: added .tsx extension to import path
 import { UsersIcon, PlusIcon, EditIcon, TrashIcon } from './Icons.tsx';
+import ImportUsersModal from './ImportUsersModal.tsx';
 
 const generatePassword = (): string => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    const length = Math.floor(Math.random() * 5) + 4; // 4 to 8 chars
+    const length = 8;
     let password = '';
     for (let i = 0; i < length; i++) {
         password += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -34,12 +33,14 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
     const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(() => 
         user ? userGroups.filter(g => g.memberIds.includes(user.id)).map(g => g.id) : []
     );
-
+    
+    // Bug fix: Ensure form data updates when the user prop changes (e.g., editing another user)
     useEffect(() => {
-        if (user.id.startsWith('new-') && !formData.password) {
+        setFormData(user);
+        if (user.id.startsWith('new-') && !user.password) {
             setFormData(prev => ({ ...prev, password: generatePassword() }));
         }
-    }, [user.id, formData.password]);
+    }, [user]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -225,6 +226,43 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
     );
 };
 
+// --- MODAL: Generate Users in Bulk ---
+interface GenerateModalProps {
+    onConfirm: (count: number) => void;
+    onClose: () => void;
+}
+
+const GenerateModal: React.FC<GenerateModalProps> = ({ onConfirm, onClose }) => {
+    const [count, setCount] = useState(10);
+    return (
+        <div className="fixed inset-0 bg-slate-800 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                <div className="p-6">
+                    <h3 className="text-lg font-medium text-slate-900">Générer des utilisateurs en masse</h3>
+                    <div className="mt-4">
+                        <label htmlFor="user-count" className="block text-sm font-medium text-slate-700">
+                            Nombre d'utilisateurs à créer
+                        </label>
+                        <input
+                            type="number"
+                            id="user-count"
+                            value={count}
+                            onChange={e => setCount(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))}
+                            min="1"
+                            max="99"
+                            className="mt-1 block w-full p-2 border border-slate-300 rounded-md"
+                        />
+                    </div>
+                </div>
+                <div className="bg-slate-50 px-4 py-3 flex justify-end gap-2">
+                    <button onClick={onClose} className="border border-slate-300 bg-white px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-50">Annuler</button>
+                    <button onClick={() => onConfirm(count)} className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Confirmer</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface UserManagerProps {
     feature: Feature;
     users: User[];
@@ -233,13 +271,16 @@ interface UserManagerProps {
     sites: Site[];
     onSaveUser: (user: User, groupIds: string[]) => void;
     onDeleteUser: (userId: string) => void;
-    onGenerateUsers: (count: number) => void;
+    onGenerateUsers: (users: User[]) => void;
+    onImportUsers: (users: User[]) => void;
     currentUser: User;
 }
 
-const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, userGroups, sites, onSaveUser, onDeleteUser, onGenerateUsers, currentUser }) => {
+const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, userGroups, sites, onSaveUser, onDeleteUser, onGenerateUsers, onImportUsers, currentUser }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isGeneratingModalOpen, setIsGeneratingModalOpen] = useState(false);
 
   const usersToDisplay = useMemo(() => {
     if (currentUser.role === 'SuperAdmin') {
@@ -276,18 +317,42 @@ const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, us
   };
   
   const handleImport = () => {
-    alert("Fonctionnalité d'importation CSV. Dans une application réelle, cela ouvrirait une boîte de dialogue pour sélectionner un fichier à téléverser.");
+    setIsImportModalOpen(true);
   };
+  
+  const handleConfirmGeneration = (count: number) => {
+    const newUsers: User[] = [];
+    const existingLoginIds = new Set(users.map(u => u.loginId));
+    
+    const highestAgentId = users
+      .map(u => parseInt(u.loginId, 10))
+      .filter(id => !isNaN(id) && id >= 1000 && id < 9000)
+      .reduce((max, current) => Math.max(max, current), 1000);
 
-  const handleMassGenerateClick = () => {
-    const countStr = prompt("Combien d'utilisateurs souhaitez-vous créer ? (max 100)", "10");
-    if (countStr === null) return;
-    const count = parseInt(countStr, 10);
-    if (isNaN(count) || count <= 0 || count > 100) {
-        alert("Veuillez entrer un nombre valide entre 1 et 100.");
-        return;
+    let nextLoginId = highestAgentId + 1;
+
+    for (let i = 0; i < count; i++) {
+        while (existingLoginIds.has(nextLoginId.toString())) {
+            nextLoginId++;
+        }
+        const loginId = nextLoginId.toString();
+        existingLoginIds.add(loginId);
+        
+        newUsers.push({
+            id: `new-gen-${Date.now() + i}`,
+            loginId: loginId,
+            firstName: `Agent`,
+            lastName: `${loginId}`,
+            email: ``,
+            role: 'Agent',
+            isActive: true,
+            campaignIds: [],
+            password: generatePassword(),
+            siteId: null,
+        });
     }
-    onGenerateUsers(count);
+    onGenerateUsers(newUsers);
+    setIsGeneratingModalOpen(false);
   };
 
   const getDeletionState = (user: User): { canDelete: boolean; tooltip: string } => {
@@ -309,6 +374,8 @@ const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, us
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       {isModalOpen && editingUser && <UserModal user={editingUser} users={users} campaigns={campaigns} userGroups={userGroups} sites={sites} currentUser={currentUser} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
+      {isImportModalOpen && <ImportUsersModal onClose={() => setIsImportModalOpen(false)} onImport={onImportUsers} existingUsers={users} />}
+      {isGeneratingModalOpen && <GenerateModal onClose={() => setIsGeneratingModalOpen(false)} onConfirm={handleConfirmGeneration} />}
       <header>
         <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>
         <p className="mt-2 text-lg text-slate-600">{feature.description}</p>
@@ -319,7 +386,7 @@ const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, us
           <h2 className="text-2xl font-semibold text-slate-800">Utilisateurs</h2>
           <div className="flex flex-wrap gap-2">
             <button onClick={handleImport} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg shadow-sm transition-colors">Importer (CSV)</button>
-             <button onClick={handleMassGenerateClick} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg shadow-sm transition-colors">Générer en masse</button>
+             <button onClick={() => setIsGeneratingModalOpen(true)} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg shadow-sm transition-colors">Générer en masse</button>
             <button onClick={handleAddNew} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors inline-flex items-center">
               <PlusIcon className="w-5 h-5 mr-2" />
               Ajouter un utilisateur

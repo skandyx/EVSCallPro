@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// Fix: added .ts extension to import path
 import type { SavedScript, ScriptBlock, DisplayCondition, Page, ButtonAction } from '../types.ts';
 
 interface AgentPreviewProps {

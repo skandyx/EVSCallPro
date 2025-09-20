@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Feature, CallHistoryRecord, User, Campaign, Qualification, AgentSession } from '../types.ts';
-// Fix: Changed ArrowDownTrayIcon to the available ArrowUpTrayIcon.
 import { ArrowUpTrayIcon, TimeIcon, PhoneIcon, ChartBarIcon } from './Icons.tsx';
 
 // Déclaration pour TypeScript afin de reconnaître les variables globales injectées par les scripts CDN
@@ -574,7 +573,6 @@ const ReportingDashboard: React.FC<ReportingDashboardProps> = ({ feature, callHi
                     <p className="mt-2 text-lg text-slate-600">{feature.description}</p>
                 </div>
                  <button onClick={handleExportPDF} className="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-lg shadow-md inline-flex items-center">
-                    {/* Fix: Replaced non-existent ArrowDownTrayIcon with ArrowUpTrayIcon. */}
                     <ArrowUpTrayIcon className="w-5 h-5 mr-2"/>
                     Exporter en PDF
                 </button>

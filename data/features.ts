@@ -519,171 +519,49 @@ export const features: Feature[] = [
                 "Il clique sur 'Tester la connexion' et attend l'indicateur de succès.",
                 "Dans la section 'Téléphonie', il configure les accès à l'interface de management (AMI) d'Asterisk.",
                 "Il teste également cette connexion.",
-                "Une fois les deux connexions validées, il sauvegarde les paramètres."
+                "Une fois les deux connexions validées, il sauvegarde les paramètres et le système est opérationnel."
             ],
         },
         specs: {
             title: 'Spécifications Techniques',
             points: [
-                "Stocke les informations de connexion de manière sécurisée (dans une application réelle).",
-                "Valide la connectivité réseau et l'authentification pour chaque service.",
-                "Ces paramètres sont utilisés par le backend pour interagir avec les services externes.",
-                "Le port AGI est affiché à titre informatif et correspond à la configuration du backend."
+                "Les mots de passe sont stockés de manière chiffrée et ne sont jamais affichés en clair.",
+                "Les tests de connexion tentent une authentification réelle avec les identifiants fournis.",
+                "Les modifications ne sont appliquées qu'après avoir cliqué sur 'Enregistrer les modifications'.",
+                "Ces paramètres sont critiques et ne devraient être modifiés que par un administrateur système."
             ],
         },
         simplificationTip: {
             title: 'Conseil de Simplification',
-            content: "Pour une installation locale (tout sur la même machine), utilisez 'localhost' comme hôte pour les deux services et les ports standards (5432 pour PostgreSQL, 5038 pour l'AMI Asterisk)."
-        }
-    },
-    {
-        id: 'maintenance',
-        title: 'Maintenance & Sauvegardes',
-        category: 'Paramètres',
-        description: 'Effectuez des sauvegardes de la configuration et gérez la maintenance du système.',
-        component: MaintenanceManager,
-        userJourney: {
-            title: 'Parcours: Planifier des sauvegardes automatiques',
-            steps: [
-                "L'administrateur système se rend dans la section 'Maintenance'.",
-                "Dans le panneau 'Planification', il choisit la fréquence 'Quotidienne'.",
-                "Il règle l'heure de la sauvegarde à 02:00, une heure de faible activité.",
-                "Il sauvegarde la nouvelle planification.",
-                "Le système effectuera maintenant une sauvegarde complète de la configuration toutes les nuits."
-            ],
-        },
-        specs: {
-            title: 'Spécifications',
-            points: [
-                "Sauvegarde manuelle en un clic.",
-                "Planification de sauvegardes automatiques (quotidienne, hebdomadaire).",
-                "Historique des sauvegardes avec leur statut (réussite/échec).",
-                "Les sauvegardes incluent toute la configuration (utilisateurs, SVI, scripts, etc.)."
-            ],
-        },
-        simplificationTip: {
-            title: 'Astuce',
-            content: "Même avec des sauvegardes automatiques, il est conseillé de lancer une sauvegarde manuelle avant d'effectuer une modification majeure de la configuration, comme la refonte d'un SVI complexe."
-        }
-    },
-    {
-        id: 'module-settings',
-        title: 'Gestion des Modules',
-        category: 'Paramètres',
-        description: 'Activez ou désactivez les modules principaux de l\'application pour simplifier l\'interface.',
-        component: ModuleSettingsManager,
-        userJourney: {
-            title: 'Parcours: Simplifier l\'interface pour un nouveau client',
-            steps: [
-                "L'administrateur se rend dans 'Gestion des Modules'.",
-                "Le client n'a pas besoin de la gestion des appels entrants au début.",
-                "Il désactive le module 'Inbound' et 'Sound' en cliquant sur les interrupteurs.",
-                "Immédiatement, les catégories correspondantes disparaissent du menu principal.",
-                "L'interface est plus simple pour le client, et les modules peuvent être réactivés plus tard."
-            ],
-        },
-        specs: {
-            title: 'Spécifications',
-            points: [
-                "Permet d'activer/désactiver les catégories principales du menu.",
-                "Les changements sont appliqués instantanément à la barre latérale.",
-                "La catégorie 'Paramètres' ne peut pas être désactivée.",
-                "Les choix sont sauvegardés localement (dans une application réelle, ils seraient sauvegardés par utilisateur)."
-            ],
-        },
-        simplificationTip: {
-            title: 'Astuce',
-            content: "Utilisez cette fonctionnalité pour adapter l'interface au rôle ou au niveau de compétence de l'utilisateur. Pour un superviseur uniquement intéressé par les rapports, vous pourriez désactiver tous les modules de configuration."
-        }
-    },
-    {
-        id: 'monitoring',
-        title: 'Monitoring Système',
-        category: 'Système',
-        description: 'Surveillez l\'état de santé des services et les ressources système.',
-        component: MonitoringDashboard,
-        userJourney: {
-            title: 'Parcours: Diagnostiquer un ralentissement',
-            steps: [
-                "Des agents signalent des lenteurs. L'admin va dans 'Monitoring Système'.",
-                "Il voit que l'indicateur d'état est 'Dégradé' et que la charge CPU est à 95%.",
-                "Il consulte le journal des événements et voit de nombreuses erreurs liées à une API externe.",
-                "Il utilise le 'Testeur de Connectivité' sur cette API, qui confirme une latence très élevée.",
-                "Il a identifié la cause du problème comme étant externe et peut communiquer en conséquence."
-            ],
-        },
-        specs: {
-            title: 'Spécifications',
-            points: [
-                "Monitoring en temps réel des ressources: CPU, RAM, Disque, Latence.",
-                "Indicateur global de santé du système (Opérationnel, Dégradé, Panne).",
-                "Journal des événements système filtrable par niveau (Info, Warning, Erreur).",
-                "Outil de test de connectivité vers les services externes (bases de données, APIs...)."
-            ],
-        },
-        simplificationTip: {
-            title: 'Astuce',
-            content: "L'indicateur global de santé est le point de départ. S'il n'est pas vert, les autres panneaux vous aideront à trouver la cause. S'il est vert, le problème vient probablement d'ailleurs que l'infrastructure de base."
+            content: "Utilisez le bouton 'Tester la connexion' pour chaque section après avoir entré les informations. Cela vous assure que les paramètres sont corrects avant de les sauvegarder et d'activer la connexion."
         }
     },
     {
         id: 'api-docs',
         title: 'Documentation API',
-        category: 'Système',
-        description: 'Consultez la documentation technique complète de l\'API REST pour les intégrations.',
+        category: 'Paramètres',
+        description: 'Consultez la documentation complète de l\'API pour l\'intégration et le développement.',
         component: ApiDocs,
         userJourney: {
-            title: 'Parcours: Intégrer un outil externe',
+            title: 'Parcours: Consulter un endpoint',
             steps: [
-                "Un développeur a besoin de créer un utilisateur via une application externe.",
-                "Le SuperAdmin lui donne accès à la 'Documentation API'.",
-                "Le développeur trouve la section 'Utilisateurs' et l'endpoint 'POST /api/users'.",
-                "Il consulte l'exemple de corps de requête et de réponse.",
-                "Il peut maintenant construire sa requête pour communiquer avec l'application."
+                "Le SuperAdmin se rend dans 'Paramètres' > 'Documentation API'.",
+                "Il navigue jusqu'à la section 'Utilisateurs'.",
+                "Il clique sur l'endpoint 'GET /api/users' pour voir sa description.",
+                "Il examine les exemples de corps de requête et de réponse pour comprendre comment l'utiliser."
             ],
         },
         specs: {
             title: 'Spécifications Techniques',
             points: [
-                "Documentation complète de tous les endpoints de l'API REST.",
-                "Exemples de requêtes et de réponses pour chaque endpoint.",
-                "Descriptions claires des paramètres et des corps de requête attendus.",
-                "Accessible uniquement par les utilisateurs 'SuperAdmin'."
+                "L'accès à cette page est strictement réservé aux utilisateurs avec le rôle 'SuperAdmin'.",
+                "La documentation est en lecture seule.",
+                "Fournit des exemples clairs pour chaque endpoint disponible dans l'API."
             ],
         },
         simplificationTip: {
             title: 'Conseil de Simplification',
-            content: "Utilisez cette page comme référence unique pour toute intégration. Les exemples peuvent être copiés-collés directement dans des outils comme Postman ou Insomnia pour tester rapidement l'API."
+            content: "Cette page est une référence technique. Utilisez-la pour comprendre la structure des données de l'application ou pour développer des intégrations avec des systèmes tiers."
         }
     },
-    {
-        id: 'help',
-        title: 'Aide & Documentation',
-        category: 'Système',
-        description: 'Consultez le guide d\'utilisation pour comprendre le fonctionnement de chaque module de l\'application.',
-        component: HelpCenter,
-        userJourney: {
-            title: 'Parcours: Comprendre la création d\'une campagne',
-            steps: [
-                "Un nouveau manager souhaite lancer sa première campagne mais ne sait pas par où commencer.",
-                "Il clique sur le menu 'Aide & Documentation'.",
-                "Il ouvre la section 'Campagnes Sortantes' dans l'accordéon.",
-                "Il lit l'explication de chaque onglet (Recyclage, Quotas...) et consulte l'image d'exemple.",
-                "Il a maintenant une vision claire du processus et peut commencer la configuration."
-            ],
-        },
-        specs: {
-            title: 'Spécifications',
-            points: [
-                "Contenu organisé par sections thématiques (Utilisateurs, Campagnes, SVI...).",
-                "Chaque section contient une explication textuelle et une illustration visuelle de l'interface.",
-                "Interface de type 'accordéon' pour une navigation simple et rapide.",
-                "Le contenu est directement intégré et ne nécessite pas de connexion internet."
-            ],
-        },
-        simplificationTip: {
-            title: 'Astuce',
-            content: "Utilisez cette page comme une référence rapide. Les illustrations visuelles sont conçues pour vous aider à localiser rapidement les fonctionnalités décrites dans le texte."
-        }
-    }
 ];

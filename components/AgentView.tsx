@@ -61,6 +61,55 @@ const ToastNotification: React.FC<{ message: string; onClose: () => void }> = ({
     </div>
 );
 
+const DialpadPopover: React.FC<{
+    number: string;
+    onNumberChange: (newNumber: string) => void;
+    onDial: () => void;
+    popoverRef: React.RefObject<HTMLDivElement>;
+}> = ({ number, onNumberChange, onDial, popoverRef }) => {
+    const dialpadKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+
+    const handleKeyPress = (key: string) => {
+        if (number.length < 15) {
+            onNumberChange(number + key);
+        }
+    };
+
+    const handleClear = () => {
+        onNumberChange('');
+    };
+
+    const handleDial = () => {
+        if (number.trim()) {
+            onDial();
+        }
+    };
+    
+    return (
+        <div ref={popoverRef} className="absolute bottom-full right-0 mb-2 w-64 bg-slate-700 rounded-lg shadow-lg p-4 z-50 text-white">
+            <div className="relative mb-2">
+                <input type="text" value={number} readOnly className="w-full bg-slate-900 text-white text-xl text-right p-2 rounded-md font-mono" />
+                {number && (
+                    <button onClick={handleClear} className="absolute left-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1">
+                        <XMarkIcon className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                {dialpadKeys.map(key => (
+                    <button key={key} onClick={() => handleKeyPress(key)} className="py-2 bg-slate-600 rounded-md text-xl font-semibold hover:bg-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        {key}
+                    </button>
+                ))}
+            </div>
+            <button onClick={handleDial} className="mt-3 w-full py-2 bg-green-600 rounded-md text-lg font-bold hover:bg-green-700 flex items-center justify-center disabled:bg-green-400 disabled:cursor-not-allowed" disabled={!number}>
+                <PhoneIcon className="w-5 h-5 mr-2" />
+                Appeler
+            </button>
+        </div>
+    );
+};
+
 const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, sites, personalCallbacks, qualifications, qualificationGroups, onLogout }) => {
     const [ctiStatus, setCtiStatus] = useState<AgentCtiStatus>('LOGGED_OUT');
     const [statusTimer, setStatusTimer] = useState(0);
@@ -79,6 +128,12 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
     const [viewedDate, setViewedDate] = useState(new Date());
     const callbacksButtonRef = useRef<HTMLButtonElement>(null);
     const callbacksPopoverRef = useRef<HTMLDivElement>(null);
+
+    // State for Dialpad
+    const [isDialpadOpen, setIsDialpadOpen] = useState(false);
+    const [dialedNumber, setDialedNumber] = useState('');
+    const dialpadButtonRef = useRef<HTMLButtonElement>(null);
+    const dialpadPopoverRef = useRef<HTMLDivElement>(null);
 
     // State for new features
     const [previousActiveCampaignIdBeforeCallback, setPreviousActiveCampaignIdBeforeCallback] = useState<string | null>(null);
@@ -99,7 +154,7 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
         return savedScripts.find(s => s.id === activeCampaign.scriptId);
     }, [activeCampaign, savedScripts]);
 
-    // Effect to handle clicking outside the callbacks popover
+    // Effect to handle clicking outside popovers
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (
@@ -107,6 +162,12 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
                 callbacksButtonRef.current && !callbacksButtonRef.current.contains(event.target as Node)
             ) {
                 setIsCallbacksPopoverOpen(false);
+            }
+            if (
+                dialpadPopoverRef.current && !dialpadPopoverRef.current.contains(event.target as Node) &&
+                dialpadButtonRef.current && !dialpadButtonRef.current.contains(event.target as Node)
+            ) {
+                setIsDialpadOpen(false);
             }
         };
 
@@ -262,6 +323,27 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
         setActiveCampaignId(callback.campaignId);
         startCallSimulation(contact);
     };
+
+    const handleManualDial = () => {
+        if (!activeCampaignId) {
+            alert("Veuillez d'abord sélectionner une campagne pour pouvoir qualifier l'appel.");
+            return;
+        }
+        console.log(`Appel manuel initié pour : ${dialedNumber}`);
+        setIsDialpadOpen(false);
+
+        const manualContact: Contact = {
+            id: `manual-${Date.now()}`,
+            firstName: 'Appel Manuel',
+            lastName: `(${dialedNumber})`,
+            phoneNumber: dialedNumber,
+            postalCode: '',
+            status: 'pending',
+        };
+
+        startCallSimulation(manualContact);
+        setDialedNumber('');
+    };
     
     const handleEndCall = () => {
         setSelectedQualId(null);
@@ -357,7 +439,8 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
                 );
             }
             
-            const campaignQuals = qualifications.filter(q => q.groupId === activeCampaign.qualificationGroupId || q.isStandard);
+            const qualGroupId = activeCampaign?.qualificationGroupId;
+            const campaignQuals = qualifications.filter(q => (qualGroupId && q.groupId === qualGroupId) || q.isStandard);
     
             type TreeQual = Qualification & { children: TreeQual[], level: number };
             const buildTree = (parentId: string | null = null, level = 0): TreeQual[] => {
@@ -531,7 +614,7 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
                 </div>
             </main>
 
-            <footer className="bg-slate-800 text-white p-3 flex justify-between items-center flex-shrink-0">
+            <footer className="bg-slate-800 text-white p-3 flex justify-between items-center flex-shrink-0 relative">
                 <div className="flex items-center space-x-4">
                     <div className={`px-4 py-2 rounded-md flex items-center ${CTI_STATUS_CONFIG[ctiStatus].color}`}>
                         <span className="font-bold">
@@ -548,6 +631,14 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
                     )}
                     {ctiStatus === 'WAITING' && (
                         <>
+                            <button
+                                ref={dialpadButtonRef}
+                                onClick={() => setIsDialpadOpen(prev => !prev)}
+                                className="bg-slate-600 hover:bg-slate-700 font-semibold py-2 px-4 rounded-lg inline-flex items-center"
+                            >
+                                <PhoneArrowUpRightIcon className="w-5 h-5 mr-2"/>
+                                Composer
+                            </button>
                             <button onClick={handlePause} className="bg-slate-600 hover:bg-slate-700 font-semibold py-2 px-4 rounded-lg inline-flex items-center"><PauseIcon className="w-5 h-5 mr-2"/>Pause</button>
                         </>
                     )}
@@ -575,6 +666,12 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
                         )
                     )}
                 </div>
+                 {isDialpadOpen && <DialpadPopover
+                    number={dialedNumber} 
+                    onNumberChange={setDialedNumber} 
+                    onDial={handleManualDial}
+                    popoverRef={dialpadPopoverRef}
+                 />}
             </footer>
         </div>
     );

@@ -1,12 +1,8 @@
-
-
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-// Fix: added .ts extension to import path
 import type { IvrFlow, IvrNode, IvrConnection, IvrNodeType, IvrNodePort, CalendarEvent, DayOfWeek } from '../types.ts';
 import {
     MenuIcon, SpeakerWaveIcon, InboxArrowDownIcon, PhoneArrowUpRightIcon, PhoneXMarkIcon, DateIcon,
     PlayIcon, SettingsIcon, TrashIcon, PlusIcon, XMarkIcon, MinusIcon, ResetViewIcon
-// Fix: added .tsx extension to import path
 } from './Icons.tsx';
 
 interface IvrDesignerProps {
@@ -42,7 +38,6 @@ const NODE_COLORS: { [key in IvrNodeType]: string } = {
     hangup: 'bg-slate-200 border-slate-400',
 };
 
-// FIX: Explicitly type WEEK_DAYS to ensure day.key is of type DayOfWeek.
 const WEEK_DAYS: { key: DayOfWeek; label: string }[] = [
     { key: 'mon', label: 'L' },
     { key: 'tue', label: 'M' },
@@ -272,6 +267,14 @@ const IvrDesigner: React.FC<IvrDesignerProps> = ({ flow: initialFlow, onSave, on
             updateNodeContent(selectedNode.id, 'events', newEvents);
         };
 
+        const handleEventChange = (index: number, field: keyof CalendarEvent, value: any) => {
+             const newEvents = selectedNode.content.events.map((event: CalendarEvent, evtIndex: number) => {
+                if (index !== evtIndex) return event;
+                return { ...event, [field]: value };
+            });
+            updateNodeContent(selectedNode.id, 'events', newEvents);
+        }
+
         return (
             <div className="p-4 space-y-4 text-sm">
                 <div className="flex justify-between items-center">
@@ -324,11 +327,7 @@ const IvrDesigner: React.FC<IvrDesignerProps> = ({ flow: initialFlow, onSave, on
                                         <input 
                                             type="text" 
                                             value={event.name}
-                                            onChange={e => {
-                                                const newEvents = [...selectedNode.content.events];
-                                                newEvents[index].name = e.target.value;
-                                                updateNodeContent(selectedNode.id, 'events', newEvents);
-                                            }}
+                                            onChange={e => handleEventChange(index, 'name', e.target.value)}
                                             className="p-1 border rounded-md font-medium w-full text-sm"
                                             placeholder="Nom de l'événement"
                                         />
@@ -347,11 +346,7 @@ const IvrDesigner: React.FC<IvrDesignerProps> = ({ flow: initialFlow, onSave, on
                                         <label className="text-xs font-medium">Type d'horaire</label>
                                         <select
                                             value={event.isRecurring ? 'recurring' : 'daterange'}
-                                            onChange={e => {
-                                                const newEvents = [...selectedNode.content.events];
-                                                newEvents[index].isRecurring = e.target.value === 'recurring';
-                                                updateNodeContent(selectedNode.id, 'events', newEvents);
-                                            }}
+                                            onChange={e => handleEventChange(index, 'isRecurring', e.target.value === 'recurring')}
                                             className="p-1.5 border rounded-md w-full text-sm mt-1 bg-white"
                                         >
                                             <option value="recurring">Récurrent (semaine)</option>
@@ -362,34 +357,20 @@ const IvrDesigner: React.FC<IvrDesignerProps> = ({ flow: initialFlow, onSave, on
                                     {event.isRecurring ? (
                                         <>
                                             <div className="flex items-center gap-2">
-                                                <input type="time" value={event.startTime} onChange={e => {
-                                                    const newEvents = [...selectedNode.content.events];
-                                                    newEvents[index].startTime = e.target.value;
-                                                    updateNodeContent(selectedNode.id, 'events', newEvents);
-                                                }} className="p-1 border rounded-md w-full text-sm"/>
+                                                <input type="time" value={event.startTime} onChange={e => handleEventChange(index, 'startTime', e.target.value)} className="p-1 border rounded-md w-full text-sm"/>
                                                 <span>à</span>
-                                                <input type="time" value={event.endTime} onChange={e => {
-                                                    const newEvents = [...selectedNode.content.events];
-                                                    newEvents[index].endTime = e.target.value;
-                                                    updateNodeContent(selectedNode.id, 'events', newEvents);
-                                                }} className="p-1 border rounded-md w-full text-sm"/>
+                                                <input type="time" value={event.endTime} onChange={e => handleEventChange(index, 'endTime', e.target.value)} className="p-1 border rounded-md w-full text-sm"/>
                                             </div>
                                             <div className="flex justify-between pt-1">
                                                 {WEEK_DAYS.map(day => (
                                                     <button
                                                         key={day.key}
                                                         onClick={() => {
-                                                            const newEvents = selectedNode.content.events.map((event: CalendarEvent, evtIndex: number) => {
-                                                                if (index !== evtIndex) return event;
-                                                                
-                                                                const currentDays = event.days || [];
-                                                                const newDays = currentDays.includes(day.key)
-                                                                    ? currentDays.filter((d: DayOfWeek) => d !== day.key)
-                                                                    : [...currentDays, day.key];
-                                                                    
-                                                                return { ...event, days: newDays };
-                                                            });
-                                                            updateNodeContent(selectedNode.id, 'events', newEvents);
+                                                            const currentDays = event.days || [];
+                                                            const newDays = currentDays.includes(day.key)
+                                                                ? currentDays.filter((d: DayOfWeek) => d !== day.key)
+                                                                : [...currentDays, day.key];
+                                                            handleEventChange(index, 'days', newDays);
                                                         }}
                                                         className={`w-7 h-7 rounded-full text-xs font-bold transition-colors ${event.days?.includes(day.key) ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
                                                     >
@@ -403,45 +384,25 @@ const IvrDesigner: React.FC<IvrDesignerProps> = ({ flow: initialFlow, onSave, on
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
                                                     <label className="text-xs font-medium">Du</label>
-                                                    <input type="date" value={event.startDate} onChange={e => {
-                                                        const newEvents = [...selectedNode.content.events];
-                                                        newEvents[index].startDate = e.target.value;
-                                                        updateNodeContent(selectedNode.id, 'events', newEvents);
-                                                    }} className="p-1 border rounded-md w-full text-sm mt-1"/>
+                                                    <input type="date" value={event.startDate} onChange={e => handleEventChange(index, 'startDate', e.target.value)} className="p-1 border rounded-md w-full text-sm mt-1"/>
                                                 </div>
                                                 <div>
                                                     <label className="text-xs font-medium">Au</label>
-                                                    <input type="date" value={event.endDate} onChange={e => {
-                                                        const newEvents = [...selectedNode.content.events];
-                                                        newEvents[index].endDate = e.target.value;
-                                                        updateNodeContent(selectedNode.id, 'events', newEvents);
-                                                    }} className="p-1 border rounded-md w-full text-sm mt-1"/>
+                                                    <input type="date" value={event.endDate} onChange={e => handleEventChange(index, 'endDate', e.target.value)} className="p-1 border rounded-md w-full text-sm mt-1"/>
                                                 </div>
                                             </div>
                                             <div className="flex items-center">
-                                                <input type="checkbox" id={`allDay-${event.id}`} checked={event.allDay} onChange={e => {
-                                                    const newEvents = [...selectedNode.content.events];
-                                                    newEvents[index].allDay = e.target.checked;
-                                                    updateNodeContent(selectedNode.id, 'events', newEvents);
-                                                }} className="h-4 w-4 rounded border-slate-300 text-indigo-600"/>
+                                                <input type="checkbox" id={`allDay-${event.id}`} checked={event.allDay} onChange={e => handleEventChange(index, 'allDay', e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600"/>
                                                 <label htmlFor={`allDay-${event.id}`} className="ml-2 text-xs">Toute la journée</label>
                                             </div>
                                             {!event.allDay && <div className="grid grid-cols-2 gap-2">
                                                 <div>
                                                     <label className="text-xs font-medium">De</label>
-                                                    <input type="time" value={event.startTime} onChange={e => {
-                                                        const newEvents = [...selectedNode.content.events];
-                                                        newEvents[index].startTime = e.target.value;
-                                                        updateNodeContent(selectedNode.id, 'events', newEvents);
-                                                    }} className="p-1 border rounded-md w-full text-sm mt-1"/>
+                                                    <input type="time" value={event.startTime} onChange={e => handleEventChange(index, 'startTime', e.target.value)} className="p-1 border rounded-md w-full text-sm mt-1"/>
                                                 </div>
                                                 <div>
                                                     <label className="text-xs font-medium">À</label>
-                                                    <input type="time" value={event.endTime} onChange={e => {
-                                                        const newEvents = [...selectedNode.content.events];
-                                                        newEvents[index].endTime = e.target.value;
-                                                        updateNodeContent(selectedNode.id, 'events', newEvents);
-                                                    }} className="p-1 border rounded-md w-full text-sm mt-1"/>
+                                                    <input type="time" value={event.endTime} onChange={e => handleEventChange(index, 'endTime', e.target.value)} className="p-1 border rounded-md w-full text-sm mt-1"/>
                                                 </div>
                                             </div>}
                                         </div>

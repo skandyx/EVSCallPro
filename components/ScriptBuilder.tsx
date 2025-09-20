@@ -211,16 +211,6 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                     if (mainBlock) {
                         mainBlock.x = startBlockX + dx;
                         mainBlock.y = startBlockY + dy;
-                         if (mainBlock.type === 'group') {
-                            page.blocks.forEach(b => {
-                                if (b.parentId === mainBlock.id) {
-                                    const childOriginalPos = dragInfo.current[`child-${b.id}`] || {x: b.x, y: b.y};
-                                    if (!dragInfo.current[`child-${b.id}`]) {
-                                        dragInfo.current[`child-${b.id}`] = childOriginalPos;
-                                    }
-                                }
-                            });
-                        }
                     }
                  }
             });
