@@ -11,6 +11,18 @@ Ce document décrit les étapes complètes pour installer, configurer et lancer 
 
 ---
 
+## Philosophie de la Configuration : Amorçage vs. Gestion
+
+Il est crucial de comprendre la différence entre la configuration initiale (d'amorçage) et la gestion continue.
+
+-   **Configuration d'Amorçage (ce guide)** : Les étapes décrites ici (création du `.env`, configuration de `manager.conf` et `extensions.conf`) sont des opérations d'infrastructure. Elles sont **effectuées une seule fois par l'administrateur système** lors de l'installation. Leur but est de permettre aux différents services (Backend, Base de Données, Téléphonie) de savoir comment communiquer entre eux pour la toute première fois.
+
+-   **Gestion Continue (via l'application)** : Une fois le système amorcé et en ligne, **toute la configuration métier se fait depuis l'interface web**. Par exemple, lorsque vous ajoutez un Trunk SIP dans l'application, c'est le backend qui se chargera de générer dynamiquement le fichier de configuration correspondant pour Asterisk et de le recharger. Vous n'aurez plus à éditer manuellement ces fichiers pour les opérations quotidiennes.
+
+Ce guide couvre donc uniquement la fondation sur laquelle l'application s'appuiera pour fonctionner.
+
+---
+
 ## Vue d'ensemble de l'Installation
 
 1.  **Préparation du Système** : Mise à jour du serveur.
@@ -92,18 +104,49 @@ Nous allons utiliser `UFW` (Uncomplicated Firewall) pour sécuriser le serveur.
     ```
     Vous devriez voir `contact_center_db` dans la liste.
 
-## Étape 4 : Installation du Moteur de Téléphonie (Asterisk)
+## Étape 4 : Installation et Configuration Initiale d'Asterisk
 
-1.  **Installer Asterisk :**
+1.  **Installer le paquet Asterisk :**
+    *Cette commande installe la version stable d'Asterisk disponible dans les dépôts officiels de Debian/Ubuntu, ainsi que les modules courants.*
     ```bash
     sudo apt install asterisk
     ```
 
-2.  **Vérifier qu'Asterisk est bien en cours d'exécution :**
+2.  **Démarrer et Activer le service Asterisk :**
+    *Une fois l'installation terminée, le service doit être démarré et activé pour se lancer automatiquement au redémarrage du serveur.*
+    ```bash
+    sudo systemctl start asterisk
+    sudo systemctl enable asterisk
+    ```
+
+3.  **Vérifier le statut du service :**
+    *Cette commande confirme qu'Asterisk est bien en cours d'exécution.*
     ```bash
     sudo systemctl status asterisk
     ```
-    Vous devriez voir `active (running)`. Appuyez sur `q` pour quitter.
+    Vous devriez voir une ligne `Active: active (running)`. Appuyez sur `q` pour quitter.
+
+4.  **Vérifier la connexion à la console Asterisk (CLI) :**
+    *La console CLI est l'outil principal pour interagir avec Asterisk en direct, voir les appels, et débugger.*
+    ```bash
+    sudo asterisk -rvvv
+    ```
+    *Le `-r` signifie "connecter à une instance en cours", et `vvv` augmente le niveau de verbosité.*
+    *Vous devriez voir une invite comme `votreserveur*CLI>`. Tapez `core show help` pour voir la liste des commandes, puis `exit` pour quitter. Cette étape confirme que le moteur est fonctionnel.*
+
+5.  **(Optionnel mais Recommandé) Configurer les permissions :**
+    *Par défaut, les fichiers de configuration dans `/etc/asterisk/` peuvent appartenir à `root`. Pour des raisons de sécurité et pour éviter des problèmes de permissions futurs, il est bon de s'assurer qu'ils appartiennent à l'utilisateur `asterisk`.*
+    ```bash
+    sudo chown -R asterisk:asterisk /etc/asterisk
+    sudo chown -R asterisk:asterisk /var/lib/asterisk
+    sudo chown -R asterisk:asterisk /var/log/asterisk
+    sudo chown -R asterisk:asterisk /var/spool/asterisk
+    sudo chown -R asterisk:asterisk /usr/lib/asterisk
+    ```
+    *Ensuite, redémarrez Asterisk pour appliquer les changements :*
+    ```bash
+    sudo systemctl restart asterisk
+    ```
 
 ## Étape 5 : Installation de l'Environnement Backend (Node.js & PM2)
 
@@ -135,12 +178,12 @@ Nous allons utiliser `UFW` (Uncomplicated Firewall) pour sécuriser le serveur.
     npm install
     ```
 
-3.  **Configurer les variables d'environnement :**
+3.  **Configurer les variables d'environnement (Amorçage) :**
     ```bash
     cp .env.example .env
     sudo nano .env
     ```
-    Modifiez le fichier `.env` avec les informations de votre base de données (le mot de passe que vous avez défini à l'étape 3).
+    Modifiez ce fichier avec les informations de votre base de données (le mot de passe que vous avez défini à l'étape 3). C'est la configuration de base pour que le backend puisse démarrer.
     ```env
     DB_HOST=localhost
     DB_PORT=5432
@@ -150,50 +193,30 @@ Nous allons utiliser `UFW` (Uncomplicated Firewall) pour sécuriser le serveur.
     AGI_PORT=4573
     ```
 
-## Étape 7 : Configuration Finale et Liaison des Services
+## Étape 7 : Configuration Finale et Liaison des Services (Amorçage)
 
 ### 7.1 Configuration d'Asterisk
 
-Modifiez les fichiers de configuration d'Asterisk avec `sudo nano`.
+Modifiez les fichiers de configuration d'Asterisk avec `sudo nano`. **Note :** Il s'agit de la configuration minimale pour qu'Asterisk puisse communiquer avec le backend. La configuration des Trunks SIP eux-mêmes se fera plus tard depuis l'application.
 
-1.  **`/etc/asterisk/sip.conf` - Connexion à votre Trunk SIP**
-    Ajoutez ceci à la fin du fichier, en remplaçant les valeurs par celles de votre fournisseur :
-    ```ini
-    [general]
-    register => VOTRE_LOGIN:VOTRE_MOT_DE_PASSE@VOTRE_FOURNISSEUR_SIP/VOTRE_LOGIN
-
-    [from-trunk](!)
-    type=friend
-    context=from-trunk-context ; Contexte pour les appels entrants
-    host=VOTRE_FOURNISSEUR_SIP
-    insecure=port,invite
-    qualify=yes
-
-    [VOTRE_FOURNISSEUR_SIP](from-trunk)
-    defaultuser=VOTRE_LOGIN
-    secret=VOTRE_MOT_DE_PASSE
-    fromuser=VOTRE_LOGIN
-    fromdomain=VOTRE_FOURNISSEUR_SIP
-    ```
-
-2.  **`/etc/asterisk/manager.conf` - Accès pour l'API (Supervision)**
-    Modifiez ce fichier pour permettre au CRM de communiquer avec Asterisk.
+1.  **`/etc/asterisk/manager.conf` - Accès pour l'API (Supervision)**
+    Permet au CRM de communiquer avec Asterisk. Les identifiants (`ami_user`, `ami_password`) devront correspondre à ceux saisis dans le module "Connexion Système" du CRM.
     ```ini
     [general]
     enabled = yes
     port = 5038
     bindaddr = 0.0.0.0
 
-    [ami_user] ; Doit correspondre à ce qui est configuré dans le CRM
-    secret = ami_password ; Doit correspondre
+    [ami_user]
+    secret = ami_password
     deny=0.0.0.0/0.0.0.0
     permit=127.0.0.1/255.255.255.0 ; Autorise uniquement le serveur local à se connecter
     read = all
     write = all
     ```
 
-3.  **`/etc/asterisk/extensions.conf` - Redirection des appels vers le Backend**
-    Ajoutez ce contexte. Il doit correspondre au `context` défini dans `sip.conf`.
+2.  **`/etc/asterisk/extensions.conf` - Redirection des appels vers le Backend**
+    Créez un contexte générique qui enverra tous les appels entrants depuis les Trunks vers le script AGI du backend.
     ```ini
     [from-trunk-context]
     exten => _X.,1,Answer()
@@ -201,8 +224,9 @@ Modifiez les fichiers de configuration d'Asterisk avec `sudo nano`.
     exten => _X.,n,AGI(agi://127.0.0.1:4573)
     exten => _X.,n,Hangup()
     ```
+    *Note : Le fichier `sip.conf` sera géré dynamiquement par l'application. Vous n'avez pas besoin de le modifier manuellement pour vos trunks.*
 
-4.  **Appliquer les changements :**
+3.  **Appliquer les changements :**
     ```bash
     sudo asterisk -rx "core reload"
     ```
