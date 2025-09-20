@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Feature, CallHistoryRecord, User, Campaign, Qualification, AgentSession } from '../types.ts';
 // Fix: Changed ArrowDownTrayIcon to the available ArrowUpTrayIcon.
@@ -575,7 +574,7 @@ const ReportingDashboard: React.FC<ReportingDashboardProps> = ({ feature, callHi
                     <p className="mt-2 text-lg text-slate-600">{feature.description}</p>
                 </div>
                  <button onClick={handleExportPDF} className="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-lg shadow-md inline-flex items-center">
-                    {/* Fix: Changed ArrowDownTrayIcon to ArrowUpTrayIcon. */}
+                    {/* Fix: Replaced non-existent ArrowDownTrayIcon with ArrowUpTrayIcon. */}
                     <ArrowUpTrayIcon className="w-5 h-5 mr-2"/>
                     Exporter en PDF
                 </button>
@@ -663,14 +662,14 @@ const KpiCard: React.FC<{title: string, value: string, icon: React.FC<any>}> = (
 const TabButton: React.FC<{text: string, isActive: boolean, onClick: () => void}> = ({ text, isActive, onClick }) => (
      <button
         onClick={onClick}
-        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
-            isActive
+        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+          isActive
             ? 'border-indigo-500 text-indigo-600'
             : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
         }`}
     >
         {text}
     </button>
-)
+);
 
 export default ReportingDashboard;

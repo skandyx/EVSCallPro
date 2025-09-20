@@ -21,6 +21,7 @@ import PlanningManager from '../components/PlanningManager.tsx';
 import ModuleSettingsManager from '../components/ModuleSettingsManager.tsx';
 import SiteManager from '../components/SiteManager.tsx';
 import SystemConnectionManager from '../components/SystemConnectionManager.tsx';
+import ApiDocs from '../components/ApiDocs.tsx';
 
 export const features: Feature[] = [
     {
@@ -623,6 +624,36 @@ export const features: Feature[] = [
         simplificationTip: {
             title: 'Astuce',
             content: "L'indicateur global de santé est le point de départ. S'il n'est pas vert, les autres panneaux vous aideront à trouver la cause. S'il est vert, le problème vient probablement d'ailleurs que l'infrastructure de base."
+        }
+    },
+    {
+        id: 'api-docs',
+        title: 'Documentation API',
+        category: 'Système',
+        description: 'Consultez la documentation technique complète de l\'API REST pour les intégrations.',
+        component: ApiDocs,
+        userJourney: {
+            title: 'Parcours: Intégrer un outil externe',
+            steps: [
+                "Un développeur a besoin de créer un utilisateur via une application externe.",
+                "Le SuperAdmin lui donne accès à la 'Documentation API'.",
+                "Le développeur trouve la section 'Utilisateurs' et l'endpoint 'POST /api/users'.",
+                "Il consulte l'exemple de corps de requête et de réponse.",
+                "Il peut maintenant construire sa requête pour communiquer avec l'application."
+            ],
+        },
+        specs: {
+            title: 'Spécifications Techniques',
+            points: [
+                "Documentation complète de tous les endpoints de l'API REST.",
+                "Exemples de requêtes et de réponses pour chaque endpoint.",
+                "Descriptions claires des paramètres et des corps de requête attendus.",
+                "Accessible uniquement par les utilisateurs 'SuperAdmin'."
+            ],
+        },
+        simplificationTip: {
+            title: 'Conseil de Simplification',
+            content: "Utilisez cette page comme référence unique pour toute intégration. Les exemples peuvent être copiés-collés directement dans des outils comme Postman ou Insomnia pour tester rapidement l'API."
         }
     },
     {

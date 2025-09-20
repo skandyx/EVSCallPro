@@ -21,7 +21,8 @@ export type FeatureId =
   | 'help'
   | 'module-settings'
   | 'sites-config'
-  | 'system-connection';
+  | 'system-connection'
+  | 'api-docs';
 
 export type FeatureCategory = 'Agent' | 'Outbound' | 'Inbound' | 'Sound' | 'Configuration' | 'Supervision & Reporting' | 'Système' | 'Paramètres';
 

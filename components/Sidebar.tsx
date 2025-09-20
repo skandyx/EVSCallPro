@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import type { Feature, FeatureId, User, FeatureCategory, ModuleVisibility } from '../types.ts';
 import {
@@ -83,7 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({ features, activeFeatureId, onSelectFe
                                         {featuresInCategory
                                             .filter(feature => {
                                                 // Special rules for SuperAdmin-only features
-                                                if (feature.id === 'module-settings' || feature.id === 'system-connection') {
+                                                if (['module-settings', 'system-connection', 'api-docs'].includes(feature.id)) {
                                                     return currentUser?.role === 'SuperAdmin';
                                                 }
                                                 // Default rule for all other features

@@ -284,9 +284,9 @@ const qualificationGroups: QualificationGroup[] = [
 ];
 
 const trunks: Trunk[] = [
-    // Fix: Added missing properties to match the Trunk type definition.
+    // Fix: Added missing properties dialPattern and inboundContext to match the Trunk type definition.
     { id: 'trunk-1', name: 'Opérateur Principal', domain: 'sip.provider.com', login: 'user12345', authType: 'register', dialPattern: '_0.', inboundContext: 'from-trunk' },
-    // Fix: Added missing properties to match the Trunk type definition.
+    // Fix: Added missing properties dialPattern and inboundContext to match the Trunk type definition.
     { id: 'trunk-2', name: 'Opérateur Secondaire', domain: 'sip.another.fr', login: 'user67890', authType: 'register', dialPattern: '_00.', inboundContext: 'from-trunk' }
 ];
 

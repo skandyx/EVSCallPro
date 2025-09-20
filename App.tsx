@@ -1,428 +1,407 @@
-
-
 import React, { useState, useMemo } from 'react';
+import type { Feature, FeatureId, User, SavedScript, IvrFlow, Campaign, Qualification, QualificationGroup, Trunk, Did, Site, UserGroup, Contact, ModuleVisibility, PersonalCallback, SystemConnectionSettings, AudioFile, ActivityType, PlanningEvent, CallHistoryRecord, AgentSession, SystemLog, VersionInfo, ConnectivityService, BackupLog, BackupSchedule } from './types.ts';
 import { features } from './data/features.ts';
 import { mockData } from './data/mockData.ts';
-// Fix: Added missing types for call history and agent sessions which are now part of the app's state.
-import type { Feature, User, SavedScript, IvrFlow, Campaign, Qualification, QualificationGroup, UserGroup, Trunk, Did, BackupLog, BackupSchedule, SystemLog, VersionInfo, ConnectivityService, Contact, CallHistoryRecord, AgentSession, AudioFile, PlanningEvent, ActivityType, ModuleVisibility, FeatureCategory, FeatureId, Site, PersonalCallback, SystemConnectionSettings } from './types.ts';
 import Sidebar from './components/Sidebar.tsx';
-import FeatureDetail from './components/FeatureDetail.tsx';
 import LoginScreen from './components/LoginScreen.tsx';
 import AgentView from './components/AgentView.tsx';
+import FeatureDetail from './components/FeatureDetail.tsx';
 
-const ALL_CATEGORIES: FeatureCategory[] = ['Agent', 'Outbound', 'Inbound', 'Sound', 'Configuration', 'Supervision & Reporting', 'Système', 'Paramètres'];
+// A simple deep copy function for state updates to avoid mutations
+const deepCopy = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
 
 const App: React.FC = () => {
     // --- STATE MANAGEMENT ---
-    const [activeFeatureId, setActiveFeatureId] = useState<string | null>(null);
+    const [data, setData] = useState(mockData);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    
-    // Data states
-    const [users, setUsers] = useState<User[]>(mockData.users);
-    const [userGroups, setUserGroups] = useState<UserGroup[]>(mockData.userGroups);
-    const [savedScripts, setSavedScripts] = useState<SavedScript[]>(mockData.savedScripts);
-    const [savedIvrFlows, setSavedIvrFlows] = useState<IvrFlow[]>(mockData.savedIvrFlows);
-    const [campaigns, setCampaigns] = useState<Campaign[]>(mockData.campaigns);
-    const [qualifications, setQualifications] = useState<Qualification[]>(mockData.qualifications);
-    const [qualificationGroups, setQualificationGroups] = useState<QualificationGroup[]>(mockData.qualificationGroups);
-    const [trunks, setTrunks] = useState<Trunk[]>(mockData.trunks);
-    const [dids, setDids] = useState<Did[]>(mockData.dids);
-    const [backupLogs, setBackupLogs] = useState<BackupLog[]>(mockData.backupLogs);
-    const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>(mockData.backupSchedule);
-    const [systemLogs, setSystemLogs] = useState<SystemLog[]>(mockData.systemLogs);
-    const [versionInfo] = useState<VersionInfo>(mockData.versionInfo);
-    const [connectivityServices] = useState<ConnectivityService[]>(mockData.connectivityServices);
-    const [audioFiles, setAudioFiles] = useState<AudioFile[]>(mockData.audioFiles);
-    const [planningEvents, setPlanningEvents] = useState<PlanningEvent[]>(mockData.planningEvents);
-    const [activityTypes] = useState<ActivityType[]>(mockData.activityTypes);
-    const [sites, setSites] = useState<Site[]>(mockData.sites);
-    const [personalCallbacks, setPersonalCallbacks] = useState<PersonalCallback[]>(mockData.personalCallbacks);
-    const [systemConnectionSettings, setSystemConnectionSettings] = useState<SystemConnectionSettings>(mockData.systemConnectionSettings);
+    const [activeFeatureId, setActiveFeatureId] = useState<FeatureId | null>(null);
 
-    // Fix: Added state for call history and agent sessions for the reporting dashboard.
-    const [callHistory] = useState<CallHistoryRecord[]>(mockData.callHistory);
-    const [agentSessions] = useState<AgentSession[]>(mockData.agentSessions);
-    
-    // UI State
+    // Load module visibility from localStorage or use a default
     const [moduleVisibility, setModuleVisibility] = useState<ModuleVisibility>(() => {
-        const initialState: ModuleVisibility = {
-            categories: {},
-            features: {}
-        };
-        ALL_CATEGORIES.forEach(cat => {
-            initialState.categories[cat] = true;
-        });
-        features.forEach(feat => {
-            initialState.features[feat.id] = true;
-        });
-        return initialState;
+        try {
+            const saved = localStorage.getItem('moduleVisibility');
+            return saved ? JSON.parse(saved) : { categories: {}, features: {} };
+        } catch (error) {
+            console.error("Failed to parse module visibility from localStorage", error);
+            return { categories: {}, features: {} };
+        }
     });
 
-    const activeFeature = useMemo(() => features.find(f => f.id === activeFeatureId), [activeFeatureId]);
+    // --- COMPUTED VALUES ---
+    const activeFeature = useMemo(() => {
+        if (!activeFeatureId) return null;
+        return features.find(f => f.id === activeFeatureId) || null;
+    }, [activeFeatureId]);
+    
+    // --- HANDLERS ---
+    const handleLoginSuccess = (user: User) => {
+        setCurrentUser(user);
+        if (user.role === 'Agent') {
+             setActiveFeatureId(null); // No default feature for agents, they see their view.
+        } else {
+            setActiveFeatureId('users'); // Default view for other roles
+        }
+    };
 
-    // --- CRUD Handlers ---
-    const handleSaveUser = (userToSave: User, groupIds: string[]) => {
-        // 1. Save the user data itself
-        setUsers(prevUsers => {
-            const index = prevUsers.findIndex(u => u.id === userToSave.id);
-            if (index > -1) {
-                const updatedUsers = [...prevUsers];
-                updatedUsers[index] = userToSave;
-                return updatedUsers;
+    const handleLogout = () => {
+        setCurrentUser(null);
+        setActiveFeatureId(null);
+    };
+    
+    const handleSaveVisibilitySettings = (visibility: ModuleVisibility) => {
+        setModuleVisibility(visibility);
+        localStorage.setItem('moduleVisibility', JSON.stringify(visibility));
+    };
+
+    const handleSaveUser = (user: User, groupIds: string[]) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const userExists = nextState.users.some(u => u.id === user.id);
+            if (userExists) {
+                nextState.users = nextState.users.map(u => u.id === user.id ? user : u);
+            } else {
+                nextState.users.push(user);
             }
-            return [...prevUsers, userToSave];
-        });
-
-        // 2. Update all user groups based on the new assignments for this user
-        setUserGroups(prevGroups => {
-            return prevGroups.map(group => {
-                const wasMember = group.memberIds.includes(userToSave.id);
-                const shouldBeMember = groupIds.includes(group.id);
-
-                if (shouldBeMember && !wasMember) {
-                    // Add user to group
-                    return { ...group, memberIds: [...group.memberIds, userToSave.id] };
+            
+            nextState.userGroups = nextState.userGroups.map(group => {
+                const shouldHaveUser = groupIds.includes(group.id);
+                const hasUser = group.memberIds.includes(user.id);
+                if (shouldHaveUser && !hasUser) {
+                    group.memberIds.push(user.id);
+                } else if (!shouldHaveUser && hasUser) {
+                    group.memberIds = group.memberIds.filter(id => id !== user.id);
                 }
-                if (!shouldBeMember && wasMember) {
-                    // Remove user from group
-                    return { ...group, memberIds: group.memberIds.filter(id => id !== userToSave.id) };
-                }
-                // No change for this group regarding this user
                 return group;
             });
+
+            return nextState;
         });
     };
     
+     const handleGenerateUsers = (count: number) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const newUsers: User[] = [];
+            const existingLoginIds = new Set(nextState.users.map(u => u.loginId));
+            let startLoginId = 1000;
+            
+            for (let i = 0; i < count; i++) {
+                while (existingLoginIds.has(String(startLoginId))) {
+                    startLoginId++;
+                }
+                const newLoginId = String(startLoginId);
+                const newUser: User = {
+                    id: `user-gen-${Date.now() + i}`,
+                    loginId: newLoginId,
+                    firstName: `Agent`,
+                    lastName: `${newLoginId}`,
+                    email: `agent.${newLoginId}@example.com`,
+                    role: 'Agent',
+                    isActive: true,
+                    campaignIds: [],
+                    password: `${newLoginId}`,
+                    siteId: nextState.sites[i % nextState.sites.length]?.id || null
+                };
+                newUsers.push(newUser);
+                existingLoginIds.add(newLoginId);
+            }
+            nextState.users.push(...newUsers);
+            return nextState;
+        });
+    };
+
     const handleDeleteUser = (userId: string) => {
-        setUsers(prev => prev.filter(u => u.id !== userId));
+        setData(prev => ({
+            ...prev,
+            users: prev.users.filter(u => u.id !== userId),
+            userGroups: prev.userGroups.map(g => ({ ...g, memberIds: g.memberIds.filter(id => id !== userId) }))
+        }));
     };
     
-    const handleGenerateUsers = (count: number) => {
-        const newUsers: User[] = [];
-        const existingLoginIds = new Set(users.map(u => u.loginId));
-        let nextLoginId = 1001;
-        for (let i = 0; i < count; i++) {
-            while(existingLoginIds.has(String(nextLoginId))) {
-                nextLoginId++;
+    const handleSaveUserGroup = (group: UserGroup) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const groupExists = nextState.userGroups.some(g => g.id === group.id);
+            if (groupExists) {
+                nextState.userGroups = nextState.userGroups.map(g => g.id === group.id ? group : g);
+            } else {
+                nextState.userGroups.push(group);
             }
-            const newUser: User = {
-                id: `new-user-${Date.now() + i}`,
-                loginId: String(nextLoginId),
-                firstName: `Agent${i+1}`,
-                lastName: `Test${nextLoginId}`,
-                email: `agent${nextLoginId}@example.com`,
-                role: 'Agent',
-                isActive: true,
-                campaignIds: [],
-                password: 'password123'
-            };
-            newUsers.push(newUser);
-            existingLoginIds.add(newUser.loginId);
-        }
-        setUsers(prev => [...prev, ...newUsers]);
-    };
-
-    const handleSaveUserGroup = (groupToSave: UserGroup) => {
-        setUserGroups(prev => {
-            const index = prev.findIndex(g => g.id === groupToSave.id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = groupToSave;
-                return updated;
-            }
-            return [...prev, groupToSave];
+            return nextState;
         });
     };
-    
+
     const handleDeleteUserGroup = (groupId: string) => {
-        setUserGroups(prev => prev.filter(g => g.id !== groupId));
+        setData(prev => ({ ...prev, userGroups: prev.userGroups.filter(g => g.id !== groupId) }));
     };
 
-    const handleSaveOrUpdateScript = (script: SavedScript) => {
-        setSavedScripts(prev => {
-            const index = prev.findIndex(s => s.id === script.id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = script;
-                return updated;
+    const handleSaveScript = (script: SavedScript) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const scriptExists = nextState.savedScripts.some(s => s.id === script.id);
+            if(scriptExists) {
+                nextState.savedScripts = nextState.savedScripts.map(s => s.id === script.id ? script : s)
+            } else {
+                nextState.savedScripts.push(script);
             }
-            return [...prev, script];
+            return nextState;
         });
     };
 
     const handleDeleteScript = (scriptId: string) => {
-        setSavedScripts(prev => prev.filter(s => s.id !== scriptId));
+        setData(prev => ({ ...prev, savedScripts: prev.savedScripts.filter(s => s.id !== scriptId) }));
     };
 
     const handleDuplicateScript = (scriptId: string) => {
-        const scriptToDuplicate = savedScripts.find(s => s.id === scriptId);
-        if(scriptToDuplicate) {
-            const newScript = JSON.parse(JSON.stringify(scriptToDuplicate));
+        setData(prev => {
+            const originalScript = prev.savedScripts.find(s => s.id === scriptId);
+            if (!originalScript) return prev;
+            const newScript = deepCopy(originalScript);
             newScript.id = `script-${Date.now()}`;
-            newScript.name = `${newScript.name} (Copie)`;
-            setSavedScripts(prev => [...prev, newScript]);
-        }
-    };
-    
-    const handleSaveOrUpdateIvrFlow = (flow: IvrFlow) => {
-        setSavedIvrFlows(prev => {
-            const index = prev.findIndex(f => f.id === flow.id);
-            if(index > -1) {
-                const updated = [...prev];
-                updated[index] = flow;
-                return updated;
-            }
-            return [...prev, flow];
+            newScript.name = `${originalScript.name} (Copie)`;
+            return { ...prev, savedScripts: [...prev.savedScripts, newScript] };
         });
     };
-
+    
+    const handleSaveIvrFlow = (flow: IvrFlow) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const flowExists = nextState.savedIvrFlows.some(f => f.id === flow.id);
+            if (flowExists) {
+                 nextState.savedIvrFlows = nextState.savedIvrFlows.map(f => f.id === flow.id ? flow : f);
+            } else {
+                nextState.savedIvrFlows.push(flow);
+            }
+            return nextState;
+        });
+    };
+    
     const handleDeleteIvrFlow = (flowId: string) => {
-        setSavedIvrFlows(prev => prev.filter(f => f.id !== flowId));
+        setData(prev => ({ ...prev, savedIvrFlows: prev.savedIvrFlows.filter(f => f.id !== flowId) }));
     };
     
     const handleDuplicateIvrFlow = (flowId: string) => {
-        const flowToDuplicate = savedIvrFlows.find(f => f.id === flowId);
-        if (flowToDuplicate) {
-            const newFlow = JSON.parse(JSON.stringify(flowToDuplicate));
+        setData(prev => {
+            const originalFlow = prev.savedIvrFlows.find(f => f.id === flowId);
+            if (!originalFlow) return prev;
+            const newFlow = deepCopy(originalFlow);
             newFlow.id = `ivr-flow-${Date.now()}`;
-            newFlow.name = `${newFlow.name} (Copie)`;
-            setSavedIvrFlows(prev => [...prev, newFlow]);
-        }
+            newFlow.name = `${originalFlow.name} (Copie)`;
+            return { ...prev, savedIvrFlows: [...prev.savedIvrFlows, newFlow] };
+        });
     };
     
-    const handleSaveCampaign = (campaign: Campaign) => {
-         setCampaigns(prev => {
-            const index = prev.findIndex(c => c.id === campaign.id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = campaign;
-                return updated;
+     const handleSaveCampaign = (campaign: Campaign) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const campaignExists = nextState.campaigns.some(c => c.id === campaign.id);
+            if (campaignExists) {
+                nextState.campaigns = nextState.campaigns.map(c => c.id === campaign.id ? campaign : c);
+            } else {
+                nextState.campaigns.push(campaign);
             }
-            return [...prev, campaign];
+            return nextState;
+        });
+    };
+    
+    const handleDeleteCampaign = (campaignId: string) => {
+        setData(prev => ({ ...prev, campaigns: prev.campaigns.filter(c => c.id !== campaignId) }));
+    };
+    
+    const handleImportContacts = (campaignId: string, contacts: Contact[]) => {
+        setData(prev => ({
+            ...prev,
+            campaigns: prev.campaigns.map(c => 
+                c.id === campaignId 
+                    ? { ...c, contacts: [...c.contacts, ...contacts] }
+                    : c
+            )
+        }));
+    };
+    
+     const handleSaveQualification = (qualification: Qualification) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const qualExists = nextState.qualifications.some(q => q.id === qualification.id);
+            if (qualExists) {
+                nextState.qualifications = nextState.qualifications.map(q => q.id === qualification.id ? qualification : q);
+            } else {
+                nextState.qualifications.push(qualification);
+            }
+            return nextState;
         });
     };
 
-    const handleDeleteCampaign = (campaignId: string) => {
-        setCampaigns(prev => prev.filter(c => c.id !== campaignId));
-    };
-    
-    const handleImportContacts = (campaignId: string, newContacts: Contact[]) => {
-        setCampaigns(prev => prev.map(c => {
-            if (c.id === campaignId) {
-                return { ...c, contacts: [...c.contacts, ...newContacts] };
-            }
-            return c;
-        }));
-    };
-    
-    const handleSaveQualification = (qual: Qualification) => {
-        setQualifications(prev => {
-            const index = prev.findIndex(q => q.id === qual.id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = qual;
-                return updated;
-            }
-            return [...prev, qual];
-        });
-    };
-    
     const handleDeleteQualification = (qualId: string) => {
-        setQualifications(prev => prev.filter(q => q.id !== qualId));
-        setQualificationGroups(prev => prev.map(g => {
-            // Also remove from any group it might have been in
-            const newQuals = qualifications.filter(q => q.groupId === g.id && q.id !== qualId);
-            return g;
-        }));
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            nextState.qualifications = nextState.qualifications.filter(q => q.id !== qualId);
+            // Also un-parent children
+            nextState.qualifications.forEach(q => {
+                if(q.parentId === qualId) q.parentId = null;
+            });
+            return nextState;
+        });
     };
 
     const handleSaveQualificationGroup = (group: QualificationGroup) => {
-        setQualificationGroups(prev => {
-            const index = prev.findIndex(g => g.id === group.id);
-            if(index > -1) {
-                const updated = [...prev];
-                updated[index] = group;
-                return updated;
+         setData(prev => {
+            const nextState = deepCopy(prev);
+            const groupExists = nextState.qualificationGroups.some(g => g.id === group.id);
+            if(groupExists) {
+                nextState.qualificationGroups = nextState.qualificationGroups.map(g => g.id === group.id ? group : g)
+            } else {
+                nextState.qualificationGroups.push(group)
             }
-            return [...prev, group];
-        })
+            return nextState;
+        });
     };
     
     const handleDeleteQualificationGroup = (groupId: string) => {
-        setQualificationGroups(prev => prev.filter(g => g.id !== groupId));
-        // Unassign qualifications from this group
-        setQualifications(prev => prev.map(q => q.groupId === groupId ? {...q, groupId: null} : q));
+         setData(prev => {
+            const nextState = deepCopy(prev);
+            nextState.qualificationGroups = nextState.qualificationGroups.filter(g => g.id !== groupId);
+            // Unassign qualifications from this group
+            nextState.qualifications.forEach(q => {
+                if(q.groupId === groupId) q.groupId = null;
+            });
+            return nextState;
+         });
     };
-
+    
     const handleUpdateGroupQualifications = (groupId: string, assignedQualIds: string[]) => {
-        setQualifications(prev => prev.map(q => {
-            if (assignedQualIds.includes(q.id)) {
-                return { ...q, groupId: groupId };
-            }
-            if (q.groupId === groupId && !assignedQualIds.includes(q.id)) {
-                return { ...q, groupId: null };
-            }
-            return q;
+        setData(prev => ({
+            ...prev,
+            qualifications: prev.qualifications.map(q => {
+                if(q.isStandard) return q;
+                if(assignedQualIds.includes(q.id)) return { ...q, groupId };
+                if(q.groupId === groupId) return { ...q, groupId: null };
+                return q;
+            })
         }));
     };
-
-    const handleSaveTrunk = (trunk: Trunk) => {
-        setTrunks(prev => {
-            const index = prev.findIndex(t => t.id === trunk.id);
-            if(index > -1) {
-                const updated = [...prev];
-                updated[index] = trunk;
-                return updated;
-            }
-            return [...prev, trunk];
-        });
-    };
-
-    const handleDeleteTrunk = (trunkId: string) => {
-        setTrunks(prev => prev.filter(t => t.id !== trunkId));
-    };
     
-    const handleSaveDid = (did: Did) => {
-        setDids(prev => {
-            const index = prev.findIndex(d => d.id === did.id);
-            if(index > -1) {
-                const updated = [...prev];
-                updated[index] = did;
-                return updated;
+    const handleSaveSite = (site: Site) => {
+        setData(prev => {
+            const nextState = deepCopy(prev);
+            const siteExists = nextState.sites.some(s => s.id === site.id);
+            if (siteExists) {
+                nextState.sites = nextState.sites.map(s => s.id === site.id ? site : s)
+            } else {
+                nextState.sites.push(site)
             }
-            return [...prev, did];
-        });
-    };
-    
-    const handleDeleteDid = (didId: string) => {
-        setDids(prev => prev.filter(d => d.id !== didId));
-    };
-
-    const handleSaveSite = (siteToSave: Site) => {
-        setSites(prev => {
-            const index = prev.findIndex(s => s.id === siteToSave.id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = siteToSave;
-                return updated;
-            }
-            return [...prev, siteToSave];
+            return nextState;
         });
     };
     
     const handleDeleteSite = (siteId: string) => {
-        setSites(prev => prev.filter(s => s.id !== siteId));
-        // Also unassign users from this site
-        setUsers(prev => prev.map(u => u.siteId === siteId ? { ...u, siteId: null } : u));
+        setData(prev => ({ ...prev, sites: prev.sites.filter(s => s.id !== siteId) }));
     };
-
-    const handleManualBackup = () => {
-        const newLog: BackupLog = {
-            id: `log-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            status: Math.random() > 0.1 ? 'success' : 'failure',
-            fileName: `backup-manual-${new Date().toISOString().split('T')[0]}.zip`
-        };
-        setBackupLogs(prev => [newLog, ...prev]);
-    };
-
-    const handleUpdateSchedule = (schedule: BackupSchedule) => {
-        setBackupSchedule(schedule);
-    };
-
-    const handleSaveAudioFile = (fileToSave: AudioFile) => {
-        setAudioFiles(prev => {
-            const index = prev.findIndex(f => f.id === fileToSave.id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = fileToSave;
-                return updated;
+    
+    const handleSaveTrunk = (trunk: Trunk) => {
+         setData(prev => {
+            const nextState = deepCopy(prev);
+            const trunkExists = nextState.trunks.some(t => t.id === trunk.id);
+            if (trunkExists) {
+                nextState.trunks = nextState.trunks.map(t => t.id === trunk.id ? trunk : t)
+            } else {
+                nextState.trunks.push(trunk)
             }
-            return [fileToSave, ...prev];
+            return nextState;
         });
     };
     
+    const handleDeleteTrunk = (trunkId: string) => {
+        setData(prev => ({ ...prev, trunks: prev.trunks.filter(t => t.id !== trunkId) }));
+    };
+    
+    const handleSaveDid = (did: Did) => {
+         setData(prev => {
+            const nextState = deepCopy(prev);
+            const didExists = nextState.dids.some(d => d.id === did.id);
+            if (didExists) {
+                nextState.dids = nextState.dids.map(d => d.id === did.id ? did : d)
+            } else {
+                nextState.dids.push(did)
+            }
+            return nextState;
+        });
+    };
+    
+    const handleDeleteDid = (didId: string) => {
+        setData(prev => ({ ...prev, dids: prev.dids.filter(d => d.id !== didId) }));
+    };
+
+    const handleSaveAudioFile = (file: AudioFile) => {
+         setData(prev => {
+            const nextState = deepCopy(prev);
+            const fileExists = nextState.audioFiles.some(f => f.id === file.id);
+            if (fileExists) {
+                nextState.audioFiles = nextState.audioFiles.map(f => f.id === file.id ? file : f)
+            } else {
+                nextState.audioFiles.push(file)
+            }
+            return nextState;
+        });
+    };
+
     const handleDeleteAudioFile = (fileId: string) => {
-        setAudioFiles(prev => prev.filter(f => f.id !== fileId));
+        setData(prev => ({ ...prev, audioFiles: prev.audioFiles.filter(f => f.id !== fileId) }));
     };
     
-    const handleSavePlanningEvent = (eventToSave: PlanningEvent) => {
-        setPlanningEvents(prev => {
-            const index = prev.findIndex(e => e.id === eventToSave.id);
-            if (index > -1) {
-                const updated = [...prev];
-                updated[index] = eventToSave;
-                return updated;
+    const handleSavePlanningEvent = (event: PlanningEvent) => {
+         setData(prev => {
+            const nextState = deepCopy(prev);
+            const eventExists = nextState.planningEvents.some(e => e.id === event.id);
+            if (eventExists) {
+                nextState.planningEvents = nextState.planningEvents.map(e => e.id === event.id ? event : e)
+            } else {
+                nextState.planningEvents.push(event)
             }
-            return [...prev, eventToSave];
+            return nextState;
         });
     };
-
+    
     const handleDeletePlanningEvent = (eventId: string) => {
-        setPlanningEvents(prev => prev.filter(e => e.id !== eventId));
+        setData(prev => ({ ...prev, planningEvents: prev.planningEvents.filter(e => e.id !== eventId) }));
     };
-
-    const handleSaveVisibilitySettings = (newVisibility: ModuleVisibility) => {
-        setModuleVisibility(newVisibility);
-    };
-
+    
     const handleSaveSystemConnectionSettings = (settings: SystemConnectionSettings) => {
-        setSystemConnectionSettings(settings);
+        setData(prev => ({...prev, systemConnectionSettings: settings }));
     };
 
 
     // --- RENDER LOGIC ---
     if (!currentUser) {
-        return <LoginScreen users={users} onLoginSuccess={setCurrentUser} />;
+        return <LoginScreen users={data.users} onLoginSuccess={handleLoginSuccess} />;
     }
     
     if (currentUser.role === 'Agent') {
         return <AgentView 
             agent={currentUser} 
-            campaigns={campaigns} 
-            savedScripts={savedScripts} 
-            sites={sites} 
-            personalCallbacks={personalCallbacks}
-            qualifications={qualifications}
-            qualificationGroups={qualificationGroups}
-            onLogout={() => setCurrentUser(null)} 
+            campaigns={data.campaigns} 
+            savedScripts={data.savedScripts}
+            sites={data.sites}
+            personalCallbacks={data.personalCallbacks}
+            qualifications={data.qualifications}
+            qualificationGroups={data.qualificationGroups}
+            onLogout={handleLogout}
         />;
     }
-    
-    const featureProps = {
-        users,
-        userGroups,
-        savedScripts,
-        ivrFlows: savedIvrFlows,
-        campaigns,
-        qualifications,
-        qualificationGroups,
-        trunks,
-        dids,
-        sites,
-        backupLogs,
-        backupSchedule,
-        systemLogs,
-        versionInfo,
-        connectivityServices,
-        audioFiles,
-        planningEvents,
-        activityTypes,
-        moduleVisibility,
-        features,
-        systemConnectionSettings,
-        // Fix: Pass callHistory and agentSessions to feature components.
-        callHistory,
-        agentSessions,
+
+    const ActiveComponent = activeFeature?.component;
+
+    // A map of handlers to avoid listing them all explicitly on each component
+    const allHandlers = {
         onSaveUser: handleSaveUser,
         onDeleteUser: handleDeleteUser,
         onGenerateUsers: handleGenerateUsers,
         onSaveUserGroup: handleSaveUserGroup,
         onDeleteUserGroup: handleDeleteUserGroup,
-        onSaveOrUpdateScript: handleSaveOrUpdateScript,
+        onSaveOrUpdateScript: handleSaveScript,
         onDeleteScript: handleDeleteScript,
         onDuplicateScript: handleDuplicateScript,
-        onSaveOrUpdateIvrFlow: handleSaveOrUpdateIvrFlow,
+        onSaveOrUpdateIvrFlow: handleSaveIvrFlow,
         onDeleteIvrFlow: handleDeleteIvrFlow,
         onDuplicateIvrFlow: handleDuplicateIvrFlow,
         onSaveCampaign: handleSaveCampaign,
@@ -433,43 +412,44 @@ const App: React.FC = () => {
         onSaveQualificationGroup: handleSaveQualificationGroup,
         onDeleteQualificationGroup: handleDeleteQualificationGroup,
         onUpdateGroupQualifications: handleUpdateGroupQualifications,
+        onSaveSite: handleSaveSite,
+        onDeleteSite: handleDeleteSite,
         onSaveTrunk: handleSaveTrunk,
         onDeleteTrunk: handleDeleteTrunk,
         onSaveDid: handleSaveDid,
         onDeleteDid: handleDeleteDid,
-        onSaveSite: handleSaveSite,
-        onDeleteSite: handleDeleteSite,
-        onManualBackup: handleManualBackup,
-        onUpdateSchedule: handleUpdateSchedule,
         onSaveAudioFile: handleSaveAudioFile,
         onDeleteAudioFile: handleDeleteAudioFile,
         onSavePlanningEvent: handleSavePlanningEvent,
         onDeletePlanningEvent: handleDeletePlanningEvent,
-        onSaveVisibilitySettings: handleSaveVisibilitySettings,
         onSaveSystemConnectionSettings: handleSaveSystemConnectionSettings,
-        currentUser
+        onSaveVisibilitySettings: handleSaveVisibilitySettings,
     };
-
-    const renderMainContent = () => {
-        if (activeFeature && activeFeature.component) {
-            const FeatureComponent = activeFeature.component;
-            return <FeatureComponent feature={activeFeature} {...featureProps} />;
-        }
-        return <FeatureDetail feature={null} />;
-    };
-
+    
     return (
-        <div className="h-screen w-screen flex overflow-hidden font-sans bg-slate-100">
+        <div className="h-screen w-screen flex bg-slate-100 font-sans">
             <Sidebar
                 features={features}
                 activeFeatureId={activeFeatureId}
                 onSelectFeature={setActiveFeatureId}
                 currentUser={currentUser}
-                onLogout={() => setCurrentUser(null)}
+                onLogout={handleLogout}
                 moduleVisibility={moduleVisibility}
             />
-            <main className="flex-1 p-8 overflow-y-auto">
-                {renderMainContent()}
+            <main className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-8">
+                    {ActiveComponent ? (
+                        <ActiveComponent
+                            feature={activeFeature}
+                            // Pass all relevant data and handlers as props
+                            {...data}
+                            {...allHandlers}
+                            currentUser={currentUser}
+                        />
+                    ) : (
+                        <FeatureDetail feature={null} />
+                    )}
+                </div>
             </main>
         </div>
     );
