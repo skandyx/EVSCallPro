@@ -1,385 +1,146 @@
-import React, { useState, useMemo } from 'react';
-import type { Feature, FeatureId, User, SavedScript, IvrFlow, Campaign, Qualification, QualificationGroup, Trunk, Did, Site, UserGroup, Contact, ModuleVisibility, PersonalCallback, SystemConnectionSettings, AudioFile, ActivityType, PlanningEvent, CallHistoryRecord, AgentSession, SystemLog, VersionInfo, ConnectivityService, BackupLog, BackupSchedule } from './types.ts';
+import React, { useState, useEffect } from 'react';
 import { features } from './data/features.ts';
 import { mockData } from './data/mockData.ts';
+import type {
+    Feature, FeatureId, User, UserRole, Campaign, UserGroup, SavedScript, IvrFlow,
+    Contact, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile,
+    PlanningEvent, ActivityType, ModuleVisibility
+} from './types.ts';
 import Sidebar from './components/Sidebar.tsx';
 import LoginScreen from './components/LoginScreen.tsx';
 import AgentView from './components/AgentView.tsx';
 import FeatureDetail from './components/FeatureDetail.tsx';
-
-// A simple deep copy function for state updates to avoid mutations
-const deepCopy = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
+import UserManager from './components/UserManager.tsx';
+import GroupManager from './components/GroupManager.tsx';
+import ScriptFeature from './components/ScriptFeature.tsx';
+import IvrFeature from './components/IvrFeature.tsx';
+import OutboundCampaignsManager from './components/OutboundCampaignsManager.tsx';
+import QualificationsManager from './components/QualificationsManager.tsx';
+import TrunkManager from './components/TrunkManager.tsx';
+import DidManager from './components/DidManager.tsx';
+import SiteManager from './components/SiteManager.tsx';
+import SupervisionDashboard from './components/SupervisionDashboard.tsx';
+import ReportingDashboard from './components/ReportingDashboard.tsx';
+import HistoryViewer from './components/HistoryViewer.tsx';
+import SessionViewer from './components/SessionViewer.tsx';
+import AudioManager from './components/AudioManager.tsx';
+import MaintenanceManager from './components/MaintenanceManager.tsx';
+import PlanningManager from './components/PlanningManager.tsx';
+import SystemConnectionManager from './components/SystemConnectionManager.tsx';
+import ModuleSettingsManager from './components/ModuleSettingsManager.tsx';
+import ApiDocs from './components/ApiDocs.tsx';
+import HelpCenter from './components/HelpCenter.tsx';
 
 const App: React.FC = () => {
     // --- STATE MANAGEMENT ---
-    const [data, setData] = useState(mockData);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [activeFeatureId, setActiveFeatureId] = useState<FeatureId | null>(null);
+    const [data, setData] = useState(mockData);
 
-    // Load module visibility from localStorage or use a default
     const [moduleVisibility, setModuleVisibility] = useState<ModuleVisibility>(() => {
-        try {
-            const saved = localStorage.getItem('moduleVisibility');
-            return saved ? JSON.parse(saved) : { categories: {}, features: {} };
-        } catch (error) {
-            console.error("Failed to parse module visibility from localStorage", error);
-            return { categories: {}, features: {} };
-        }
+        const saved = localStorage.getItem('moduleVisibility');
+        return saved ? JSON.parse(saved) : { categories: {}, features: {} };
     });
-
-    // --- COMPUTED VALUES ---
-    const activeFeature = useMemo(() => {
-        if (!activeFeatureId) return null;
-        return features.find(f => f.id === activeFeatureId) || null;
-    }, [activeFeatureId]);
     
     // --- HANDLERS ---
-    const handleLoginSuccess = (user: User) => {
+    const handleLogin = (user: User) => {
         setCurrentUser(user);
         if (user.role === 'Agent') {
-             setActiveFeatureId(null); // No default feature for agents, they see their view.
+            // Agent view handled separately
         } else {
-            setActiveFeatureId('users'); // Default view for other roles
+            setActiveFeatureId('supervision');
         }
     };
-
     const handleLogout = () => {
         setCurrentUser(null);
         setActiveFeatureId(null);
     };
-    
+
+    // --- DATA MUTATION HANDLERS (Simulating backend) ---
+    const handleSaveUser = (user: User, groupIds: string[]) => {
+        setData(prev => {
+            const userIndex = prev.users.findIndex(u => u.id === user.id);
+            const newUsers = [...prev.users];
+            if (userIndex > -1) {
+                newUsers[userIndex] = user;
+            } else {
+                newUsers.push(user);
+            }
+            const newGroups = prev.userGroups.map(g => ({
+                ...g,
+                memberIds: g.memberIds.filter(id => id !== user.id)
+            }));
+            groupIds.forEach(gid => {
+                const group = newGroups.find(g => g.id === gid);
+                if (group) group.memberIds.push(user.id);
+            });
+            return { ...prev, users: newUsers, userGroups: newGroups };
+        });
+    };
+    const handleDeleteUser = (userId: string) => {
+        setData(prev => ({
+            ...prev,
+            users: prev.users.filter(u => u.id !== userId),
+            userGroups: prev.userGroups.map(g => ({...g, memberIds: g.memberIds.filter(id => id !== userId)}))
+        }));
+    };
+
+    const handleSaveOrUpdateScript = (script: SavedScript) => {
+        setData(prev => {
+            const index = prev.savedScripts.findIndex(s => s.id === script.id);
+            const newScripts = [...prev.savedScripts];
+            if (index > -1) newScripts[index] = script;
+            else newScripts.push(script);
+            return { ...prev, savedScripts: newScripts };
+        });
+    };
+    const handleDeleteScript = (scriptId: string) => setData(prev => ({...prev, savedScripts: prev.savedScripts.filter(s => s.id !== scriptId)}));
+    const handleDuplicateScript = (scriptId: string) => {
+        const scriptToCopy = data.savedScripts.find(s => s.id === scriptId);
+        if (scriptToCopy) {
+            const newScript = JSON.parse(JSON.stringify(scriptToCopy));
+            newScript.id = `script-${Date.now()}`;
+            newScript.name = `${newScript.name} (Copie)`;
+            handleSaveOrUpdateScript(newScript);
+        }
+    };
+
+    const handleSaveCampaign = (campaign: Campaign) => {
+         setData(prev => {
+            const index = prev.campaigns.findIndex(c => c.id === campaign.id);
+            const newCampaigns = [...prev.campaigns];
+            if (index > -1) newCampaigns[index] = campaign;
+            else newCampaigns.push(campaign);
+            return { ...prev, campaigns: newCampaigns };
+        });
+    };
+    const handleDeleteCampaign = (campaignId: string) => setData(prev => ({ ...prev, campaigns: prev.campaigns.filter(c => c.id !== campaignId)}));
+    const handleImportContacts = (campaignId: string, newContacts: Contact[]) => {
+        setData(prev => {
+            const newCampaigns = prev.campaigns.map(c => {
+                if(c.id === campaignId) {
+                    return {...c, contacts: [...c.contacts, ...newContacts]};
+                }
+                return c;
+            });
+            return {...prev, campaigns: newCampaigns};
+        });
+    };
+
     const handleSaveVisibilitySettings = (visibility: ModuleVisibility) => {
         setModuleVisibility(visibility);
         localStorage.setItem('moduleVisibility', JSON.stringify(visibility));
     };
 
-    const handleSaveUser = (user: User, groupIds: string[]) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const userExists = nextState.users.some(u => u.id === user.id);
-            if (userExists) {
-                nextState.users = nextState.users.map(u => u.id === user.id ? user : u);
-            } else {
-                nextState.users.push(user);
-            }
-            
-            nextState.userGroups = nextState.userGroups.map(group => {
-                const shouldHaveUser = groupIds.includes(group.id);
-                const hasUser = group.memberIds.includes(user.id);
-                if (shouldHaveUser && !hasUser) {
-                    group.memberIds.push(user.id);
-                } else if (!shouldHaveUser && hasUser) {
-                    group.memberIds = group.memberIds.filter(id => id !== user.id);
-                }
-                return group;
-            });
-
-            return nextState;
-        });
-    };
-    
-     const handleGenerateUsers = (count: number) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const newUsers: User[] = [];
-            const existingLoginIds = new Set(nextState.users.map(u => u.loginId));
-            let startLoginId = 1000;
-            
-            for (let i = 0; i < count; i++) {
-                while (existingLoginIds.has(String(startLoginId))) {
-                    startLoginId++;
-                }
-                const newLoginId = String(startLoginId);
-                const newUser: User = {
-                    id: `user-gen-${Date.now() + i}`,
-                    loginId: newLoginId,
-                    firstName: `Agent`,
-                    lastName: `${newLoginId}`,
-                    email: `agent.${newLoginId}@example.com`,
-                    role: 'Agent',
-                    isActive: true,
-                    campaignIds: [],
-                    password: `${newLoginId}`,
-                    siteId: nextState.sites[i % nextState.sites.length]?.id || null
-                };
-                newUsers.push(newUser);
-                existingLoginIds.add(newLoginId);
-            }
-            nextState.users.push(...newUsers);
-            return nextState;
-        });
-    };
-
-    const handleDeleteUser = (userId: string) => {
-        setData(prev => ({
-            ...prev,
-            users: prev.users.filter(u => u.id !== userId),
-            userGroups: prev.userGroups.map(g => ({ ...g, memberIds: g.memberIds.filter(id => id !== userId) }))
-        }));
-    };
-    
-    const handleSaveUserGroup = (group: UserGroup) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const groupExists = nextState.userGroups.some(g => g.id === group.id);
-            if (groupExists) {
-                nextState.userGroups = nextState.userGroups.map(g => g.id === group.id ? group : g);
-            } else {
-                nextState.userGroups.push(group);
-            }
-            return nextState;
-        });
-    };
-
-    const handleDeleteUserGroup = (groupId: string) => {
-        setData(prev => ({ ...prev, userGroups: prev.userGroups.filter(g => g.id !== groupId) }));
-    };
-
-    const handleSaveScript = (script: SavedScript) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const scriptExists = nextState.savedScripts.some(s => s.id === script.id);
-            if(scriptExists) {
-                nextState.savedScripts = nextState.savedScripts.map(s => s.id === script.id ? script : s)
-            } else {
-                nextState.savedScripts.push(script);
-            }
-            return nextState;
-        });
-    };
-
-    const handleDeleteScript = (scriptId: string) => {
-        setData(prev => ({ ...prev, savedScripts: prev.savedScripts.filter(s => s.id !== scriptId) }));
-    };
-
-    const handleDuplicateScript = (scriptId: string) => {
-        setData(prev => {
-            const originalScript = prev.savedScripts.find(s => s.id === scriptId);
-            if (!originalScript) return prev;
-            const newScript = deepCopy(originalScript);
-            newScript.id = `script-${Date.now()}`;
-            newScript.name = `${originalScript.name} (Copie)`;
-            return { ...prev, savedScripts: [...prev.savedScripts, newScript] };
-        });
-    };
-    
-    const handleSaveIvrFlow = (flow: IvrFlow) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const flowExists = nextState.savedIvrFlows.some(f => f.id === flow.id);
-            if (flowExists) {
-                 nextState.savedIvrFlows = nextState.savedIvrFlows.map(f => f.id === flow.id ? flow : f);
-            } else {
-                nextState.savedIvrFlows.push(flow);
-            }
-            return nextState;
-        });
-    };
-    
-    const handleDeleteIvrFlow = (flowId: string) => {
-        setData(prev => ({ ...prev, savedIvrFlows: prev.savedIvrFlows.filter(f => f.id !== flowId) }));
-    };
-    
-    const handleDuplicateIvrFlow = (flowId: string) => {
-        setData(prev => {
-            const originalFlow = prev.savedIvrFlows.find(f => f.id === flowId);
-            if (!originalFlow) return prev;
-            const newFlow = deepCopy(originalFlow);
-            newFlow.id = `ivr-flow-${Date.now()}`;
-            newFlow.name = `${originalFlow.name} (Copie)`;
-            return { ...prev, savedIvrFlows: [...prev.savedIvrFlows, newFlow] };
-        });
-    };
-    
-     const handleSaveCampaign = (campaign: Campaign) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const campaignExists = nextState.campaigns.some(c => c.id === campaign.id);
-            if (campaignExists) {
-                nextState.campaigns = nextState.campaigns.map(c => c.id === campaign.id ? campaign : c);
-            } else {
-                nextState.campaigns.push(campaign);
-            }
-            return nextState;
-        });
-    };
-    
-    const handleDeleteCampaign = (campaignId: string) => {
-        setData(prev => ({ ...prev, campaigns: prev.campaigns.filter(c => c.id !== campaignId) }));
-    };
-    
-    const handleImportContacts = (campaignId: string, contacts: Contact[]) => {
-        setData(prev => ({
-            ...prev,
-            campaigns: prev.campaigns.map(c => 
-                c.id === campaignId 
-                    ? { ...c, contacts: [...c.contacts, ...contacts] }
-                    : c
-            )
-        }));
-    };
-    
-     const handleSaveQualification = (qualification: Qualification) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const qualExists = nextState.qualifications.some(q => q.id === qualification.id);
-            if (qualExists) {
-                nextState.qualifications = nextState.qualifications.map(q => q.id === qualification.id ? qualification : q);
-            } else {
-                nextState.qualifications.push(qualification);
-            }
-            return nextState;
-        });
-    };
-
-    const handleDeleteQualification = (qualId: string) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            nextState.qualifications = nextState.qualifications.filter(q => q.id !== qualId);
-            // Also un-parent children
-            nextState.qualifications.forEach(q => {
-                if(q.parentId === qualId) q.parentId = null;
-            });
-            return nextState;
-        });
-    };
-
-    const handleSaveQualificationGroup = (group: QualificationGroup) => {
-         setData(prev => {
-            const nextState = deepCopy(prev);
-            const groupExists = nextState.qualificationGroups.some(g => g.id === group.id);
-            if(groupExists) {
-                nextState.qualificationGroups = nextState.qualificationGroups.map(g => g.id === group.id ? group : g)
-            } else {
-                nextState.qualificationGroups.push(group)
-            }
-            return nextState;
-        });
-    };
-    
-    const handleDeleteQualificationGroup = (groupId: string) => {
-         setData(prev => {
-            const nextState = deepCopy(prev);
-            nextState.qualificationGroups = nextState.qualificationGroups.filter(g => g.id !== groupId);
-            // Unassign qualifications from this group
-            nextState.qualifications.forEach(q => {
-                if(q.groupId === groupId) q.groupId = null;
-            });
-            return nextState;
-         });
-    };
-    
-    const handleUpdateGroupQualifications = (groupId: string, assignedQualIds: string[]) => {
-        setData(prev => ({
-            ...prev,
-            qualifications: prev.qualifications.map(q => {
-                if(q.isStandard) return q;
-                if(assignedQualIds.includes(q.id)) return { ...q, groupId };
-                if(q.groupId === groupId) return { ...q, groupId: null };
-                return q;
-            })
-        }));
-    };
-    
-    const handleSaveSite = (site: Site) => {
-        setData(prev => {
-            const nextState = deepCopy(prev);
-            const siteExists = nextState.sites.some(s => s.id === site.id);
-            if (siteExists) {
-                nextState.sites = nextState.sites.map(s => s.id === site.id ? site : s)
-            } else {
-                nextState.sites.push(site)
-            }
-            return nextState;
-        });
-    };
-    
-    const handleDeleteSite = (siteId: string) => {
-        setData(prev => ({ ...prev, sites: prev.sites.filter(s => s.id !== siteId) }));
-    };
-    
-    const handleSaveTrunk = (trunk: Trunk) => {
-         setData(prev => {
-            const nextState = deepCopy(prev);
-            const trunkExists = nextState.trunks.some(t => t.id === trunk.id);
-            if (trunkExists) {
-                nextState.trunks = nextState.trunks.map(t => t.id === trunk.id ? trunk : t)
-            } else {
-                nextState.trunks.push(trunk)
-            }
-            return nextState;
-        });
-    };
-    
-    const handleDeleteTrunk = (trunkId: string) => {
-        setData(prev => ({ ...prev, trunks: prev.trunks.filter(t => t.id !== trunkId) }));
-    };
-    
-    const handleSaveDid = (did: Did) => {
-         setData(prev => {
-            const nextState = deepCopy(prev);
-            const didExists = nextState.dids.some(d => d.id === did.id);
-            if (didExists) {
-                nextState.dids = nextState.dids.map(d => d.id === did.id ? did : d)
-            } else {
-                nextState.dids.push(did)
-            }
-            return nextState;
-        });
-    };
-    
-    const handleDeleteDid = (didId: string) => {
-        setData(prev => ({ ...prev, dids: prev.dids.filter(d => d.id !== didId) }));
-    };
-
-    const handleSaveAudioFile = (file: AudioFile) => {
-         setData(prev => {
-            const nextState = deepCopy(prev);
-            const fileExists = nextState.audioFiles.some(f => f.id === file.id);
-            if (fileExists) {
-                nextState.audioFiles = nextState.audioFiles.map(f => f.id === file.id ? file : f)
-            } else {
-                nextState.audioFiles.push(file)
-            }
-            return nextState;
-        });
-    };
-
-    const handleDeleteAudioFile = (fileId: string) => {
-        setData(prev => ({ ...prev, audioFiles: prev.audioFiles.filter(f => f.id !== fileId) }));
-    };
-    
-    const handleSavePlanningEvent = (event: PlanningEvent) => {
-         setData(prev => {
-            const nextState = deepCopy(prev);
-            const eventExists = nextState.planningEvents.some(e => e.id === event.id);
-            if (eventExists) {
-                nextState.planningEvents = nextState.planningEvents.map(e => e.id === event.id ? event : e)
-            } else {
-                nextState.planningEvents.push(event)
-            }
-            return nextState;
-        });
-    };
-    
-    const handleDeletePlanningEvent = (eventId: string) => {
-        setData(prev => ({ ...prev, planningEvents: prev.planningEvents.filter(e => e.id !== eventId) }));
-    };
-    
-    const handleSaveSystemConnectionSettings = (settings: SystemConnectionSettings) => {
-        setData(prev => ({...prev, systemConnectionSettings: settings }));
-    };
-
-
     // --- RENDER LOGIC ---
     if (!currentUser) {
-        return <LoginScreen users={data.users} onLoginSuccess={handleLoginSuccess} />;
+        return <LoginScreen users={data.users} onLoginSuccess={handleLogin} />;
     }
-    
+
     if (currentUser.role === 'Agent') {
-        return <AgentView 
-            agent={currentUser} 
-            campaigns={data.campaigns} 
+        return <AgentView
+            agent={currentUser}
+            campaigns={data.campaigns}
             savedScripts={data.savedScripts}
             sites={data.sites}
             personalCallbacks={data.personalCallbacks}
@@ -389,41 +150,36 @@ const App: React.FC = () => {
         />;
     }
 
-    const ActiveComponent = activeFeature?.component;
-
-    // A map of handlers to avoid listing them all explicitly on each component
-    const allHandlers = {
-        onSaveUser: handleSaveUser,
-        onDeleteUser: handleDeleteUser,
-        onGenerateUsers: handleGenerateUsers,
-        onSaveUserGroup: handleSaveUserGroup,
-        onDeleteUserGroup: handleDeleteUserGroup,
-        onSaveOrUpdateScript: handleSaveScript,
-        onDeleteScript: handleDeleteScript,
-        onDuplicateScript: handleDuplicateScript,
-        onSaveOrUpdateIvrFlow: handleSaveIvrFlow,
-        onDeleteIvrFlow: handleDeleteIvrFlow,
-        onDuplicateIvrFlow: handleDuplicateIvrFlow,
-        onSaveCampaign: handleSaveCampaign,
-        onDeleteCampaign: handleDeleteCampaign,
-        onImportContacts: handleImportContacts,
-        onSaveQualification: handleSaveQualification,
-        onDeleteQualification: handleDeleteQualification,
-        onSaveQualificationGroup: handleSaveQualificationGroup,
-        onDeleteQualificationGroup: handleDeleteQualificationGroup,
-        onUpdateGroupQualifications: handleUpdateGroupQualifications,
-        onSaveSite: handleSaveSite,
-        onDeleteSite: handleDeleteSite,
-        onSaveTrunk: handleSaveTrunk,
-        onDeleteTrunk: handleDeleteTrunk,
-        onSaveDid: handleSaveDid,
-        onDeleteDid: handleDeleteDid,
-        onSaveAudioFile: handleSaveAudioFile,
-        onDeleteAudioFile: handleDeleteAudioFile,
-        onSavePlanningEvent: handleSavePlanningEvent,
-        onDeletePlanningEvent: handleDeletePlanningEvent,
-        onSaveSystemConnectionSettings: handleSaveSystemConnectionSettings,
-        onSaveVisibilitySettings: handleSaveVisibilitySettings,
+    const activeFeature = features.find(f => f.id === activeFeatureId);
+    
+    const renderFeatureComponent = () => {
+        if (!activeFeature) return <FeatureDetail feature={null} />;
+        
+        switch (activeFeature.id) {
+            case 'users': return <UserManager feature={activeFeature} users={data.users} campaigns={data.campaigns} userGroups={data.userGroups} sites={data.sites} currentUser={currentUser} onSaveUser={handleSaveUser} onDeleteUser={handleDeleteUser} onGenerateUsers={() => {}} />;
+            case 'groups': return <GroupManager feature={activeFeature} users={data.users} userGroups={data.userGroups} onSaveUserGroup={(g) => setData(prev => ({...prev, userGroups: prev.userGroups.find(ug => ug.id === g.id) ? prev.userGroups.map(ug => ug.id === g.id ? g : ug) : [...prev.userGroups, g]}))} onDeleteUserGroup={(id) => setData(prev => ({...prev, userGroups: prev.userGroups.filter(g => g.id !== id)}))} />;
+            case 'scripts': return <ScriptFeature feature={activeFeature} savedScripts={data.savedScripts} onSaveOrUpdateScript={handleSaveOrUpdateScript} onDeleteScript={handleDeleteScript} onDuplicateScript={handleDuplicateScript} />;
+            case 'ivr': return <IvrFeature feature={activeFeature} ivrFlows={data.savedIvrFlows} onSaveOrUpdateIvrFlow={(f) => setData(prev => ({...prev, savedIvrFlows: prev.savedIvrFlows.find(i => i.id === f.id) ? prev.savedIvrFlows.map(i => i.id === f.id ? f : i) : [...prev.savedIvrFlows, f]}))} onDeleteIvrFlow={(id) => setData(prev => ({...prev, savedIvrFlows: prev.savedIvrFlows.filter(i => i.id !== id)}))} onDuplicateIvrFlow={(id) => { const f = data.savedIvrFlows.find(i => i.id === id); if(f) setData(prev => ({...prev, savedIvrFlows: [...prev.savedIvrFlows, {...JSON.parse(JSON.stringify(f)), id: `ivr-${Date.now()}`, name: `${f.name} (Copie)`}]})) }}/>;
+            case 'outbound': return <OutboundCampaignsManager feature={activeFeature} campaigns={data.campaigns} users={data.users} savedScripts={data.savedScripts} qualificationGroups={data.qualificationGroups} onSaveCampaign={handleSaveCampaign} onDeleteCampaign={handleDeleteCampaign} onImportContacts={handleImportContacts} />;
+            case 'qualifications': return <QualificationsManager feature={activeFeature} qualifications={data.qualifications} qualificationGroups={data.qualificationGroups} onSaveQualification={(q) => setData(prev => ({...prev, qualifications: prev.qualifications.find(i => i.id === q.id) ? prev.qualifications.map(i => i.id === q.id ? q : i) : [...prev.qualifications, q]}))} onDeleteQualification={(id) => setData(prev => ({...prev, qualifications: prev.qualifications.filter(i => i.id !== id)}))} onSaveQualificationGroup={(g) => setData(prev => ({...prev, qualificationGroups: prev.qualificationGroups.find(i => i.id === g.id) ? prev.qualificationGroups.map(i => i.id === g.id ? g : i) : [...prev.qualificationGroups, g]}))} onDeleteQualificationGroup={(id) => setData(prev => ({...prev, qualificationGroups: prev.qualificationGroups.filter(i => i.id !== id)}))} onUpdateGroupQualifications={(groupId, qualIds) => setData(prev => ({...prev, qualifications: prev.qualifications.map(q => q.groupId === groupId ? {...q, groupId: null} : q).map(q => qualIds.includes(q.id) ? {...q, groupId} : q)}))} />;
+            case 'trunks': return <TrunkManager feature={activeFeature} trunks={data.trunks} onSaveTrunk={(t) => setData(prev => ({...prev, trunks: prev.trunks.find(i=>i.id === t.id) ? prev.trunks.map(i=>i.id===t.id ? t : i) : [...prev.trunks, t]}))} onDeleteTrunk={(id) => setData(prev => ({...prev, trunks: prev.trunks.filter(i=>i.id!==id)}))} />;
+            case 'dids': return <DidManager feature={activeFeature} dids={data.dids} trunks={data.trunks} ivrFlows={data.savedIvrFlows} onSaveDid={(d) => setData(prev => ({...prev, dids: prev.dids.find(i=>i.id===d.id) ? prev.dids.map(i=>i.id===d.id ? d : i) : [...prev.dids, d]}))} onDeleteDid={(id) => setData(prev => ({...prev, dids: prev.dids.filter(i=>i.id!==id)}))} />;
+            case 'sites-config': return <SiteManager feature={activeFeature} sites={data.sites} onSaveSite={(s) => setData(prev => ({...prev, sites: prev.sites.find(i=>i.id===s.id) ? prev.sites.map(i=>i.id===s.id ? s : i) : [...prev.sites, s]}))} onDeleteSite={(id) => setData(prev => ({...prev, sites: prev.sites.filter(i=>i.id!==id)}))} />;
+            case 'supervision': return <SupervisionDashboard feature={activeFeature} users={data.users} campaigns={data.campaigns} currentUser={currentUser} />;
+            case 'reporting': return <ReportingDashboard feature={activeFeature} callHistory={data.callHistory} agentSessions={data.agentSessions} users={data.users} campaigns={data.campaigns} qualifications={data.qualifications} />;
+            case 'history': return <HistoryViewer feature={activeFeature} callHistory={data.callHistory} users={data.users} campaigns={data.campaigns} qualifications={data.qualifications} />;
+            case 'sessions': return <SessionViewer feature={activeFeature} agentSessions={data.agentSessions} users={data.users} />;
+            case 'audio': return <AudioManager feature={activeFeature} audioFiles={data.audioFiles} onSaveAudioFile={(f) => setData(prev => ({...prev, audioFiles: prev.audioFiles.find(i=>i.id===f.id) ? prev.audioFiles.map(i=>i.id===f.id ? f : i) : [...prev.audioFiles, f]}))} onDeleteAudioFile={(id) => setData(prev => ({...prev, audioFiles: prev.audioFiles.filter(i=>i.id!==id)}))} />;
+            case 'maintenance': return <MaintenanceManager feature={activeFeature} backupLogs={data.backupLogs} backupSchedule={data.backupSchedule} onSaveBackupSchedule={(s) => setData(prev => ({...prev, backupSchedule: s}))} onRunBackup={() => alert("Backup started!")} />;
+            case 'planning': return <PlanningManager feature={activeFeature} planningEvents={data.planningEvents} activityTypes={data.activityTypes} users={data.users} userGroups={data.userGroups} onSavePlanningEvent={(e) => setData(prev => ({...prev, planningEvents: prev.planningEvents.find(i=>i.id===e.id) ? prev.planningEvents.map(i=>i.id===e.id ? e : i) : [...prev.planningEvents, e]}))} onDeletePlanningEvent={(id) => setData(prev => ({...prev, planningEvents: prev.planningEvents.filter(i=>i.id!==id)}))} />;
+            case 'system-connection': return <SystemConnectionManager feature={activeFeature} systemConnectionSettings={data.systemConnectionSettings} onSaveSystemConnectionSettings={(s) => setData(prev => ({...prev, systemConnectionSettings: s}))} />;
+            case 'module-settings': return <ModuleSettingsManager feature={activeFeature} features={features} moduleVisibility={moduleVisibility} onSaveVisibilitySettings={handleSaveVisibilitySettings} />;
+            case 'api-docs': return <ApiDocs feature={activeFeature} />;
+            case 'help': return <HelpCenter feature={activeFeature} />;
+            
+            // Default case if a component is not specified for a feature
+            default: return <FeatureDetail feature={activeFeature} />;
+        }
     };
     
     return (
@@ -431,25 +187,15 @@ const App: React.FC = () => {
             <Sidebar
                 features={features}
                 activeFeatureId={activeFeatureId}
-                onSelectFeature={setActiveFeatureId}
+                onSelectFeature={(id: FeatureId) => setActiveFeatureId(id)}
                 currentUser={currentUser}
                 onLogout={handleLogout}
                 moduleVisibility={moduleVisibility}
             />
             <main className="flex-1 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-8">
-                    {ActiveComponent ? (
-                        <ActiveComponent
-                            feature={activeFeature}
-                            // Pass all relevant data and handlers as props
-                            {...data}
-                            {...allHandlers}
-                            currentUser={currentUser}
-                        />
-                    ) : (
-                        <FeatureDetail feature={null} />
-                    )}
-                </div>
+                 <div className="flex-1 p-8 overflow-y-auto">
+                    {renderFeatureComponent()}
+                 </div>
             </main>
         </div>
     );
