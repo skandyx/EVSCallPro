@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, CallHistoryRecord } from './types.ts';
 import { features } from './data/features.ts';
 import { mockData } from './data/mockData.ts'; // Kept for simulated data not yet in DB
@@ -13,7 +13,7 @@ import AgentView from './components/AgentView.tsx';
 const App: React.FC = () => {
     // --- STATE MANAGEMENT ---
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isLoading, setIsLoading] = useState<boolean>(true); // Start as true to check for token
 
     // All application data, initialized empty, to be filled from API
     const [users, setUsers] = useState<User[]>([]);
@@ -40,14 +40,54 @@ const App: React.FC = () => {
     const [activeView, setActiveView] = useState<'app' | 'monitoring'>('app');
     const [activeFeatureId, setActiveFeatureId] = useState<FeatureId | null>('users');
     
+     // --- EVENT HANDLERS ---
+    const handleLogout = useCallback(() => {
+        localStorage.removeItem('token');
+        sessionStorage.clear();
+        console.log("Token and session storage cleared for security.");
+        setCurrentUser(null);
+    }, []);
+
+    // Helper for API calls, now including auth token
+    const apiCall = useCallback(async (url: string, method: string, body?: any) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            handleLogout();
+            throw new Error("No auth token found");
+        }
+
+        const options: RequestInit = {
+            method,
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+        };
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
+        const response = await fetch(url, options);
+        
+        if (response.status === 401) { // Unauthorized
+            handleLogout();
+            throw new Error('Session expired. Please log in again.');
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'API request failed');
+        }
+        if (response.status !== 204) {
+            return response.json();
+        }
+        return null;
+    }, [handleLogout]);
+
     // --- DATA FETCHING ---
-    const fetchApplicationData = async () => {
+    const fetchApplicationData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const response = await fetch('/api/application-data');
-            if (!response.ok) throw new Error('Failed to fetch application data');
-            const data = await response.json();
-
+            const data = await apiCall('/api/application-data', 'GET');
             setUsers(data.users || []);
             setUserGroups(data.userGroups || []);
             setCampaigns(data.campaigns || []);
@@ -62,78 +102,63 @@ const App: React.FC = () => {
             setPlanningEvents(data.planningEvents || []);
             setPersonalCallbacks(data.personalCallbacks || []);
             setActivityTypes(data.activityTypes || []);
-
         } catch (error) {
             console.error("Error fetching data:", error);
-            // Optionally, set an error state to show in the UI
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [apiCall]);
+
+    // Effect for initial token validation on app load
+    useEffect(() => {
+        const validateToken = async () => {
+            const storedToken = localStorage.getItem('token');
+            if (storedToken) {
+                try {
+                    const response = await fetch('/api/me', {
+                        headers: { 'Authorization': `Bearer ${storedToken}` }
+                    });
+                    if (response.ok) {
+                        const user = await response.json();
+                        setCurrentUser(user);
+                    } else {
+                        handleLogout(); // Token is invalid or expired
+                    }
+                } catch (error) {
+                    console.error("Token validation failed", error);
+                    handleLogout();
+                }
+            } else {
+                setIsLoading(false); // No token, stop loading
+            }
+        };
+        validateToken();
+    }, [handleLogout]);
     
     useEffect(() => {
         if (currentUser) {
             fetchApplicationData();
         } else {
             // Clear data on logout
-            setUsers([]);
-            setUserGroups([]);
-            setCampaigns([]);
-            setSavedScripts([]);
-            setIvrFlows([]);
-            setQualifications([]);
-            setQualificationGroups([]);
-            setDids([]);
-            setTrunks([]);
-            setSites([]);
-            setAudioFiles([]);
-            setPlanningEvents([]);
-            setPersonalCallbacks([]);
-            setActivityTypes([]);
+            setUsers([]); setUserGroups([]); setCampaigns([]); setSavedScripts([]); setIvrFlows([]);
+            setQualifications([]); setQualificationGroups([]); setDids([]); setTrunks([]); setSites([]);
+            setAudioFiles([]); setPlanningEvents([]); setPersonalCallbacks([]); setActivityTypes([]);
             setIsLoading(false);
         }
-    }, [currentUser]);
+    }, [currentUser, fetchApplicationData]);
 
     // --- COMPUTED VALUES ---
     const activeFeature = useMemo(() => features.find(f => f.id === activeFeatureId), [activeFeatureId]);
 
-    // --- EVENT HANDLERS ---
-    const handleLoginSuccess = (user: User) => setCurrentUser(user);
-    
-    const handleLogout = () => {
-        // Secure cleanup: Clear any sensitive data stored locally in the browser.
-        localStorage.clear();
-        sessionStorage.clear();
-        console.log("Local storage and session storage cleared for security.");
-        
-        // Reset the application state to return to the login screen.
-        setCurrentUser(null);
+    const handleLoginSuccess = (data: { user: User, token: string }) => {
+        const { user, token } = data;
+        localStorage.setItem('token', token);
+        setCurrentUser(user);
     };
 
     const handleSelectFeature = (id: FeatureId) => setActiveFeatureId(id);
 
     // --- DATA MUTATION HANDLERS (API CALLS) ---
-    
-    // Helper for API calls
-    const apiCall = async (url: string, method: string, body?: any) => {
-        const options: RequestInit = {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-        };
-        if (body) {
-            options.body = JSON.stringify(body);
-        }
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'API request failed');
-        }
-        if (response.status !== 204) {
-            return response.json();
-        }
-        return null;
-    };
-
     // Users
     const handleSaveUser = async (user: User, groupIds: string[]) => {
         const isNew = !users.some(u => u.id === user.id);
@@ -240,14 +265,10 @@ const App: React.FC = () => {
         }
     };
     
-    // Generic handlers for simple CRUD (can be expanded)
-    const createCrudHandlers = <T extends { id: string }>(
-        pluralName: string, 
-        data: T[], 
-        setData: React.Dispatch<React.SetStateAction<T[]>>
-    ) => ({
+    const createCrudHandlers = <T extends { id: string }>(pluralName: string) => ({
         save: async (item: T) => {
-            const isNew = !data.some(d => d.id === item.id);
+            const currentData: T[] = (eval(pluralName) as T[]) || [];
+            const isNew = !currentData.some(d => d.id === item.id);
             const url = isNew ? `/api/${pluralName}` : `/api/${pluralName}/${item.id}`;
             await apiCall(url, isNew ? 'POST' : 'PUT', item);
             await fetchApplicationData();
@@ -258,11 +279,11 @@ const App: React.FC = () => {
         }
     });
     
-    const didHandlers = createCrudHandlers('dids', dids, setDids);
-    const trunkHandlers = createCrudHandlers('trunks', trunks, setTrunks);
-    const siteHandlers = createCrudHandlers('sites', sites, setSites);
-    const audioHandlers = createCrudHandlers('audio-files', audioFiles, setAudioFiles);
-    const planningEventHandlers = createCrudHandlers('planning-events', planningEvents, setPlanningEvents);
+    const didHandlers = createCrudHandlers('dids');
+    const trunkHandlers = createCrudHandlers('trunks');
+    const siteHandlers = createCrudHandlers('sites');
+    const audioHandlers = createCrudHandlers('audio-files');
+    const planningEventHandlers = createCrudHandlers('planning-events');
 
     const handleRunBackup = () => {
          setBackupLogs(prev => [
@@ -272,8 +293,12 @@ const App: React.FC = () => {
     };
 
     // --- RENDER LOGIC ---
+    if (isLoading) {
+        return <div className="h-screen w-screen flex items-center justify-center bg-slate-100">Vérification de la session...</div>;
+    }
+
     if (!currentUser) {
-        return <LoginScreen users={users} onLoginSuccess={handleLoginSuccess} />;
+        return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
     }
 
     if (currentUser.role === 'Agent') {
@@ -287,10 +312,6 @@ const App: React.FC = () => {
             qualificationGroups={qualificationGroups}
             onLogout={handleLogout}
         />;
-    }
-    
-    if (isLoading) {
-        return <div className="h-screen w-screen flex items-center justify-center">Loading application data...</div>;
     }
     
     const featureComponentProps: any = {

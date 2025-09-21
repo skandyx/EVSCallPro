@@ -3,11 +3,10 @@ import type { User } from '../types.ts';
 import { LogoIcon } from './Icons.tsx';
 
 interface LoginScreenProps {
-    users: User[]; // This prop is kept for potential UI hints, but not for auth
-    onLoginSuccess: (user: User) => void;
+    onLoginSuccess: (data: { user: User, token: string }) => void;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     const [loginId, setLoginId] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -28,9 +27,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess }) => {
             });
 
             if (response.ok) {
-                const user = await response.json();
-                if (user.isActive) {
-                    onLoginSuccess(user);
+                const data = await response.json(); // Expects { user, token }
+                if (data.user.isActive) {
+                    onLoginSuccess(data);
                 } else {
                      setError("Ce compte utilisateur est désactivé.");
                 }

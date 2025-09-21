@@ -1,8 +1,11 @@
 const pool = require('./connection');
 const { keysToCamel } = require('./utils');
 
+// Define safe columns to be returned, excluding sensitive ones like password_hash
+const SAFE_USER_COLUMNS = 'id, login_id, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at';
+
 const getUsers = async () => {
-    const res = await pool.query('SELECT * FROM users ORDER BY first_name, last_name');
+    const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users ORDER BY first_name, last_name`);
     return res.rows.map(keysToCamel);
 };
 
@@ -14,7 +17,7 @@ const createUser = async (user, groupIds) => {
         const userQuery = `
             INSERT INTO users (id, login_id, first_name, last_name, email, "role", is_active, password_hash, site_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING *;
+            RETURNING ${SAFE_USER_COLUMNS};
         `;
         const userRes = await client.query(userQuery, [
             user.id, user.loginId, user.firstName, user.lastName, user.email || null,
@@ -52,84 +55,56 @@ const updateUser = async (userId, user, groupIds) => {
     try {
         await client.query('BEGIN');
 
-        // Step 1: Update the user record itself
         const hasPassword = user.password && user.password.trim() !== '';
         
+        const queryParams = [
+            user.loginId, user.firstName, user.lastName, user.email || null,
+            user.role, user.isActive, user.siteId || null
+        ];
+        
+        let passwordUpdateClause = '';
+        if (hasPassword) {
+            passwordUpdateClause = `, password_hash = $${queryParams.length + 1}`;
+            queryParams.push(user.password);
+        }
+        
+        queryParams.push(userId);
+        const userIdIndex = queryParams.length;
+
         const userQuery = `
             UPDATE users SET 
-                login_id = $1, 
-                first_name = $2, 
-                last_name = $3, 
-                email = $4, 
-                "role" = $5, 
-                is_active = $6, 
-                site_id = $7
-                ${hasPassword ? ', password_hash = $8' : ''}, 
-                updated_at = NOW()
-            WHERE id = $${hasPassword ? 9 : 8}
-            RETURNING *;
+                login_id = $1, first_name = $2, last_name = $3, email = $4, 
+                "role" = $5, is_active = $6, site_id = $7
+                ${passwordUpdateClause}, updated_at = NOW()
+            WHERE id = $${userIdIndex}
+            RETURNING ${SAFE_USER_COLUMNS};
         `;
-        
-        const userValues = [
-            user.loginId,
-            user.firstName,
-            user.lastName,
-            user.email || null,
-            user.role,
-            user.isActive,
-            user.siteId || null,
-        ];
 
-        if (hasPassword) {
-            userValues.push(user.password);
-        }
-        userValues.push(userId);
-
-        const { rows: updatedUserRows } = await client.query(userQuery, userValues);
+        const { rows: updatedUserRows } = await client.query(userQuery, queryParams);
         if (updatedUserRows.length === 0) {
             throw new Error('User not found for update.');
         }
 
-        // Step 2: Update group memberships using diff logic
+        // Update group memberships
         const { rows: currentGroups } = await client.query('SELECT group_id FROM user_group_members WHERE user_id = $1', [userId]);
         const currentGroupIds = new Set(currentGroups.map(g => g.group_id));
         const desiredGroupIds = new Set(groupIds || []);
+        const toAdd = [...desiredGroupIds].filter(id => !currentGroupIds.has(id));
+        const toRemove = [...currentGroupIds].filter(id => !desiredGroupIds.has(id));
+        if (toRemove.length > 0) await client.query(`DELETE FROM user_group_members WHERE user_id = $1 AND group_id = ANY($2::text[])`, [userId, toRemove]);
+        if (toAdd.length > 0) for (const groupId of toAdd) await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [userId, groupId]);
 
-        const groupsToAdd = [...desiredGroupIds].filter(id => !currentGroupIds.has(id));
-        const groupsToRemove = [...currentGroupIds].filter(id => !desiredGroupIds.has(id));
-
-        if (groupsToRemove.length > 0) {
-            const placeholders = groupsToRemove.map((_, i) => `$${i + 2}`).join(',');
-            await client.query(`DELETE FROM user_group_members WHERE user_id = $1 AND group_id IN (${placeholders})`, [userId, ...groupsToRemove]);
-        }
-        if (groupsToAdd.length > 0) {
-            for (const groupId of groupsToAdd) {
-                await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [userId, groupId]);
-            }
-        }
-        
-        // Step 3: Update campaign assignments using diff logic
+        // Update campaign assignments
         const { rows: currentCampaigns } = await client.query('SELECT campaign_id FROM campaign_agents WHERE user_id = $1', [userId]);
         const currentCampaignIds = new Set(currentCampaigns.map(c => c.campaign_id));
         const desiredCampaignIds = new Set(user.campaignIds || []);
-
         const campaignsToAdd = [...desiredCampaignIds].filter(id => !currentCampaignIds.has(id));
         const campaignsToRemove = [...currentCampaignIds].filter(id => !desiredCampaignIds.has(id));
-
-        if (campaignsToRemove.length > 0) {
-            const placeholders = campaignsToRemove.map((_, i) => `$${i + 2}`).join(',');
-            await client.query(`DELETE FROM campaign_agents WHERE user_id = $1 AND campaign_id IN (${placeholders})`, [userId, ...campaignsToRemove]);
-        }
-        if (campaignsToAdd.length > 0) {
-            for (const campaignId of campaignsToAdd) {
-                await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [userId, campaignId]);
-            }
-        }
+        if (campaignsToRemove.length > 0) await client.query(`DELETE FROM campaign_agents WHERE user_id = $1 AND campaign_id = ANY($2::text[])`, [userId, campaignsToRemove]);
+        if (campaignsToAdd.length > 0) for (const campaignId of campaignsToAdd) await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [userId, campaignId]);
         
         await client.query('COMMIT');
-        
         return keysToCamel(updatedUserRows[0]);
-
     } catch (e) {
         await client.query('ROLLBACK');
         console.error("Error in updateUser transaction:", e);
