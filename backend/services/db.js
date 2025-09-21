@@ -260,8 +260,9 @@ const saveUserGroup = async (group, id) => {
         
         await client.query('DELETE FROM user_group_members WHERE group_id = $1', [savedGroup.id]);
         if (group.memberIds && group.memberIds.length > 0) {
-            const values = group.memberIds.map((userId, i) => `($1, $${i + 2})`).join(',');
-            await client.query(`INSERT INTO user_group_members (group_id, user_id) VALUES ${values}`, [savedGroup.id, ...group.memberIds]);
+            // Harmonize column order with other functions for consistency and robustness.
+            const values = group.memberIds.map((userId, i) => `($${i + 2}, $1)`).join(',');
+            await client.query(`INSERT INTO user_group_members (user_id, group_id) VALUES ${values}`, [savedGroup.id, ...group.memberIds]);
         }
         
         await client.query('COMMIT');
