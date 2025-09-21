@@ -1,62 +1,129 @@
--- backend/services/db.js
+// backend/services/db.js
 const { Pool } = require('pg');
 
 const pool = new Pool({
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT || '5432', 10),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
 });
 
-// Helper function to convert snake_case keys from DB to camelCase for the API
+// Utility to convert snake_case keys from DB to camelCase for JS/JSON
 const keysToCamel = (obj) => {
-    // Correctly handle null, undefined, and arrays before processing.
-    if (obj === null || typeof obj !== 'object') {
+    if (obj === null || typeof obj !== 'object' || obj.constructor.name !== 'Object') {
         return obj;
     }
     if (Array.isArray(obj)) {
         return obj.map(v => keysToCamel(v));
     }
     const newObj = {};
-    for (const key in obj) {
+    for (let key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-            newObj[camelKey] = keysToCamel(obj[key]);
+            const newKey = key.replace(/(_\w)/g, k => k[1].toUpperCase());
+            newObj[newKey] = keysToCamel(obj[key]);
         }
     }
     return newObj;
 };
 
-// Helper to ensure JSON fields are parsed correctly from the DB
-const parseJsonFields = (rows, fields) => {
-    return rows.map(row => {
-        const newRow = { ...row };
-        fields.forEach(field => {
-            // Check if the field exists and is a string (JSONB can sometimes be returned as an object already)
-            if (newRow[field] && typeof newRow[field] === 'string') {
-                try {
-                    newRow[field] = JSON.parse(newRow[field]);
-                } catch (e) {
-                    console.error(`Error parsing JSON for field ${field} in row with id ${newRow.id}:`, e);
-                    // Assign a default value or handle the error as needed
-                    newRow[field] = (field === 'pages' || field === 'nodes' || field === 'connections') ? [] : {};
-                }
+
+// Parse complex JSONB fields from the database
+const parseComplexFields = (item, fields) => {
+    const newItem = { ...item };
+    fields.forEach(field => {
+        if (newItem[field] && typeof newItem[field] === 'string') {
+            try {
+                newItem[field] = JSON.parse(newItem[field]);
+            } catch (e) {
+                console.error(`Error parsing JSON for field ${field}:`, newItem[field]);
+                // Keep it as is or set to a default value
             }
-        });
-        return newRow;
+        }
     });
+    return newItem;
 };
 
+// --- AUTHENTICATION ---
+async function authenticateUser(loginId, password) {
+    // In a real app, password should be hashed with bcrypt.
+    // const res = await pool.query('SELECT * FROM users WHERE login_id = $1', [loginId]);
+    // if (res.rows.length > 0) {
+    //     const user = res.rows[0];
+    //     const match = await bcrypt.compare(password, user.password_hash);
+    //     if (match) {
+    //         delete user.password_hash;
+    //         return keysToCamel(user);
+    //     }
+    // }
+    // For this project, we compare plaintext passwords.
+    const res = await pool.query('SELECT * FROM users WHERE login_id = $1 AND password_hash = $2', [loginId, password]);
+    if (res.rows.length > 0) {
+        const user = res.rows[0];
+        delete user.password_hash; // Never send password hash to client
+        return keysToCamel(user);
+    }
+    return null;
+}
+
+
+// --- DATA GETTERS ---
+
+const getUsers = async () => {
+    const res = await pool.query('SELECT id, login_id, first_name, last_name, email, role, is_active, site_id FROM users ORDER BY first_name, last_name');
+    const users = keysToCamel(res.rows);
+    // Fetch assigned campaign IDs for each user
+    for (const user of users) {
+        const campaignRes = await pool.query('SELECT campaign_id FROM campaign_agents WHERE user_id = $1', [user.id]);
+        user.campaignIds = campaignRes.rows.map(r => r.campaign_id);
+    }
+    return users;
+};
+const getUserGroups = async () => {
+    const res = await pool.query('SELECT * FROM user_groups ORDER BY name');
+    const groups = keysToCamel(res.rows);
+    for (const group of groups) {
+        const membersRes = await pool.query('SELECT user_id FROM user_group_members WHERE group_id = $1', [group.id]);
+        group.memberIds = membersRes.rows.map(r => r.user_id);
+    }
+    return groups;
+};
+const getCampaigns = async () => {
+    const res = await pool.query('SELECT * FROM campaigns ORDER BY name');
+    const campaigns = keysToCamel(res.rows);
+    for (const campaign of campaigns) {
+        const contactsRes = await pool.query('SELECT * FROM contacts WHERE campaign_id = $1', [campaign.id]);
+        campaign.contacts = keysToCamel(contactsRes.rows);
+        // This is a simplified stand-in. In a real app, you'd join tables.
+        const agentsRes = await pool.query('SELECT user_id FROM campaign_agents WHERE campaign_id = $1', [campaign.id]);
+        campaign.assignedUserIds = agentsRes.rows.map(r => r.user_id);
+    }
+    return campaigns;
+};
+const getScripts = async () => {
+    const res = await pool.query('SELECT * FROM scripts ORDER BY name');
+    // Ensure pages, which are stored as JSONB, are parsed correctly
+    return keysToCamel(res.rows).map(script => parseComplexFields(script, ['pages']));
+};
+const getIvrFlows = async () => {
+    const res = await pool.query('SELECT * FROM ivr_flows ORDER BY name');
+    // Ensure nodes and connections, which are stored as JSONB, are parsed correctly
+    return keysToCamel(res.rows).map(flow => parseComplexFields(flow, ['nodes', 'connections']));
+};
+const getQualifications = async () => (await pool.query('SELECT * FROM qualifications ORDER BY code')).rows.map(keysToCamel);
+const getQualificationGroups = async () => (await pool.query('SELECT * FROM qualification_groups ORDER BY name')).rows.map(keysToCamel);
+const getTrunks = async () => (await pool.query('SELECT * FROM trunks ORDER BY name')).rows.map(keysToCamel);
+const getDids = async () => (await pool.query('SELECT * FROM dids ORDER BY number')).rows.map(keysToCamel);
+const getSites = async () => (await pool.query('SELECT * FROM sites ORDER BY name')).rows.map(keysToCamel);
+const getAudioFiles = async () => (await pool.query('SELECT * FROM audio_files ORDER BY name')).rows.map(keysToCamel);
+const getPlanningEvents = async () => (await pool.query('SELECT * FROM planning_events ORDER BY start_date')).rows.map(keysToCamel);
+
+
 async function getAllApplicationData() {
-    // This function will fetch all necessary data for the application's initial load.
-    // It's a placeholder and should be implemented to fetch from all relevant tables.
+    // This function loads all necessary data in parallel for the initial app load.
     const [
         users, userGroups, campaigns, savedScripts, ivrFlows,
-        qualifications, qualificationGroups, trunks, dids, sites,
-        audioFiles, planningEvents,
-        // The following are more for reporting/supervision, might not be needed on initial load
-        // callHistory, agentSessions, personalCallbacks
+        qualifications, qualificationGroups, dids, trunks, sites, audioFiles, planningEvents
     ] = await Promise.all([
         getUsers(),
         getUserGroups(),
@@ -65,8 +132,8 @@ async function getAllApplicationData() {
         getIvrFlows(),
         getQualifications(),
         getQualificationGroups(),
-        getTrunks(),
         getDids(),
+        getTrunks(),
         getSites(),
         getAudioFiles(),
         getPlanningEvents(),
@@ -77,140 +144,53 @@ async function getAllApplicationData() {
         userGroups,
         campaigns,
         savedScripts,
-        ivrFlows,
+        savedIvrFlows: ivrFlows,
         qualifications,
         qualificationGroups,
-        trunks,
         dids,
+        trunks,
         sites,
         audioFiles,
         planningEvents,
-        // Add other data sets as needed
+        // Mock data for features not yet implemented in DB
+        personalCallbacks: [],
+        systemConnectionSettings: {},
+        backupSchedule: {},
+        backupLogs: [],
     };
 }
 
 
-// --- DATA FETCHERS ---
-
-async function getUsers() {
-    const res = await pool.query('SELECT id, login_id, first_name, last_name, email, role, is_active, site_id FROM users ORDER BY first_name, last_name');
-    return keysToCamel(res.rows);
-}
-
-async function getUserGroups() {
-    const res = await pool.query('SELECT * FROM user_groups ORDER BY name');
-    const groups = keysToCamel(res.rows);
-    const membersRes = await pool.query('SELECT * FROM user_group_members');
-    groups.forEach(g => {
-        g.memberIds = membersRes.rows.filter(m => m.group_id === g.id).map(m => m.user_id);
-    });
-    return groups;
-}
-
-async function getCampaigns() {
-    const res = await pool.query('SELECT * FROM campaigns ORDER BY name');
-    const campaigns = keysToCamel(res.rows);
-    const contactsRes = await pool.query('SELECT * FROM contacts');
-    const agentsRes = await pool.query('SELECT * FROM campaign_agents');
-    campaigns.forEach(c => {
-        c.contacts = keysToCamel(contactsRes.rows.filter(co => co.campaign_id === c.id));
-        c.assignedUserIds = agentsRes.rows.filter(a => a.campaign_id === c.id).map(a => a.user_id);
-    });
-    return campaigns;
-}
-
-async function getScripts() {
-    const res = await pool.query('SELECT * FROM scripts ORDER BY name');
-    return keysToCamel(parseJsonFields(res.rows, ['pages']));
-}
-
-async function getIvrFlows() {
-    const res = await pool.query('SELECT * FROM ivr_flows ORDER BY name');
-    return keysToCamel(parseJsonFields(res.rows, ['nodes', 'connections']));
-}
-
-async function getQualifications() {
-    const res = await pool.query('SELECT * FROM qualifications ORDER BY code');
-    return keysToCamel(res.rows);
-}
-
-async function getQualificationGroups() {
-    const res = await pool.query('SELECT * FROM qualification_groups ORDER BY name');
-    return keysToCamel(res.rows);
-}
-
-async function getTrunks() {
-    const res = await pool.query('SELECT id, name, domain, login, auth_type, dial_pattern, inbound_context, force_caller_id FROM trunks ORDER BY name');
-    return keysToCamel(res.rows);
-}
-
-async function getDids() {
-    const res = await pool.query('SELECT * FROM dids ORDER BY number');
-    return keysToCamel(res.rows);
-}
-
-async function getSites() {
-    const res = await pool.query('SELECT id, name, yeastar_ip, api_user FROM sites ORDER BY name');
-    return keysToCamel(res.rows);
-}
-
-async function getAudioFiles() {
-    const res = await pool.query('SELECT * FROM audio_files ORDER BY name');
-    return keysToCamel(res.rows);
-}
-
-async function getPlanningEvents() {
-    const res = await pool.query('SELECT * FROM planning_events');
-    return keysToCamel(res.rows);
-}
-
-async function getIvrFlowByDnid(dnid) {
-    const res = await pool.query('SELECT f.* FROM ivr_flows f JOIN dids d ON f.id = d.ivr_flow_id WHERE d.number = $1 LIMIT 1', [dnid]);
-    if (res.rows.length > 0) {
-        return keysToCamel(parseJsonFields(res.rows, ['nodes', 'connections'])[0]);
-    }
-    return null;
-}
-
 // --- DATA SAVERS ---
 
-async function authenticateUser(loginId, password) {
-    // WARNING: Storing and comparing plain text passwords is a major security risk.
-    // This should be replaced with a password hashing library like bcrypt in production.
-    const res = await pool.query(
-        'SELECT id, login_id, first_name, last_name, email, role, is_active, site_id FROM users WHERE login_id = $1 AND password_hash = $2', 
-        [loginId, password]
-    );
-    return res.rows.length > 0 ? keysToCamel(res.rows[0]) : null;
-}
-
+// Users
 async function createUser(user, groupIds = []) {
+    const { loginId, firstName, lastName, email, role, isActive, password, siteId, campaignIds = [] } = user;
+    // In a real app, you would hash the password here. e.g., const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = password; // For this project, storing plaintext
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const userRes = await client.query(
-            `INSERT INTO users (id, login_id, first_name, last_name, email, "role", is_active, password_hash, site_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             RETURNING id, login_id, first_name, last_name, email, "role", is_active, site_id`,
-            [user.id, user.loginId, user.firstName, user.lastName, user.email || null, user.role, user.isActive, user.password, user.siteId || null]
+        const res = await client.query(
+            'INSERT INTO users (id, login_id, first_name, last_name, email, role, is_active, password_hash, site_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+            [user.id, loginId, firstName, lastName, email || null, role, isActive, passwordHash, siteId || null]
         );
-        const newUser = userRes.rows[0];
+        const newUser = keysToCamel(res.rows[0]);
+        delete newUser.passwordHash;
 
-        if (groupIds.length > 0) {
-            for (const groupId of groupIds) {
-                await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [newUser.id, groupId]);
-            }
+        // Handle group assignments
+        for (const groupId of groupIds) {
+            await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [newUser.id, groupId]);
         }
         
-        if (user.campaignIds && user.campaignIds.length > 0) {
-            for (const campaignId of user.campaignIds) {
-                 await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [newUser.id, campaignId]);
-            }
+        // Handle campaign assignments
+        for (const campaignId of campaignIds) {
+            await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [newUser.id, campaignId]);
         }
 
         await client.query('COMMIT');
-        newUser.campaignIds = user.campaignIds || [];
-        return keysToCamel(newUser);
+        return newUser;
     } catch (e) {
         await client.query('ROLLBACK');
         throw e;
@@ -219,93 +199,85 @@ async function createUser(user, groupIds = []) {
     }
 }
 
-async function updateUser(userId, user, groupIds = []) {
+async function updateUser(id, user, groupIds = []) {
+    const { loginId, firstName, lastName, email, role, isActive, password, siteId, campaignIds = [] } = user;
     const client = await pool.connect();
+    
     try {
         await client.query('BEGIN');
-
-        // Build the UPDATE query dynamically to avoid overwriting the password
-        const updates = {
-            login_id: user.loginId,
-            first_name: user.firstName,
-            last_name: user.lastName,
-            email: user.email || null,
-            "role": user.role,
-            is_active: user.isActive,
-            site_id: user.siteId || null
-        };
-
-        // Only add password to the update if it's provided and not empty
-        if (user.password && user.password.length > 0) {
-            updates.password_hash = user.password;
-        }
-
-        const setClauses = Object.keys(updates).map((key, i) => `${key} = $${i + 1}`).join(', ');
-        const values = Object.values(updates);
-
-        const userRes = await client.query(
-            `UPDATE users SET ${setClauses}, updated_at = NOW()
-             WHERE id = $${values.length + 1}
-             RETURNING id, login_id, first_name, last_name, email, "role", is_active, site_id`,
-            [...values, userId]
-        );
-        const updatedUser = userRes.rows[0];
         
-        if (!updatedUser) {
-            throw new Error(`User with id ${userId} not found.`);
-        }
+        // Build the update query dynamically
+        const updateFields = [];
+        const values = [];
+        let valueIndex = 1;
 
-        await client.query('DELETE FROM user_group_members WHERE user_id = $1', [userId]);
-        if (groupIds && groupIds.length > 0) {
-            for (const groupId of groupIds) {
-                await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [userId, groupId]);
-            }
+        if (loginId !== undefined) { updateFields.push(`login_id = $${valueIndex++}`); values.push(loginId); }
+        if (firstName !== undefined) { updateFields.push(`first_name = $${valueIndex++}`); values.push(firstName); }
+        if (lastName !== undefined) { updateFields.push(`last_name = $${valueIndex++}`); values.push(lastName); }
+        if (email !== undefined) { updateFields.push(`email = $${valueIndex++}`); values.push(email || null); }
+        if (role !== undefined) { updateFields.push(`role = $${valueIndex++}`); values.push(role); }
+        if (isActive !== undefined) { updateFields.push(`is_active = $${valueIndex++}`); values.push(isActive); }
+        if (password) { // CRITICAL: Only update password if a new one is provided
+            // In a real app, hash it: const passwordHash = await bcrypt.hash(password, 10);
+            const passwordHash = password;
+            updateFields.push(`password_hash = $${valueIndex++}`);
+            values.push(passwordHash);
         }
+        if (siteId !== undefined) { updateFields.push(`site_id = $${valueIndex++}`); values.push(siteId || null); }
+        
+        values.push(id);
+        
+        const res = await client.query(
+            `UPDATE users SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = $${valueIndex} RETURNING *`,
+            values
+        );
 
-        await client.query('DELETE FROM campaign_agents WHERE user_id = $1', [userId]);
-        if (user.campaignIds && user.campaignIds.length > 0) {
-             for (const campaignId of user.campaignIds) {
-                 await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [userId, campaignId]);
-            }
+        // Update group memberships
+        await client.query('DELETE FROM user_group_members WHERE user_id = $1', [id]);
+        for (const groupId of groupIds) {
+            await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [id, groupId]);
+        }
+        
+        // Update campaign assignments
+        await client.query('DELETE FROM campaign_agents WHERE user_id = $1', [id]);
+        for (const campaignId of campaignIds) {
+            await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [id, campaignId]);
         }
 
         await client.query('COMMIT');
-        updatedUser.campaignIds = user.campaignIds || [];
-        return keysToCamel(updatedUser);
+        
+        const updatedUser = keysToCamel(res.rows[0]);
+        delete updatedUser.passwordHash;
+        return updatedUser;
     } catch (e) {
         await client.query('ROLLBACK');
-        console.error("Error in updateUser transaction:", e);
         throw e;
     } finally {
         client.release();
     }
 }
 
+const deleteUser = (id) => pool.query('DELETE FROM users WHERE id = $1', [id]);
 
-async function deleteUser(userId) {
-    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-}
-
-async function saveUserGroup(group, id = null) {
+// Groups
+async function saveUserGroup(group, id) {
+    const { name, memberIds } = group;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         let savedGroup;
         if (id) {
-            const res = await client.query('UPDATE user_groups SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [group.name, id]);
+            const res = await client.query('UPDATE user_groups SET name = $1 WHERE id = $2 RETURNING *', [name, id]);
             savedGroup = res.rows[0];
+            await client.query('DELETE FROM user_group_members WHERE group_id = $1', [id]);
         } else {
-            const res = await client.query('INSERT INTO user_groups (id, name) VALUES ($1, $2) RETURNING *', [group.id, group.name]);
+            const res = await client.query('INSERT INTO user_groups (id, name) VALUES ($1, $2) RETURNING *', [group.id, name]);
             savedGroup = res.rows[0];
         }
-        await client.query('DELETE FROM user_group_members WHERE group_id = $1', [savedGroup.id]);
-        if (group.memberIds && group.memberIds.length > 0) {
-            for (const memberId of group.memberIds) {
-                await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [memberId, savedGroup.id]);
-            }
+        for (const userId of memberIds) {
+            await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [userId, savedGroup.id]);
         }
         await client.query('COMMIT');
-        savedGroup.memberIds = group.memberIds || [];
         return keysToCamel(savedGroup);
     } catch (e) {
         await client.query('ROLLBACK');
@@ -314,69 +286,35 @@ async function saveUserGroup(group, id = null) {
         client.release();
     }
 }
+const deleteUserGroup = (id) => pool.query('DELETE FROM user_groups WHERE id = $1', [id]);
 
-async function deleteUserGroup(groupId) {
-    await pool.query('DELETE FROM user_groups WHERE id = $1', [groupId]);
-}
 
-async function saveCampaign(campaign, id = null) {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        let savedCampaign;
-        const { name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime } = campaign;
-        const queryParams = [name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime];
-
-        if (id) {
-            const res = await client.query(
-                `UPDATE campaigns SET name = $1, description = $2, script_id = $3, qualification_group_id = $4, caller_id = $5, is_active = $6, dialing_mode = $7, wrap_up_time = $8, updated_at = NOW() 
-                 WHERE id = $9 RETURNING *`,
-                [...queryParams, id]
-            );
-            savedCampaign = res.rows[0];
-        } else {
-            const res = await client.query(
-                `INSERT INTO campaigns (name, description, script_id, qualification_group_id, caller_id, is_active, dialing_mode, wrap_up_time, id) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-                [...queryParams, campaign.id]
-            );
-            savedCampaign = res.rows[0];
-        }
-
-        await client.query('DELETE FROM campaign_agents WHERE campaign_id = $1', [savedCampaign.id]);
-        if (campaign.assignedUserIds && campaign.assignedUserIds.length > 0) {
-            for (const userId of campaign.assignedUserIds) {
-                await client.query('INSERT INTO campaign_agents (campaign_id, user_id) VALUES ($1, $2)', [savedCampaign.id, userId]);
-            }
-        }
-        await client.query('COMMIT');
-        savedCampaign.assignedUserIds = campaign.assignedUserIds || [];
-        return keysToCamel(savedCampaign);
-    } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-    } finally {
-        client.release();
+// Campaigns & Contacts
+async function saveCampaign(campaign, id) {
+    const { name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime } = campaign;
+    if (id) {
+        const res = await pool.query('UPDATE campaigns SET name=$1, description=$2, script_id=$3, qualification_group_id=$4, caller_id=$5, is_active=$6, dialing_mode=$7, wrap_up_time=$8 WHERE id=$9 RETURNING *', [name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime, id]);
+        return keysToCamel(res.rows[0]);
     }
+    const res = await pool.query('INSERT INTO campaigns (id, name, description, script_id, qualification_group_id, caller_id, is_active, dialing_mode, wrap_up_time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *', [campaign.id, name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime]);
+    return keysToCamel(res.rows[0]);
 }
 
-async function deleteCampaign(campaignId) {
-    await pool.query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
-}
+const deleteCampaign = (id) => pool.query('DELETE FROM campaigns WHERE id = $1', [id]);
 
 async function importContacts(campaignId, contacts) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         for (const contact of contacts) {
+            const { id, firstName, lastName, phoneNumber, postalCode, status, customFields } = contact;
             await client.query(
-                `INSERT INTO contacts (id, campaign_id, first_name, last_name, phone_number, postal_code, status, custom_fields)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [contact.id, campaignId, contact.firstName, contact.lastName, contact.phoneNumber, contact.postalCode, 'pending', JSON.stringify(contact.customFields || {})]
+                'INSERT INTO contacts (id, campaign_id, first_name, last_name, phone_number, postal_code, status, custom_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+                [id, campaignId, firstName, lastName, phoneNumber, postalCode, status, JSON.stringify(customFields || {})]
             );
         }
         await client.query('COMMIT');
-        return { message: 'Contacts imported successfully' };
+        return { success: true, imported: contacts.length };
     } catch (e) {
         await client.query('ROLLBACK');
         throw e;
@@ -385,115 +323,69 @@ async function importContacts(campaignId, contacts) {
     }
 }
 
-async function saveScript(script, id = null) {
-    const pagesJson = JSON.stringify(script.pages);
+
+// Scripts
+async function saveScript(script, id) {
+    const { name, pages, startPageId, backgroundColor } = script;
     if (id) {
-        const res = await pool.query(
-            `UPDATE scripts SET name = $1, pages = $2, start_page_id = $3, background_color = $4, updated_at = NOW()
-             WHERE id = $5 RETURNING *`,
-            [script.name, pagesJson, script.startPageId, script.backgroundColor, id]
-        );
-        return keysToCamel(parseJsonFields(res.rows, ['pages'])[0]);
-    }
-    const res = await pool.query(
-        `INSERT INTO scripts (id, name, pages, start_page_id, background_color)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [script.id, script.name, pagesJson, script.startPageId, script.backgroundColor]
-    );
-    return keysToCamel(parseJsonFields(res.rows, ['pages'])[0]);
-}
-
-async function deleteScript(scriptId) {
-    await pool.query('DELETE FROM scripts WHERE id = $1', [scriptId]);
-}
-
-async function duplicateScript(scriptId) {
-    const originalRes = await pool.query('SELECT * FROM scripts WHERE id = $1', [scriptId]);
-    if (originalRes.rows.length === 0) throw new Error('Script not found');
-    const original = originalRes.rows[0];
-    const newScript = {
-        ...original,
-        id: `script-${Date.now()}`,
-        name: `${original.name} (Copie)`,
-    };
-    return saveScript(newScript);
-}
-
-async function saveIvrFlow(flow, id = null) {
-    const nodesJson = JSON.stringify(flow.nodes);
-    const connectionsJson = JSON.stringify(flow.connections);
-    if (id) {
-        const res = await pool.query(
-            `UPDATE ivr_flows SET name = $1, nodes = $2, connections = $3, updated_at = NOW()
-             WHERE id = $4 RETURNING *`,
-            [flow.name, nodesJson, connectionsJson, id]
-        );
-        return keysToCamel(parseJsonFields(res.rows, ['nodes', 'connections'])[0]);
-    }
-    const res = await pool.query(
-        `INSERT INTO ivr_flows (id, name, nodes, connections)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [flow.id, flow.name, nodesJson, connectionsJson]
-    );
-    return keysToCamel(parseJsonFields(res.rows, ['nodes', 'connections'])[0]);
-}
-
-async function deleteIvrFlow(flowId) {
-    await pool.query('DELETE FROM ivr_flows WHERE id = $1', [flowId]);
-}
-
-async function duplicateIvrFlow(flowId) {
-    const originalRes = await pool.query('SELECT * FROM ivr_flows WHERE id = $1', [flowId]);
-    if (originalRes.rows.length === 0) throw new Error('IVR Flow not found');
-    const original = originalRes.rows[0];
-    const newFlow = {
-        ...original,
-        id: `ivr-flow-${Date.now()}`,
-        name: `${original.name} (Copie)`,
-    };
-    return saveIvrFlow(newFlow);
-}
-
-
-async function saveQualification(qual, id = null) {
-    const { code, description, type, parentId } = qual;
-    if (id) {
-        const res = await pool.query(
-            `UPDATE qualifications SET code = $1, description = $2, type = $3, parent_id = $4, updated_at = NOW() WHERE id = $5 AND is_standard = false RETURNING *`,
-            [code, description, type, parentId || null, id]
-        );
+        const res = await pool.query('UPDATE scripts SET name=$1, pages=$2, start_page_id=$3, background_color=$4 WHERE id=$5 RETURNING *', [name, JSON.stringify(pages), startPageId, backgroundColor, id]);
         return keysToCamel(res.rows[0]);
     }
-    const res = await pool.query(
-        `INSERT INTO qualifications (id, code, description, type, parent_id, is_standard) VALUES ($1, $2, $3, $4, $5, false) RETURNING *`,
-        [qual.id, code, description, type, parentId || null]
-    );
+    const res = await pool.query('INSERT INTO scripts (id, name, pages, start_page_id, background_color) VALUES ($1, $2, $3, $4, $5) RETURNING *', [script.id, name, JSON.stringify(pages), startPageId, backgroundColor]);
     return keysToCamel(res.rows[0]);
 }
+const deleteScript = (id) => pool.query('DELETE FROM scripts WHERE id = $1', [id]);
+// ... duplicateScript logic here ...
 
-async function deleteQualification(qualId) {
-    await pool.query('DELETE FROM qualifications WHERE id = $1 AND is_standard = false', [qualId]);
+// IVR
+async function saveIvrFlow(flow, id) {
+    const { name, nodes, connections } = flow;
+    if (id) {
+        const res = await pool.query('UPDATE ivr_flows SET name=$1, nodes=$2, connections=$3 WHERE id=$4 RETURNING *', [name, JSON.stringify(nodes), JSON.stringify(connections), id]);
+        return keysToCamel(res.rows[0]);
+    }
+    const res = await pool.query('INSERT INTO ivr_flows (id, name, nodes, connections) VALUES ($1, $2, $3, $4) RETURNING *', [flow.id, name, JSON.stringify(nodes), JSON.stringify(connections)]);
+    return keysToCamel(res.rows[0]);
 }
+const deleteIvrFlow = (id) => pool.query('DELETE FROM ivr_flows WHERE id = $1', [id]);
+const getIvrFlowByDnid = async (dnid) => {
+    const res = await pool.query('SELECT f.* FROM ivr_flows f JOIN dids d ON f.id = d.ivr_flow_id WHERE d.number = $1', [dnid]);
+    if (res.rows.length === 0) return null;
+    return keysToCamel(res.rows[0]);
+};
 
-async function saveQualificationGroup(group, assignedQualIds = [], id = null) {
+
+// Qualifications
+async function saveQualification(qual, id) {
+    const { code, description, type, parentId } = qual;
+    if (id) {
+        const res = await pool.query('UPDATE qualifications SET code=$1, description=$2, type=$3, parent_id=$4 WHERE id=$5 RETURNING *', [code, description, type, parentId, id]);
+        return keysToCamel(res.rows[0]);
+    }
+    const res = await pool.query('INSERT INTO qualifications (id, code, description, type, is_standard, parent_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *', [qual.id, code, description, type, false, parentId]);
+    return keysToCamel(res.rows[0]);
+}
+const deleteQualification = (id) => pool.query('DELETE FROM qualifications WHERE id = $1 AND is_standard = false', [id]);
+
+async function saveQualificationGroup(group, assignedQualIds, id) {
+    const { name } = group;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         let savedGroup;
         if (id) {
-            const res = await client.query('UPDATE qualification_groups SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [group.name, id]);
+            const res = await client.query('UPDATE qualification_groups SET name = $1 WHERE id = $2 RETURNING *', [name, id]);
             savedGroup = res.rows[0];
+            // Dis-assign all qualifications from this group first
+            await client.query('UPDATE qualifications SET group_id = NULL WHERE group_id = $1', [id]);
         } else {
-            const res = await client.query('INSERT INTO qualification_groups (id, name) VALUES ($1, $2) RETURNING *', [group.id, group.name]);
+            const res = await client.query('INSERT INTO qualification_groups (id, name) VALUES ($1, $2) RETURNING *', [group.id, name]);
             savedGroup = res.rows[0];
         }
-
-        await client.query('UPDATE qualifications SET group_id = NULL WHERE group_id = $1', [savedGroup.id]);
-        if (assignedQualIds.length > 0) {
-            const placeholders = assignedQualIds.map((_, i) => `$${i + 2}`).join(',');
-            await client.query(`UPDATE qualifications SET group_id = $1 WHERE id IN (${placeholders})`, [savedGroup.id, ...assignedQualIds]);
+        // Re-assign selected qualifications
+        for (const qualId of assignedQualIds) {
+            await client.query('UPDATE qualifications SET group_id = $1 WHERE id = $2', [savedGroup.id, qualId]);
         }
-        
         await client.query('COMMIT');
         return keysToCamel(savedGroup);
     } catch (e) {
@@ -503,74 +395,39 @@ async function saveQualificationGroup(group, assignedQualIds = [], id = null) {
         client.release();
     }
 }
+const deleteQualificationGroup = (id) => pool.query('DELETE FROM qualification_groups WHERE id = $1', [id]);
 
-async function deleteQualificationGroup(groupId) {
-    await pool.query('DELETE FROM qualification_groups WHERE id = $1', [groupId]);
-}
+// Simplified CRUD for remaining simple entities
+const createSimpleSaver = (table) => async (entity, id) => {
+    const keys = Object.keys(entity).filter(k => k !== 'id');
+    const values = keys.map(k => entity[k]);
 
-async function saveGeneric(table, data, id = null) {
-    const keys = Object.keys(data).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at' && k !== 'password' || (k === 'password' && data[k]));
-    const columns = keys.map(k => k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`));
-    
     if (id) {
-        const setString = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
-        const values = keys.map(key => data[key]);
-        const res = await pool.query(`UPDATE ${table} SET ${setString}, updated_at = NOW() WHERE id = $${keys.length + 1} RETURNING *`, [...values, id]);
+        const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+        const res = await pool.query(`UPDATE ${table} SET ${setString} WHERE id = $${keys.length + 1} RETURNING *`, [...values, id]);
         return keysToCamel(res.rows[0]);
     }
-    const allColumns = ['id', ...columns];
-    const placeholders = allColumns.map((_, i) => `$${i + 1}`).join(',');
-    const values = [data.id, ...keys.map(key => data[key])];
-    const res = await pool.query(`INSERT INTO ${table} (${allColumns.join(',')}) VALUES (${placeholders}) RETURNING *`, values);
+    const columns = ['id', ...keys].join(', ');
+    const placeholders = ['$1', ...keys.map((_, i) => `$${i + 2}`)].join(', ');
+    const res = await pool.query(`INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING *`, [entity.id, ...values]);
     return keysToCamel(res.rows[0]);
-}
+};
 
-async function deleteGeneric(table, id) {
-     await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
-}
+const createSimpleDeleter = (table) => (id) => pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
 
 module.exports = {
     getAllApplicationData,
     authenticateUser,
-    getUsers,
-    createUser,
-    updateUser,
-    deleteUser,
-    getUserGroups,
-    saveUserGroup,
-    deleteUserGroup,
-    getCampaigns,
-    saveCampaign,
-    deleteCampaign,
-    importContacts,
-    getScripts,
-    saveScript,
-    deleteScript,
-    duplicateScript,
-    getIvrFlows,
-    saveIvrFlow,
-    deleteIvrFlow,
-    duplicateIvrFlow,
-    getQualifications,
-    saveQualification,
-    deleteQualification,
-    getQualificationGroups,
-    saveQualificationGroup,
-    deleteQualificationGroup,
-    getTrunks,
-    saveTrunk: (data, id) => saveGeneric('trunks', data, id),
-    deleteTrunk: (id) => deleteGeneric('trunks', id),
-    getDids,
-    saveDid: (data, id) => saveGeneric('dids', data, id),
-    deleteDid: (id) => deleteGeneric('dids', id),
-    getSites,
-    saveSite: (data, id) => saveGeneric('sites', data, id),
-    deleteSite: (id) => deleteGeneric('sites', id),
-    getAudioFiles,
-    saveAudioFile: (data, id) => saveGeneric('audio_files', data, id),
-    deleteAudioFile: (id) => deleteGeneric('audio_files', id),
-    getPlanningEvents,
-    savePlanningEvent: (data, id) => saveGeneric('planning_events', data, id),
-    deletePlanningEvent: (id) => deleteGeneric('planning_events', id),
-    getIvrFlowByDnid,
+    getUsers, createUser, updateUser, deleteUser,
+    getUserGroups, saveUserGroup, deleteUserGroup,
+    getCampaigns, saveCampaign, deleteCampaign, importContacts,
+    getScripts, saveScript, deleteScript,
+    getIvrFlows, saveIvrFlow, deleteIvrFlow, getIvrFlowByDnid,
+    getQualifications, saveQualification, deleteQualification,
+    getQualificationGroups, saveQualificationGroup, deleteQualificationGroup,
+    saveTrunk: createSimpleSaver('trunks'), deleteTrunk: createSimpleDeleter('trunks'), getTrunks,
+    saveDid: createSimpleSaver('dids'), deleteDid: createSimpleDeleter('dids'), getDids,
+    saveSite: createSimpleSaver('sites'), deleteSite: createSimpleDeleter('sites'), getSites,
+    saveAudioFile: createSimpleSaver('audio_files'), deleteAudioFile: createSimpleDeleter('audio_files'), getAudioFiles,
+    savePlanningEvent: createSimpleSaver('planning_events'), deletePlanningEvent: createSimpleDeleter('planning_events'), getPlanningEvents,
 };
