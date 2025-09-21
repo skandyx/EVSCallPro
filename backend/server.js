@@ -57,7 +57,6 @@ const swaggerOptions = {
 };
 
 const openapiSpecification = swaggerJsdoc(swaggerOptions);
-// Correction: Changed URL to /api/docs to work with existing proxy setups
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpecification));
 
 // --- Security: Simple In-Memory Session Store ---
@@ -163,11 +162,13 @@ app.post('/api/login', handleRequest(async (req, res) => {
  * @openapi
  * /me:
  *   get:
- *     summary: Récupère les informations de l'utilisateur authentifié.
+ *     summary: Récupère les informations de l'utilisateur authentifié via son token.
  *     tags: [Authentification]
  *     responses:
  *       200:
  *         description: Objet utilisateur.
+ *       401:
+ *         description: Token invalide ou expiré.
  */
 app.get('/api/me', authMiddleware, handleRequest(async (req, res) => {
     res.json(req.user);
@@ -177,11 +178,11 @@ app.get('/api/me', authMiddleware, handleRequest(async (req, res) => {
  * @openapi
  * /application-data:
  *   get:
- *     summary: Récupère toutes les données de configuration initiales.
+ *     summary: Récupère toutes les données de configuration initiales pour l'application.
  *     tags: [Application]
  *     responses:
  *       200:
- *         description: Un objet contenant toutes les données de l'application.
+ *         description: Un objet contenant toutes les données de l'application (utilisateurs, campagnes, etc.).
  */
 app.get('/api/application-data', authMiddleware, handleRequest(async (req, res) => {
     const data = await db.getAllApplicationData();
@@ -190,65 +191,365 @@ app.get('/api/application-data', authMiddleware, handleRequest(async (req, res) 
 
 
 // Users
+/**
+ * @openapi
+ * /users:
+ *   get:
+ *     summary: Récupère la liste de tous les utilisateurs.
+ *     tags: [Utilisateurs]
+ *     responses:
+ *       200: { description: "Liste d'utilisateurs." }
+ *   post:
+ *     summary: Crée un nouvel utilisateur.
+ *     tags: [Utilisateurs]
+ *     requestBody:
+ *       required: true
+ *       content: { application/json: { schema: { type: object, properties: { user: { type: object }, groupIds: { type: array, items: { type: string } } } } } }
+ *     responses:
+ *       201: { description: "Utilisateur créé." }
+ */
 app.get('/api/users', authMiddleware, handleRequest(async (req, res) => res.json(await db.getUsers())));
 app.post('/api/users', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.createUser(req.body.user, req.body.groupIds))));
+
+/**
+ * @openapi
+ * /users/{id}:
+ *   put:
+ *     summary: Met à jour un utilisateur existant.
+ *     tags: [Utilisateurs]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     requestBody:
+ *       required: true
+ *       content: { application/json: { schema: { type: object, properties: { user: { type: object }, groupIds: { type: array, items: { type: string } } } } } }
+ *     responses:
+ *       200: { description: "Utilisateur mis à jour." }
+ *   delete:
+ *     summary: Supprime un utilisateur.
+ *     tags: [Utilisateurs]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Utilisateur supprimé." }
+ */
 app.put('/api/users/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.updateUser(req.params.id, req.body.user, req.body.groupIds))));
 app.delete('/api/users/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteUser(req.params.id); res.status(204).send(); }));
 
 // Groups
+/**
+ * @openapi
+ * /groups:
+ *   post:
+ *     summary: Crée un nouveau groupe.
+ *     tags: [Groupes]
+ *     responses:
+ *       201: { description: "Groupe créé." }
+ * /groups/{id}:
+ *   put:
+ *     summary: Met à jour un groupe.
+ *     tags: [Groupes]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Groupe mis à jour." }
+ *   delete:
+ *     summary: Supprime un groupe.
+ *     tags: [Groupes]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Groupe supprimé." }
+ */
 app.post('/api/groups', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveUserGroup(req.body))));
 app.put('/api/groups/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveUserGroup(req.body, req.params.id))));
 app.delete('/api/groups/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteUserGroup(req.params.id); res.status(204).send(); }));
 
 // Campaigns
+/**
+ * @openapi
+ * /campaigns:
+ *   post:
+ *     summary: Crée une nouvelle campagne.
+ *     tags: [Campagnes]
+ *     responses:
+ *       201: { description: "Campagne créée." }
+ * /campaigns/{id}:
+ *   put:
+ *     summary: Met à jour une campagne.
+ *     tags: [Campagnes]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Campagne mise à jour." }
+ *   delete:
+ *     summary: Supprime une campagne.
+ *     tags: [Campagnes]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Campagne supprimée." }
+ * /campaigns/{id}/contacts:
+ *   post:
+ *     summary: Importe des contacts dans une campagne.
+ *     tags: [Campagnes]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       201: { description: "Contacts importés." }
+ */
 app.post('/api/campaigns', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveCampaign(req.body))));
 app.put('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveCampaign(req.body, req.params.id))));
 app.delete('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteCampaign(req.params.id); res.status(204).send(); }));
 app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.importContacts(req.params.id, req.body.contacts))));
 
 // Scripts
+/**
+ * @openapi
+ * /scripts:
+ *   post:
+ *     summary: Crée un nouveau script.
+ *     tags: [Scripts]
+ *     responses:
+ *       201: { description: "Script créé." }
+ * /scripts/{id}:
+ *   put:
+ *     summary: Met à jour un script.
+ *     tags: [Scripts]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Script mis à jour." }
+ *   delete:
+ *     summary: Supprime un script.
+ *     tags: [Scripts]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Script supprimé." }
+ * /scripts/{id}/duplicate:
+ *   post:
+ *     summary: Duplique un script.
+ *     tags: [Scripts]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       201: { description: "Script dupliqué." }
+ */
 app.post('/api/scripts', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveScript(req.body))));
 app.put('/api/scripts/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveScript(req.body, req.params.id))));
 app.delete('/api/scripts/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteScript(req.params.id); res.status(204).send(); }));
 app.post('/api/scripts/:id/duplicate', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.duplicateScript(req.params.id))));
 
 // IVR Flows
+/**
+ * @openapi
+ * /ivr-flows:
+ *   post:
+ *     summary: Crée un nouveau flux SVI.
+ *     tags: [SVI]
+ *     responses:
+ *       201: { description: "Flux SVI créé." }
+ * /ivr-flows/{id}:
+ *   put:
+ *     summary: Met à jour un flux SVI.
+ *     tags: [SVI]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Flux SVI mis à jour." }
+ *   delete:
+ *     summary: Supprime un flux SVI.
+ *     tags: [SVI]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Flux SVI supprimé." }
+ * /ivr-flows/{id}/duplicate:
+ *   post:
+ *     summary: Duplique un flux SVI.
+ *     tags: [SVI]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       201: { description: "Flux SVI dupliqué." }
+ */
 app.post('/api/ivr-flows', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveIvrFlow(req.body))));
 app.put('/api/ivr-flows/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveIvrFlow(req.body, req.params.id))));
 app.delete('/api/ivr-flows/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteIvrFlow(req.params.id); res.status(204).send(); }));
 app.post('/api/ivr-flows/:id/duplicate', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.duplicateIvrFlow(req.params.id))));
 
 // Qualifications
+/**
+ * @openapi
+ * /qualifications:
+ *   post:
+ *     summary: Crée une nouvelle qualification.
+ *     tags: [Qualifications]
+ *     responses:
+ *       201: { description: "Qualification créée." }
+ * /qualifications/{id}:
+ *   put:
+ *     summary: Met à jour une qualification.
+ *     tags: [Qualifications]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Qualification mise à jour." }
+ *   delete:
+ *     summary: Supprime une qualification.
+ *     tags: [Qualifications]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Qualification supprimée." }
+ */
 app.post('/api/qualifications', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveQualification(req.body))));
 app.put('/api/qualifications/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveQualification(req.body, req.params.id))));
 app.delete('/api/qualifications/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteQualification(req.params.id); res.status(204).send(); }));
 
 // Qualification Groups
+/**
+ * @openapi
+ * /qualification-groups:
+ *   post:
+ *     summary: Crée un nouveau groupe de qualifications.
+ *     tags: [Qualifications]
+ *     responses:
+ *       201: { description: "Groupe créé." }
+ * /qualification-groups/{id}:
+ *   put:
+ *     summary: Met à jour un groupe de qualifications.
+ *     tags: [Qualifications]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Groupe mis à jour." }
+ *   delete:
+ *     summary: Supprime un groupe de qualifications.
+ *     tags: [Qualifications]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Groupe supprimé." }
+ */
 app.post('/api/qualification-groups', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveQualificationGroup(req.body.group, req.body.assignedQualIds))));
 app.put('/api/qualification-groups/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveQualificationGroup(req.body.group, req.body.assignedQualIds, req.params.id))));
 app.delete('/api/qualification-groups/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteQualificationGroup(req.params.id); res.status(204).send(); }));
 
 // Trunks
+/**
+ * @openapi
+ * /trunks:
+ *   post:
+ *     summary: Crée un nouveau Trunk SIP.
+ *     tags: [Téléphonie]
+ *     responses:
+ *       201: { description: "Trunk créé." }
+ * /trunks/{id}:
+ *   put:
+ *     summary: Met à jour un Trunk SIP.
+ *     tags: [Téléphonie]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Trunk mis à jour." }
+ *   delete:
+ *     summary: Supprime un Trunk SIP.
+ *     tags: [Téléphonie]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Trunk supprimé." }
+ */
 app.post('/api/trunks', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveTrunk(req.body))));
 app.put('/api/trunks/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveTrunk(req.body, req.params.id))));
 app.delete('/api/trunks/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteTrunk(req.params.id); res.status(204).send(); }));
 
 // DIDs
+/**
+ * @openapi
+ * /dids:
+ *   post:
+ *     summary: Crée un nouveau numéro SDA/DID.
+ *     tags: [Téléphonie]
+ *     responses:
+ *       201: { description: "Numéro créé." }
+ * /dids/{id}:
+ *   put:
+ *     summary: Met à jour un numéro SDA/DID.
+ *     tags: [Téléphonie]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Numéro mis à jour." }
+ *   delete:
+ *     summary: Supprime un numéro SDA/DID.
+ *     tags: [Téléphonie]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Numéro supprimé." }
+ */
 app.post('/api/dids', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveDid(req.body))));
 app.put('/api/dids/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveDid(req.body, req.params.id))));
 app.delete('/api/dids/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteDid(req.params.id); res.status(204).send(); }));
 
 // Sites
+/**
+ * @openapi
+ * /sites:
+ *   post:
+ *     summary: Crée un nouveau site.
+ *     tags: [Sites]
+ *     responses:
+ *       201: { description: "Site créé." }
+ * /sites/{id}:
+ *   put:
+ *     summary: Met à jour un site.
+ *     tags: [Sites]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Site mis à jour." }
+ *   delete:
+ *     summary: Supprime un site.
+ *     tags: [Sites]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Site supprimé." }
+ */
 app.post('/api/sites', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveSite(req.body))));
 app.put('/api/sites/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveSite(req.body, req.params.id))));
 app.delete('/api/sites/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteSite(req.params.id); res.status(204).send(); }));
 
 // Audio Files
+/**
+ * @openapi
+ * /audio-files:
+ *   post:
+ *     summary: Ajoute un nouveau fichier audio.
+ *     tags: [Média]
+ *     responses:
+ *       201: { description: "Fichier ajouté." }
+ * /audio-files/{id}:
+ *   put:
+ *     summary: Met à jour un fichier audio.
+ *     tags: [Média]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Fichier mis à jour." }
+ *   delete:
+ *     summary: Supprime un fichier audio.
+ *     tags: [Média]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Fichier supprimé." }
+ */
 app.post('/api/audio-files', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveAudioFile(req.body))));
 app.put('/api/audio-files/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveAudioFile(req.body, req.params.id))));
 app.delete('/api/audio-files/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteAudioFile(req.params.id); res.status(204).send(); }));
 
 // Planning
+/**
+ * @openapi
+ * /planning-events:
+ *   post:
+ *     summary: Crée un nouvel événement de planning.
+ *     tags: [Planning]
+ *     responses:
+ *       201: { description: "Événement créé." }
+ * /planning-events/{id}:
+ *   put:
+ *     summary: Met à jour un événement de planning.
+ *     tags: [Planning]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Événement mis à jour." }
+ *   delete:
+ *     summary: Supprime un événement de planning.
+ *     tags: [Planning]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       204: { description: "Événement supprimé." }
+ */
 app.post('/api/planning-events', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.savePlanningEvent(req.body))));
 app.put('/api/planning-events/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.savePlanningEvent(req.body, req.params.id))));
 app.delete('/api/planning-events/:id', authMiddleware, handleRequest(async (req, res) => { await db.deletePlanningEvent(req.params.id); res.status(204).send(); }));
