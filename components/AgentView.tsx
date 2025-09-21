@@ -423,7 +423,7 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
         }
     
         if (ctiStatus === 'IN_CALL' && agentScript && currentContact) {
-            return <AgentPreview script={agentScript} onClose={() => {}} embedded={true} />;
+            return <AgentPreview script={agentScript} onClose={() => {}} embedded={true} contact={currentContact} />;
         }
     
         if (ctiStatus === 'WRAP_UP' && activeCampaign) {

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import type { SavedScript, ScriptBlock, DisplayCondition, Page, ButtonAction } from '../types.ts';
+import type { SavedScript, ScriptBlock, DisplayCondition, Page, ButtonAction, Contact } from '../types.ts';
 
 interface AgentPreviewProps {
   script: SavedScript;
   onClose: () => void;
   embedded?: boolean;
+  contact?: Contact | null;
 }
 
 const checkCondition = (condition: DisplayCondition | null, values: Record<string, any>): boolean => {
@@ -16,9 +17,25 @@ const checkCondition = (condition: DisplayCondition | null, values: Record<strin
     return targetValue === condition.value;
 };
 
-const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded = false }) => {
-  const [formValues, setFormValues] = useState<Record<string, any>>({});
+const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded = false, contact = null }) => {
+  const [formValues, setFormValues] = useState<Record<string, any>>(() => {
+    if (contact?.customFields) {
+        return { ...contact.customFields };
+    }
+    return {};
+  });
   const [currentPageId, setCurrentPageId] = useState<string>(script.startPageId);
+
+  // This ensures the form values reset when a new contact is presented.
+  useEffect(() => {
+    if (contact?.customFields) {
+      setFormValues({ ...contact.customFields });
+    } else {
+      setFormValues({});
+    }
+    setCurrentPageId(script.startPageId); // Also reset to the first page for the new contact
+  }, [contact, script.startPageId]);
+
 
   const handleValueChange = (name: string, value: any) => {
       setFormValues(prev => ({ ...prev, [name]: value }));
@@ -93,6 +110,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300"
+                        value={formValues[block.name] || ''}
                         onChange={e => handleValueChange(block.name, e.target.value)}
                     />
                 </div>
@@ -104,7 +122,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                     <div className="space-y-1">
                         {block.content.options.map((opt: string) => (
                             <label key={opt} className="flex items-center">
-                                <input type="radio" name={block.name} value={opt} onChange={e => handleValueChange(block.name, e.target.value)} className="mr-2" />
+                                <input type="radio" name={block.name} value={opt} checked={formValues[block.name] === opt} onChange={e => handleValueChange(block.name, e.target.value)} className="mr-2" />
                                 {opt}
                             </label>
                         ))}
@@ -118,7 +136,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                     <div className="space-y-1">
                         {block.content.options.map((opt: string) => (
                             <label key={opt} className="flex items-center">
-                                <input type="checkbox" name={`${block.name}-${opt}`} value={opt} onChange={e => handleCheckboxChange(block.name, opt, e.target.checked)} className="mr-2" />
+                                <input type="checkbox" name={`${block.name}-${opt}`} value={opt} checked={Array.isArray(formValues[block.name]) && formValues[block.name].includes(opt)} onChange={e => handleCheckboxChange(block.name, opt, e.target.checked)} className="mr-2" />
                                 {opt}
                             </label>
                         ))}
@@ -132,6 +150,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                     <select
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300"
+                        value={formValues[block.name] || ''}
                         onChange={e => handleValueChange(block.name, e.target.value)}
                     >
                         <option value="">-- Sélectionnez --</option>
@@ -147,6 +166,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                         type="date"
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300"
+                        value={formValues[block.name] || ''}
                         onChange={e => handleValueChange(block.name, e.target.value)}
                     />
                 </div>
@@ -160,6 +180,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300"
+                        value={formValues[block.name] || ''}
                         onChange={e => handleValueChange(block.name, e.target.value)}
                     />
                 </div>
@@ -179,6 +200,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300"
+                        value={formValues[block.name] || ''}
                         onChange={e => handleValueChange(block.name, e.target.value)}
                     />
                 </div>
@@ -191,6 +213,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                         type="time"
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300"
+                        value={formValues[block.name] || ''}
                         onChange={e => handleValueChange(block.name, e.target.value)}
                     />
                 </div>
