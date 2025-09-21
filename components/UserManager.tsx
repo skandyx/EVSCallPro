@@ -107,6 +107,8 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
         setIsEmailEnabled(prev => !prev);
         if (isEmailEnabled) setFormData(f => ({ ...f, email: '' }));
     };
+
+    const isNewUser = user.id.startsWith('new-');
     
     const TabButton: React.FC<{tabName: 'general' | 'groups' | 'campaigns', label: string}> = ({tabName, label}) => (
         <button type="button" onClick={() => setActiveTab(tabName)} className={`py-2 px-4 text-sm font-medium rounded-t-lg ${activeTab === tabName ? 'bg-white text-indigo-600 border-b-0' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
@@ -119,7 +121,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
             <div className="bg-slate-50 rounded-lg shadow-xl w-full max-w-lg flex flex-col h-[90vh]">
                 <form onSubmit={handleSubmit} className="flex flex-col h-full">
                     <div className="p-6 border-b bg-white rounded-t-lg">
-                        <h3 className="text-lg font-medium leading-6 text-slate-900">{user.id.startsWith('new-') ? 'Ajouter un nouvel utilisateur' : 'Modifier l\'utilisateur'}</h3>
+                        <h3 className="text-lg font-medium leading-6 text-slate-900">{isNewUser ? 'Ajouter un nouvel utilisateur' : 'Modifier l\'utilisateur'}</h3>
                     </div>
                     <div className="border-b border-slate-200 px-4 pt-2">
                         <nav className="-mb-px flex space-x-2">
@@ -160,7 +162,16 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
                                 <div>
                                     <label htmlFor="password" className="block text-sm font-medium text-slate-700">Mot de passe</label>
                                     <div className="mt-1 flex rounded-md shadow-sm">
-                                        <input type="text" name="password" id="password" value={formData.password || ''} onChange={handleChange} required className="block w-full flex-1 rounded-none rounded-l-md border-slate-300 p-2 border"/>
+                                        <input
+                                            type="text"
+                                            name="password"
+                                            id="password"
+                                            value={formData.password || ''}
+                                            onChange={handleChange}
+                                            required={isNewUser}
+                                            placeholder={isNewUser ? '' : 'Laisser vide pour ne pas changer'}
+                                            className="block w-full flex-1 rounded-none rounded-l-md border-slate-300 p-2 border"
+                                        />
                                         <button type="button" onClick={handleGeneratePassword} className="inline-flex items-center rounded-r-md border border-l-0 border-slate-300 bg-slate-50 px-3 text-sm text-slate-500 hover:bg-slate-100">Générer</button>
                                     </div>
                                 </div>
