@@ -1,4 +1,4 @@
-const db = require('./services/db.js');
+const db = require('./services/db');
 const { executeFlow } = require('./services/ivr-executor.js');
 
 /**

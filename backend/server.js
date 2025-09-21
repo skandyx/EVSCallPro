@@ -3,7 +3,7 @@ const FastAGI = require('fastagi');
 const express = require('express');
 const cors = require('cors');
 const agiHandler = require('./agi-handler.js');
-const db = require('./services/db.js');
+const db = require('./services/db');
 
 const AGI_PORT = process.env.AGI_PORT || 4573;
 const API_PORT = process.env.API_PORT || 3001;
