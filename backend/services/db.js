@@ -169,45 +169,52 @@ const updateUser = async (userId, user, groupIds) => {
     try {
         await client.query('BEGIN');
 
-        const updateFields = [];
-        const updateValues = [];
-        let valueIndex = 1;
+        // Step 1: Update the user record itself
+        const hasPassword = user.password && user.password.trim() !== '';
+        
+        const userQuery = `
+            UPDATE users SET 
+                login_id = $1, 
+                first_name = $2, 
+                last_name = $3, 
+                email = $4, 
+                "role" = $5, 
+                is_active = $6, 
+                site_id = $7
+                ${hasPassword ? ', password_hash = $8' : ''}, 
+                updated_at = NOW()
+            WHERE id = $${hasPassword ? 9 : 8}
+            RETURNING *;
+        `;
+        
+        const userValues = [
+            user.loginId,
+            user.firstName,
+            user.lastName,
+            user.email || null,
+            user.role,
+            user.isActive,
+            user.siteId || null,
+        ];
 
-        const addField = (fieldName, value) => {
-            if (value !== undefined) { // Allow null to be set
-                updateFields.push(`${fieldName} = $${valueIndex++}`);
-                updateValues.push(value);
-            }
-        };
+        if (hasPassword) {
+            userValues.push(user.password);
+        }
+        userValues.push(userId);
 
-        addField('first_name', user.firstName);
-        addField('last_name', user.lastName);
-        addField('email', user.email === '' ? null : user.email);
-        addField('role', user.role);
-        addField('is_active', user.isActive);
-        addField('site_id', user.siteId === '' ? null : user.siteId);
-        addField('login_id', user.loginId);
-
-        if (user.password && user.password.trim() !== '') {
-            updateFields.push(`password_hash = $${valueIndex++}`);
-            updateValues.push(user.password);
+        const { rows: updatedUserRows } = await client.query(userQuery, userValues);
+        if (updatedUserRows.length === 0) {
+            throw new Error('User not found for update.');
         }
 
-        if (updateFields.length > 0) {
-            updateValues.push(userId);
-            const updateUserQuery = `
-                UPDATE users SET ${updateFields.join(', ')}, updated_at = NOW()
-                WHERE id = $${valueIndex} RETURNING *;
-            `;
-            await client.query(updateUserQuery, updateValues);
-        }
-
+        // Step 2: Update group memberships
         await client.query('DELETE FROM user_group_members WHERE user_id = $1', [userId]);
         if (groupIds && groupIds.length > 0) {
             const groupValues = groupIds.map((groupId, i) => `($1, $${i + 2})`).join(',');
             await client.query(`INSERT INTO user_group_members (user_id, group_id) VALUES ${groupValues}`, [userId, ...groupIds]);
         }
         
+        // Step 3: Update campaign assignments
         await client.query('DELETE FROM campaign_agents WHERE user_id = $1', [userId]);
         if (user.campaignIds && user.campaignIds.length > 0) {
             const campaignValues = user.campaignIds.map((campaignId, i) => `($1, $${i + 2})`).join(',');
@@ -215,11 +222,13 @@ const updateUser = async (userId, user, groupIds) => {
         }
         
         await client.query('COMMIT');
+        
+        // The user was updated, return the updated record. No need to re-query.
+        return keysToCamel(updatedUserRows[0]);
 
-        const res = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
-        return keysToCamel(res.rows[0]);
     } catch (e) {
         await client.query('ROLLBACK');
+        console.error("Error in updateUser transaction:", e);
         throw e;
     } finally {
         client.release();
