@@ -11,19 +11,6 @@ interface ImportContactsModalProps {
 
 type CsvRow = Record<string, string>;
 
-// Mock CSV data for simulation
-const MOCK_CSV_DATA: { headers: string[], data: CsvRow[] } = {
-    headers: ["telephone", "nom", "prenom", "code_postal", "ville", "date_rdv"],
-    data: [
-        { telephone: "0611223344", nom: "Dupont", prenom: "Jean", code_postal: "75001", ville: "Paris", date_rdv: "2024-09-15" },
-        { telephone: "0655667788", nom: "Martin", prenom: "Marie", code_postal: "13008", ville: "Marseille", date_rdv: "2024-09-16" },
-        { telephone: "0699887766", nom: "Bernard", prenom: "Luc", code_postal: "69002", ville: "Lyon", date_rdv: "2024-09-17" },
-        { telephone: "invalid-phone", nom: "Durand", prenom: "Sophie", code_postal: "31000", ville: "Toulouse", date_rdv: "2024-09-18" },
-        { telephone: "0612345678", nom: "", prenom: "Pierre", code_postal: "59000", ville: "Lille", date_rdv: "2024-09-19" },
-        { telephone: "0601020304", nom: "العربي", prenom: "محمد", code_postal: "92100", ville: "Boulogne", date_rdv: "2024-09-20" },
-    ]
-};
-
 const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, script, onClose, onImport }) => {
     const [step, setStep] = useState(1);
     const [file, setFile] = useState<File | null>(null);
@@ -31,6 +18,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
     const [csvData, setCsvData] = useState<CsvRow[]>([]);
     const [mappings, setMappings] = useState<Record<string, string>>({});
     const [summary, setSummary] = useState<{ total: number; valids: Contact[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
+    const [isLoadingFile, setIsLoadingFile] = useState(false);
     
     const scriptInputFields = useMemo(() => {
         if (!script) return [];
@@ -42,30 +30,75 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                 }
             });
         });
-        return inputBlocks.sort((a,b) => a.type === 'phone' ? -1 : 1); // Prioritize phone field
+        return inputBlocks.sort((a,b) => {
+            if (a.type === 'phone') return -1;
+            if (b.type === 'phone') return 1;
+            return 0;
+        });
     }, [script]);
 
     const handleFileSelect = (selectedFile: File) => {
+        if (!selectedFile) return;
         setFile(selectedFile);
-        // Simulate parsing
-        setCsvHeaders(MOCK_CSV_DATA.headers);
-        setCsvData(MOCK_CSV_DATA.data);
-        // Auto-map obvious fields
-        const initialMappings: Record<string, string> = {};
-        scriptInputFields.forEach(field => {
-            const fieldNameLower = field.name.toLowerCase();
-            const matchingHeader = MOCK_CSV_DATA.headers.find(header => {
-                const h = header.toLowerCase();
-                 if (field.type === 'phone') {
-                    return h.includes('phone') || h.includes('tel') || h.includes('num');
-                }
-                return h.includes(fieldNameLower);
-            });
-            if (matchingHeader) {
-                initialMappings[field.fieldName] = matchingHeader;
+        setIsLoadingFile(true);
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            if (!text) {
+                setIsLoadingFile(false);
+                return;
             }
-        });
-        setMappings(initialMappings);
+
+            const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+            if (lines.length === 0) {
+                setCsvHeaders([]);
+                setCsvData([]);
+                setIsLoadingFile(false);
+                return;
+            }
+
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = lines.slice(1).map(line => {
+                const values = line.split(',');
+                return headers.reduce((obj, header, index) => {
+                    obj[header] = values[index]?.trim() || '';
+                    return obj;
+                }, {} as CsvRow);
+            });
+            
+            setCsvHeaders(headers);
+            setCsvData(data);
+
+            // Auto-map obvious fields
+            const initialMappings: Record<string, string> = {};
+            scriptInputFields.forEach(field => {
+                 const fieldNameLower = field.name.toLowerCase().replace(/ /g, '_');
+                 const fieldNameSimple = fieldNameLower.replace(/[^a-z0-9]/gi, '');
+
+                const matchingHeader = headers.find(header => {
+                    const h = header.toLowerCase().replace(/ /g, '_');
+                    const hSimple = h.replace(/[^a-z0-9]/gi, '');
+
+                    if (field.type === 'phone') {
+                        return h.includes('phone') || h.includes('tel') || h.includes('num');
+                    }
+                    return h === fieldNameLower || hSimple === fieldNameSimple;
+                });
+
+                if (matchingHeader) {
+                    initialMappings[field.fieldName] = matchingHeader;
+                }
+            });
+            setMappings(initialMappings);
+            setIsLoadingFile(false);
+        };
+        reader.onerror = () => {
+             alert("Erreur lors de la lecture du fichier.");
+             setIsLoadingFile(false);
+        };
+
+        reader.readAsText(selectedFile, 'UTF-8');
     };
 
     const processAndGoToSummary = () => {
@@ -81,7 +114,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
 
         csvData.forEach((row, index) => {
             const phoneNumber = row[phoneHeader] || '';
-            if (!phoneNumber || !/^\d{10,}$/.test(phoneNumber.replace(/\s/g, ''))) {
+            if (!phoneNumber || !/^\d{9,}$/.test(phoneNumber.replace(/\s/g, ''))) {
                 invalids.push({ row, reason: "Numéro de téléphone manquant ou invalide." });
                 return;
             }
@@ -94,10 +127,10 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                 const value = header ? row[header] : '';
                 if (value) {
                     customFields[field.fieldName] = value;
-                    const nameLower = field.name.toLowerCase();
-                    if (nameLower.includes('prénom') || nameLower.includes('first')) firstName = value;
-                    if (nameLower.includes('nom') || nameLower.includes('last')) lastName = value;
-                    if (nameLower.includes('postal') || nameLower.includes('cp')) postalCode = value;
+                    const fieldNameLower = field.fieldName.toLowerCase();
+                    if (fieldNameLower.includes('prenom') || fieldNameLower.includes('first')) firstName = value;
+                    if (fieldNameLower.includes('nom') || fieldNameLower.includes('last')) lastName = value;
+                    if (fieldNameLower.includes('postal') || fieldNameLower.includes('cp')) postalCode = value;
                 }
             });
 
@@ -130,10 +163,9 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                          <p className="text-sm text-slate-600">Sélectionnez un fichier CSV à importer dans la campagne <span className="font-semibold">{campaign.name}</span>. Le fichier doit être encodé en UTF-8 pour supporter les caractères spéciaux (ex: Arabe).</p>
                         <label className="block w-full cursor-pointer rounded-lg border-2 border-dashed border-slate-300 p-8 text-center hover:border-indigo-500">
                             <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-slate-400" />
-                            <span className="mt-2 block text-sm font-medium text-slate-900">{file ? file.name : "Téléverser un fichier CSV"}</span>
+                            <span className="mt-2 block text-sm font-medium text-slate-900">{isLoadingFile ? "Analyse en cours..." : file ? file.name : "Téléverser un fichier CSV"}</span>
                             <input type='file' className="sr-only" accept=".csv" onChange={e => e.target.files && handleFileSelect(e.target.files[0])} />
                         </label>
-                        {file && <p className="text-center text-xs text-slate-500">Simulation: Le contenu du fichier a été chargé à partir de données de démonstration.</p>}
                     </div>
                 );
             case 2:
@@ -143,9 +175,12 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                         <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
                             {scriptInputFields.map(field => (
                                 <div key={field.id} className="grid grid-cols-2 gap-4 items-center p-1">
-                                    <span className="font-medium text-slate-700 truncate" title={field.name}>{field.name}</span>
+                                    <span className="font-medium text-slate-700 truncate" title={field.name}>
+                                        {field.type === 'phone' && <span className="text-red-500 mr-1">*</span>}
+                                        {field.name}
+                                    </span>
                                     <select value={mappings[field.fieldName] || ''} onChange={e => setMappings(prev => ({ ...prev, [field.fieldName]: e.target.value }))} className="w-full p-2 border bg-white rounded-md">
-                                        <option value="">Ignorer ce champ</option>
+                                        <option value="">Ignorer cette colonne</option>
                                         {csvHeaders.map(header => <option key={header} value={header}>{header}</option>)}
                                     </select>
                                 </div>
@@ -193,7 +228,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
     };
     
     const isNextDisabled = useMemo(() => {
-        if (step === 1 && !file) return true;
+        if (step === 1 && (!file || isLoadingFile)) return true;
         if (step === 2) {
             const phoneField = scriptInputFields.find(f => f.type === 'phone');
             if (!phoneField || !mappings[phoneField.fieldName]) {
@@ -201,7 +236,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
             }
         }
         return false;
-    }, [step, file, mappings, scriptInputFields]);
+    }, [step, file, isLoadingFile, mappings, scriptInputFields]);
 
     return (
         <div className="fixed inset-0 bg-slate-800 bg-opacity-75 flex items-center justify-center p-4 z-[60]">
