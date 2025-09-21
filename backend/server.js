@@ -1,5 +1,5 @@
 require('dotenv').config();
-const FastAGI = require('fast-agi');
+const FastAGI = require('fastagi');
 const express = require('express');
 const cors = require('cors');
 const agiHandler = require('./agi-handler.js');
