@@ -149,8 +149,8 @@ const createUser = async (user, groupIds) => {
         }
         
         if (user.campaignIds && user.campaignIds.length > 0) {
-            const campaignValues = user.campaignIds.map((campaignId, i) => `($1, $${i + 2})`).join(',');
-            const campaignQuery = `INSERT INTO campaign_agents (user_id, campaign_id) VALUES ${campaignValues};`;
+            const campaignValues = user.campaignIds.map((campaignId, i) => `($${i + 2}, $1)`).join(',');
+            const campaignQuery = `INSERT INTO campaign_agents (campaign_id, user_id) VALUES ${campaignValues};`;
             await client.query(campaignQuery, [newUser.id, ...user.campaignIds]);
         }
 
@@ -217,8 +217,8 @@ const updateUser = async (userId, user, groupIds) => {
         // Step 3: Update campaign assignments
         await client.query('DELETE FROM campaign_agents WHERE user_id = $1', [userId]);
         if (user.campaignIds && user.campaignIds.length > 0) {
-            const campaignValues = user.campaignIds.map((campaignId, i) => `($1, $${i + 2})`).join(',');
-            await client.query(`INSERT INTO campaign_agents (user_id, campaign_id) VALUES ${campaignValues}`, [userId, ...user.campaignIds]);
+            const campaignValues = user.campaignIds.map((campaignId, i) => `($${i + 2}, $1)`).join(',');
+            await client.query(`INSERT INTO campaign_agents (campaign_id, user_id) VALUES ${campaignValues}`, [userId, ...user.campaignIds]);
         }
         
         await client.query('COMMIT');
