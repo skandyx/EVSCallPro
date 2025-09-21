@@ -26,6 +26,7 @@ const keysToCamel = (obj) => {
 
 // --- AUTHENTICATION ---
 const authenticateUser = async (loginId, password) => {
+    // In a real app, 'password' would be hashed before comparison
     const res = await pool.query('SELECT * FROM users WHERE login_id = $1 AND password_hash = $2', [loginId, password]);
     if (res.rows.length > 0) {
         return keysToCamel(res.rows[0]);
@@ -36,45 +37,67 @@ const authenticateUser = async (loginId, password) => {
 // --- DATA LOADERS ---
 const getAllApplicationData = async () => {
     const [
-        sites, users, userGroups, campaigns, savedScripts, ivrFlows,
-        qualifications, qualificationGroups, trunks, dids, audioFiles,
-        planningEvents, personalCallbacks, activityTypes
+        sitesRes, usersRes, userGroupsRes, campaignsRes, scriptsRes, ivrFlowsRes,
+        qualificationsRes, qualificationGroupsRes, trunksRes, didsRes, audioFilesRes,
+        planningEventsRes, personalCallbacksRes, activityTypesRes,
+        userGroupMembersRes, campaignAgentsRes, contactsRes
     ] = await Promise.all([
-        getSites(), getUsers(), getUserGroups(), getCampaigns(), getScripts(), getIvrFlows(),
-        getQualifications(), getQualificationGroups(), getTrunks(), getDids(), getAudioFiles(),
-        getPlanningEvents(), getPersonalCallbacks(), getActivityTypes()
+        pool.query('SELECT * FROM sites ORDER BY name'),
+        pool.query('SELECT * FROM users ORDER BY first_name, last_name'),
+        pool.query('SELECT * FROM user_groups ORDER BY name'),
+        pool.query('SELECT * FROM campaigns ORDER BY name'),
+        pool.query('SELECT * FROM scripts ORDER BY name'),
+        pool.query('SELECT * FROM ivr_flows ORDER BY name'),
+        pool.query('SELECT * FROM qualifications ORDER BY code'),
+        pool.query('SELECT * FROM qualification_groups ORDER BY name'),
+        pool.query('SELECT * FROM trunks ORDER BY name'),
+        pool.query('SELECT * FROM dids ORDER BY number'),
+        pool.query('SELECT * FROM audio_files ORDER BY name'),
+        pool.query('SELECT * FROM planning_events'),
+        pool.query('SELECT * FROM personal_callbacks'),
+        pool.query('SELECT * FROM activity_types ORDER BY name'),
+        pool.query('SELECT * FROM user_group_members'),
+        pool.query('SELECT * FROM campaign_agents'),
+        pool.query('SELECT * FROM contacts')
     ]);
 
-    // Attach group and campaign memberships to users
-    const userGroupMembers = await pool.query('SELECT * FROM user_group_members');
-    const campaignAgents = await pool.query('SELECT * FROM campaign_agents');
-    
-    const usersWithMemberships = users.map(user => {
-        const campaignIds = campaignAgents.rows.filter(ca => ca.user_id === user.id).map(ca => ca.campaign_id);
-        return { ...user, campaignIds };
-    });
+    const users = usersRes.rows.map(keysToCamel);
+    const userGroups = userGroupsRes.rows.map(keysToCamel);
+    const campaigns = campaignsRes.rows.map(keysToCamel);
+    const contacts = contactsRes.rows.map(keysToCamel);
 
-    const groupsWithMembers = userGroups.map(group => {
-        const memberIds = userGroupMembers.rows.filter(ugm => ugm.group_id === group.id).map(ugm => ugm.user_id);
-        return { ...group, memberIds };
-    });
+    // Attach memberships and contacts
+    const usersWithMemberships = users.map(user => ({
+        ...user,
+        campaignIds: campaignAgentsRes.rows.filter(ca => ca.user_id === user.id).map(ca => ca.campaign_id),
+    }));
+
+    const groupsWithMembers = userGroups.map(group => ({
+        ...group,
+        memberIds: userGroupMembersRes.rows.filter(ugm => ugm.group_id === group.id).map(ugm => ugm.user_id),
+    }));
+    
+    const campaignsWithContacts = campaigns.map(c => ({
+        ...c,
+        contacts: contacts.filter(co => co.campaign_id === c.id)
+    }));
+
 
     return {
-        sites,
+        sites: sitesRes.rows.map(keysToCamel),
         users: usersWithMemberships,
         userGroups: groupsWithMembers,
-        campaigns,
-        savedScripts,
-        savedIvrFlows: ivrFlows,
-        qualifications,
-        qualificationGroups,
-        trunks,
-        dids,
-        audioFiles,
-        planningEvents,
-        personalCallbacks,
-        activityTypes
-        // Add other data as needed (history, sessions, etc.)
+        campaigns: campaignsWithContacts,
+        savedScripts: scriptsRes.rows.map(parseScriptOrFlow),
+        savedIvrFlows: ivrFlowsRes.rows.map(parseScriptOrFlow),
+        qualifications: qualificationsRes.rows.map(keysToCamel),
+        qualificationGroups: qualificationGroupsRes.rows.map(keysToCamel),
+        trunks: trunksRes.rows.map(keysToCamel),
+        dids: didsRes.rows.map(keysToCamel),
+        audioFiles: audioFilesRes.rows.map(keysToCamel),
+        planningEvents: planningEventsRes.rows.map(keysToCamel),
+        personalCallbacks: personalCallbacksRes.rows.map(keysToCamel),
+        activityTypes: activityTypesRes.rows.map(keysToCamel)
     };
 };
 
@@ -107,7 +130,6 @@ const createUser = async (user, groupIds) => {
     try {
         await client.query('BEGIN');
         
-        // Step 1: Create the user
         const userQuery = `
             INSERT INTO users (id, login_id, first_name, last_name, email, "role", is_active, password_hash, site_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -120,14 +142,12 @@ const createUser = async (user, groupIds) => {
 
         const newUser = userRes.rows[0];
 
-        // Step 2: Assign to groups
         if (groupIds && groupIds.length > 0) {
             const groupValues = groupIds.map((groupId, i) => `($1, $${i + 2})`).join(',');
             const groupQuery = `INSERT INTO user_group_members (user_id, group_id) VALUES ${groupValues};`;
             await client.query(groupQuery, [newUser.id, ...groupIds]);
         }
         
-        // Step 3: Assign to campaigns
         if (user.campaignIds && user.campaignIds.length > 0) {
             const campaignValues = user.campaignIds.map((campaignId, i) => `($1, $${i + 2})`).join(',');
             const campaignQuery = `INSERT INTO campaign_agents (user_id, campaign_id) VALUES ${campaignValues};`;
@@ -149,13 +169,12 @@ const updateUser = async (userId, user, groupIds) => {
     try {
         await client.query('BEGIN');
 
-        // Step 1: Dynamically build the UPDATE query for user details
         const updateFields = [];
         const updateValues = [];
         let valueIndex = 1;
 
         const addField = (fieldName, value) => {
-            if (value !== undefined && value !== null) {
+            if (value !== undefined) { // Allow null to be set
                 updateFields.push(`${fieldName} = $${valueIndex++}`);
                 updateValues.push(value);
             }
@@ -163,15 +182,15 @@ const updateUser = async (userId, user, groupIds) => {
 
         addField('first_name', user.firstName);
         addField('last_name', user.lastName);
-        addField('email', user.email);
+        addField('email', user.email === '' ? null : user.email);
         addField('role', user.role);
         addField('is_active', user.isActive);
-        addField('site_id', user.siteId);
+        addField('site_id', user.siteId === '' ? null : user.siteId);
+        addField('login_id', user.loginId);
 
-        // Only update password if a non-empty value is provided
         if (user.password && user.password.trim() !== '') {
             updateFields.push(`password_hash = $${valueIndex++}`);
-            updateValues.push(user.password); // In a real app, hash this password
+            updateValues.push(user.password);
         }
 
         if (updateFields.length > 0) {
@@ -183,14 +202,12 @@ const updateUser = async (userId, user, groupIds) => {
             await client.query(updateUserQuery, updateValues);
         }
 
-        // Step 2: Update group memberships (delete and re-insert)
         await client.query('DELETE FROM user_group_members WHERE user_id = $1', [userId]);
         if (groupIds && groupIds.length > 0) {
             const groupValues = groupIds.map((groupId, i) => `($1, $${i + 2})`).join(',');
             await client.query(`INSERT INTO user_group_members (user_id, group_id) VALUES ${groupValues}`, [userId, ...groupIds]);
         }
         
-        // Step 3: Update campaign memberships
         await client.query('DELETE FROM campaign_agents WHERE user_id = $1', [userId]);
         if (user.campaignIds && user.campaignIds.length > 0) {
             const campaignValues = user.campaignIds.map((campaignId, i) => `($1, $${i + 2})`).join(',');
@@ -280,7 +297,19 @@ const saveScript = async (script, id) => {
 };
 
 const deleteScript = async (id) => await pool.query('DELETE FROM scripts WHERE id = $1', [id]);
-const duplicateScript = async (id) => { /* ... Implement duplication logic ... */ return {}; };
+const duplicateScript = async (id) => {
+    const res = await pool.query('SELECT * FROM scripts WHERE id = $1', [id]);
+    if (res.rows.length === 0) {
+        throw new Error('Script not found');
+    }
+    const originalScript = parseScriptOrFlow(res.rows[0]);
+    const newScript = {
+        ...originalScript,
+        id: `script-${Date.now()}`,
+        name: `${originalScript.name} (Copie)`,
+    };
+    return saveScript(newScript); 
+};
 
 // --- IVR FLOWS ---
 const getIvrFlows = async () => {
@@ -299,18 +328,24 @@ const saveIvrFlow = async (flow, id) => {
     return parseScriptOrFlow(res.rows[0]);
 };
 const deleteIvrFlow = async (id) => await pool.query('DELETE FROM ivr_flows WHERE id=$1', [id]);
-const duplicateIvrFlow = async (id) => { /* ... */ return {}; };
+const duplicateIvrFlow = async (id) => {
+    const res = await pool.query('SELECT * FROM ivr_flows WHERE id = $1', [id]);
+    if (res.rows.length === 0) {
+        throw new Error('IVR Flow not found');
+    }
+    const originalFlow = parseScriptOrFlow(res.rows[0]);
+    const newFlow = {
+        ...originalFlow,
+        id: `ivr-flow-${Date.now()}`,
+        name: `${originalFlow.name} (Copie)`,
+    };
+    return saveIvrFlow(newFlow);
+};
 
 // --- CAMPAIGNS ---
 const getCampaigns = async () => {
-    const campaignsRes = await pool.query('SELECT * FROM campaigns ORDER BY name');
-    const contactsRes = await pool.query('SELECT * FROM contacts');
-    const campaigns = campaignsRes.rows.map(keysToCamel);
-    const contacts = contactsRes.rows.map(keysToCamel);
-    return campaigns.map(c => ({
-        ...c,
-        contacts: contacts.filter(co => co.campaignId === c.id)
-    }));
+    const res = await pool.query('SELECT * FROM campaigns ORDER BY name');
+    return res.rows.map(keysToCamel);
 };
 const saveCampaign = async (campaign, id) => {
     const { name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime } = campaign;

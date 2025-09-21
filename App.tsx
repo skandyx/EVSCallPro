@@ -1,8 +1,7 @@
-import React, { useState, useMemo } from 'react';
-// Fix: Importing all necessary types for state management.
+import React, { useState, useMemo, useEffect } from 'react';
 import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, CallHistoryRecord } from './types.ts';
 import { features } from './data/features.ts';
-import { mockData } from './data/mockData.ts';
+import { mockData } from './data/mockData.ts'; // Kept for simulated data not yet in DB
 import Sidebar from './components/Sidebar.tsx';
 import FeatureDetail from './components/FeatureDetail.tsx';
 import LoginScreen from './components/LoginScreen.tsx';
@@ -10,304 +9,247 @@ import Header from './components/Header.tsx';
 import MonitoringDashboard from './components/MonitoringDashboard.tsx';
 import AgentView from './components/AgentView.tsx';
 
-// Fix: The entire App component was missing. This is the root component that orchestrates the entire application.
+
 const App: React.FC = () => {
     // --- STATE MANAGEMENT ---
-    // Simulating a backend with useState
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [users, setUsers] = useState<User[]>(mockData.users);
-    const [userGroups, setUserGroups] = useState<UserGroup[]>(mockData.userGroups);
-    const [campaigns, setCampaigns] = useState<Campaign[]>(mockData.campaigns);
-    const [savedScripts, setSavedScripts] = useState<SavedScript[]>(mockData.savedScripts);
-    const [ivrFlows, setIvrFlows] = useState<IvrFlow[]>(mockData.savedIvrFlows);
-    const [qualifications, setQualifications] = useState<Qualification[]>(mockData.qualifications);
-    const [qualificationGroups, setQualificationGroups] = useState<QualificationGroup[]>(mockData.qualificationGroups);
-    const [dids, setDids] = useState<Did[]>(mockData.dids);
-    const [trunks, setTrunks] = useState<Trunk[]>(mockData.trunks);
-    const [sites, setSites] = useState<Site[]>(mockData.sites);
-    const [audioFiles, setAudioFiles] = useState<AudioFile[]>(mockData.audioFiles);
-    const [planningEvents, setPlanningEvents] = useState<PlanningEvent[]>(mockData.planningEvents);
-    const [personalCallbacks, setPersonalCallbacks] = useState<PersonalCallback[]>(mockData.personalCallbacks);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+
+    // All application data, initialized empty, to be filled from API
+    const [users, setUsers] = useState<User[]>([]);
+    const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
+    const [ivrFlows, setIvrFlows] = useState<IvrFlow[]>([]);
+    const [qualifications, setQualifications] = useState<Qualification[]>([]);
+    const [qualificationGroups, setQualificationGroups] = useState<QualificationGroup[]>([]);
+    const [dids, setDids] = useState<Did[]>([]);
+    const [trunks, setTrunks] = useState<Trunk[]>([]);
+    const [sites, setSites] = useState<Site[]>([]);
+    const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
+    const [planningEvents, setPlanningEvents] = useState<PlanningEvent[]>([]);
+    const [personalCallbacks, setPersonalCallbacks] = useState<PersonalCallback[]>([]);
+    const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
+    
+    // Non-persistent or simulated data
     const [systemConnectionSettings, setSystemConnectionSettings] = useState<SystemConnectionSettings>(mockData.systemConnectionSettings);
     const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>(mockData.backupSchedule);
     const [backupLogs, setBackupLogs] = useState<BackupLog[]>(mockData.backupLogs);
-
+    const [moduleVisibility, setModuleVisibility] = useState<ModuleVisibility>({ categories: {}, features: {} });
 
     const [activeView, setActiveView] = useState<'app' | 'monitoring'>('app');
     const [activeFeatureId, setActiveFeatureId] = useState<FeatureId | null>('users');
     
-    // --- Module Visibility (SuperAdmin feature) ---
-    const [moduleVisibility, setModuleVisibility] = useState<ModuleVisibility>({
-        categories: {},
-        features: {},
-    });
+    // --- DATA FETCHING ---
+    const fetchApplicationData = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/application-data');
+            if (!response.ok) throw new Error('Failed to fetch application data');
+            const data = await response.json();
 
-    // --- COMPUTED VALUES ---
-    const activeFeature = useMemo(
-        () => features.find(f => f.id === activeFeatureId),
-        [activeFeatureId]
-    );
+            setUsers(data.users || []);
+            setUserGroups(data.userGroups || []);
+            setCampaigns(data.campaigns || []);
+            setSavedScripts(data.savedScripts || []);
+            setIvrFlows(data.savedIvrFlows || []);
+            setQualifications(data.qualifications || []);
+            setQualificationGroups(data.qualificationGroups || []);
+            setDids(data.dids || []);
+            setTrunks(data.trunks || []);
+            setSites(data.sites || []);
+            setAudioFiles(data.audioFiles || []);
+            setPlanningEvents(data.planningEvents || []);
+            setPersonalCallbacks(data.personalCallbacks || []);
+            setActivityTypes(data.activityTypes || []);
 
-    // --- EVENT HANDLERS ---
-    const handleLoginSuccess = (user: User) => {
-        setCurrentUser(user);
-    };
-
-    const handleLogout = () => {
-        setCurrentUser(null);
-        setActiveFeatureId(null);
-    };
-
-    const handleSelectFeature = (id: FeatureId) => {
-        setActiveFeatureId(id);
-    };
-
-    // --- DATA MUTATION HANDLERS (CRUD SIMULATION) ---
-    // These functions simulate updating a backend database.
-    
-    // Users
-    const handleSaveUser = (user: User, groupIds: string[]) => {
-        setUsers(prev => {
-            const index = prev.findIndex(u => u.id === user.id);
-            if (index > -1) {
-                const newUsers = [...prev];
-                newUsers[index] = user;
-                return newUsers;
-            }
-            return [...prev, user];
-        });
-        setUserGroups(prev => {
-            const newGroups = JSON.parse(JSON.stringify(prev));
-            // Remove user from all groups first
-            newGroups.forEach((g: UserGroup) => {
-                g.memberIds = g.memberIds.filter(id => id !== user.id);
-            });
-            // Add user to selected groups
-            groupIds.forEach(groupId => {
-                const group = newGroups.find((g: UserGroup) => g.id === groupId);
-                if (group) {
-                    group.memberIds.push(user.id);
-                }
-            });
-            return newGroups;
-        });
-    };
-    const handleDeleteUser = (userId: string) => {
-        if (window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) {
-            setUsers(prev => prev.filter(u => u.id !== userId));
-            setUserGroups(prev => prev.map(g => ({...g, memberIds: g.memberIds.filter(id => id !== userId)})));
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            // Optionally, set an error state to show in the UI
+        } finally {
+            setIsLoading(false);
         }
     };
-    const handleGenerateUsers = (newUsers: User[]) => {
-        setUsers(prev => [...prev, ...newUsers]);
+    
+    useEffect(() => {
+        if (currentUser) {
+            fetchApplicationData();
+        } else {
+            // Clear data on logout
+            setUsers([]);
+            setUserGroups([]);
+            setCampaigns([]);
+            setSavedScripts([]);
+            setIvrFlows([]);
+            setQualifications([]);
+            setQualificationGroups([]);
+            setDids([]);
+            setTrunks([]);
+            setSites([]);
+            setAudioFiles([]);
+            setPlanningEvents([]);
+            setPersonalCallbacks([]);
+            setActivityTypes([]);
+            setIsLoading(false);
+        }
+    }, [currentUser]);
+
+    // --- COMPUTED VALUES ---
+    const activeFeature = useMemo(() => features.find(f => f.id === activeFeatureId), [activeFeatureId]);
+
+    // --- EVENT HANDLERS ---
+    const handleLoginSuccess = (user: User) => setCurrentUser(user);
+    const handleLogout = () => setCurrentUser(null);
+    const handleSelectFeature = (id: FeatureId) => setActiveFeatureId(id);
+
+    // --- DATA MUTATION HANDLERS (API CALLS) ---
+    
+    // Helper for API calls
+    const apiCall = async (url: string, method: string, body?: any) => {
+        const options: RequestInit = {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+        };
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'API request failed');
+        }
+        if (response.status !== 204) {
+            return response.json();
+        }
+        return null;
+    };
+
+    // Users
+    const handleSaveUser = async (user: User, groupIds: string[]) => {
+        const isNew = user.id.startsWith('new-');
+        const url = isNew ? '/api/users' : `/api/users/${user.id}`;
+        await apiCall(url, isNew ? 'POST' : 'PUT', { user, groupIds });
+        await fetchApplicationData();
+    };
+    const handleDeleteUser = async (userId: string) => {
+        if (window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) {
+            await apiCall(`/api/users/${userId}`, 'DELETE');
+            await fetchApplicationData();
+        }
+    };
+    const handleGenerateUsers = async (newUsers: User[]) => {
+        await Promise.all(newUsers.map(user => apiCall('/api/users', 'POST', { user, groupIds: [] })));
+        await fetchApplicationData();
     };
 
     // User Groups
-    const handleSaveUserGroup = (group: UserGroup) => {
-        setUserGroups(prev => {
-            const index = prev.findIndex(g => g.id === group.id);
-            if (index > -1) {
-                const newGroups = [...prev];
-                newGroups[index] = group;
-                return newGroups;
-            }
-            return [...prev, group];
-        });
+    const handleSaveUserGroup = async (group: UserGroup) => {
+        const isNew = group.id.startsWith('group-');
+        const url = isNew ? '/api/groups' : `/api/groups/${group.id}`;
+        await apiCall(url, isNew ? 'POST' : 'PUT', group);
+        await fetchApplicationData();
     };
-    const handleDeleteUserGroup = (groupId: string) => {
-        setUserGroups(prev => prev.filter(g => g.id !== groupId));
+    const handleDeleteUserGroup = async (groupId: string) => {
+        await apiCall(`/api/groups/${groupId}`, 'DELETE');
+        await fetchApplicationData();
     };
 
     // Campaigns
-    const handleSaveCampaign = (campaign: Campaign) => {
-        setCampaigns(prev => {
-            const index = prev.findIndex(c => c.id === campaign.id);
-            if (index > -1) {
-                const newCampaigns = [...prev];
-                newCampaigns[index] = campaign;
-                return newCampaigns;
-            }
-            return [...prev, campaign];
-        });
+    const handleSaveCampaign = async (campaign: Campaign) => {
+        const isNew = campaign.id.startsWith('campaign-');
+        const url = isNew ? '/api/campaigns' : `/api/campaigns/${campaign.id}`;
+        await apiCall(url, isNew ? 'POST' : 'PUT', campaign);
+        await fetchApplicationData();
     };
-    const handleDeleteCampaign = (campaignId: string) => {
-        setCampaigns(prev => prev.filter(c => c.id !== campaignId));
+    const handleDeleteCampaign = async (campaignId: string) => {
+        await apiCall(`/api/campaigns/${campaignId}`, 'DELETE');
+        await fetchApplicationData();
     };
-    const handleImportContacts = (campaignId: string, contacts: Contact[]) => {
-        setCampaigns(prev => prev.map(c => {
-            if (c.id === campaignId) {
-                return { ...c, contacts: [...c.contacts, ...contacts] };
-            }
-            return c;
-        }));
+    const handleImportContacts = async (campaignId: string, contacts: Contact[]) => {
+        await apiCall(`/api/campaigns/${campaignId}/contacts`, 'POST', { contacts });
+        await fetchApplicationData();
     };
     
     // Scripts
-    const handleSaveOrUpdateScript = (script: SavedScript) => {
-        setSavedScripts(prev => {
-            const index = prev.findIndex(s => s.id === script.id);
-            if (index > -1) {
-                const newScripts = [...prev];
-                newScripts[index] = script;
-                return newScripts;
-            }
-            return [...prev, script];
-        });
+    const handleSaveOrUpdateScript = async (script: SavedScript) => {
+        const isNew = script.id.startsWith('script-');
+        const url = isNew ? '/api/scripts' : `/api/scripts/${script.id}`;
+        await apiCall(url, isNew ? 'POST' : 'PUT', script);
+        await fetchApplicationData();
     };
-    const handleDeleteScript = (scriptId: string) => {
-        setSavedScripts(prev => prev.filter(s => s.id !== scriptId));
+    const handleDeleteScript = async (scriptId: string) => {
+        await apiCall(`/api/scripts/${scriptId}`, 'DELETE');
+        await fetchApplicationData();
     };
-    const handleDuplicateScript = (scriptId: string) => {
-        const scriptToDuplicate = savedScripts.find(s => s.id === scriptId);
-        if (scriptToDuplicate) {
-            const newScript = JSON.parse(JSON.stringify(scriptToDuplicate));
-            newScript.id = `script-${Date.now()}`;
-            newScript.name = `${scriptToDuplicate.name} (Copie)`;
-            setSavedScripts(prev => [...prev, newScript]);
-        }
+    const handleDuplicateScript = async (scriptId: string) => {
+        await apiCall(`/api/scripts/${scriptId}/duplicate`, 'POST');
+        await fetchApplicationData();
     };
     
     // IVR Flows
-    const handleSaveOrUpdateIvrFlow = (flow: IvrFlow) => {
-        setIvrFlows(prev => {
-            const index = prev.findIndex(f => f.id === flow.id);
-            if (index > -1) {
-                const newFlows = [...prev];
-                newFlows[index] = flow;
-                return newFlows;
-            }
-            return [...prev, flow];
-        });
+    const handleSaveOrUpdateIvrFlow = async (flow: IvrFlow) => {
+        const isNew = flow.id.startsWith('ivr-flow-');
+        const url = isNew ? '/api/ivr-flows' : `/api/ivr-flows/${flow.id}`;
+        await apiCall(url, isNew ? 'POST' : 'PUT', flow);
+        await fetchApplicationData();
     };
-    const handleDeleteIvrFlow = (flowId: string) => {
-        setIvrFlows(prev => prev.filter(f => f.id !== flowId));
+    const handleDeleteIvrFlow = async (flowId: string) => {
+        await apiCall(`/api/ivr-flows/${flowId}`, 'DELETE');
+        await fetchApplicationData();
     };
-     const handleDuplicateIvrFlow = (flowId: string) => {
-        const flowToDuplicate = ivrFlows.find(f => f.id === flowId);
-        if (flowToDuplicate) {
-            const newFlow = JSON.parse(JSON.stringify(flowToDuplicate));
-            newFlow.id = `ivr-flow-${Date.now()}`;
-            newFlow.name = `${flowToDuplicate.name} (Copie)`;
-            setIvrFlows(prev => [...prev, newFlow]);
-        }
+    const handleDuplicateIvrFlow = async (flowId: string) => {
+        await apiCall(`/api/ivr-flows/${flowId}/duplicate`, 'POST');
+        await fetchApplicationData();
     };
 
     // Qualifications
-    const handleSaveQualification = (qual: Qualification) => {
-        setQualifications(prev => {
-            const index = prev.findIndex(q => q.id === qual.id);
-            if (index > -1) {
-                const newQuals = [...prev];
-                newQuals[index] = qual;
-                return newQuals;
-            }
-            return [...prev, qual];
-        });
+    const handleSaveQualification = async (qual: Qualification) => {
+        const isNew = qual.id.startsWith('qual-');
+        const url = isNew ? '/api/qualifications' : `/api/qualifications/${qual.id}`;
+        await apiCall(url, isNew ? 'POST' : 'PUT', qual);
+        await fetchApplicationData();
     };
-    const handleDeleteQualification = (qualId: string) => {
+    const handleDeleteQualification = async (qualId: string) => {
          if (window.confirm("Êtes-vous sûr de vouloir supprimer cette qualification ? Elle sera retirée de tous les groupes.")) {
-            setQualifications(prev => prev.filter(q => q.id !== qualId));
+            await apiCall(`/api/qualifications/${qualId}`, 'DELETE');
+            await fetchApplicationData();
         }
     };
 
     // Qualification Groups
-    const handleSaveQualificationGroup = (group: QualificationGroup, assignedQualIds: string[]) => {
-        setQualificationGroups(prev => {
-            const index = prev.findIndex(g => g.id === group.id);
-            if (index > -1) {
-                const newGroups = [...prev];
-                newGroups[index] = group;
-                return newGroups;
-            }
-            return [...prev, group];
-        });
-        setQualifications(prev => {
-            return prev.map(q => {
-                if (assignedQualIds.includes(q.id)) {
-                    return { ...q, groupId: group.id };
-                }
-                if (q.groupId === group.id) {
-                    return { ...q, groupId: null };
-                }
-                return q;
-            });
-        });
+    const handleSaveQualificationGroup = async (group: QualificationGroup, assignedQualIds: string[]) => {
+        const isNew = group.id.startsWith('qg-');
+        const url = isNew ? '/api/qualification-groups' : `/api/qualification-groups/${group.id}`;
+        await apiCall(url, isNew ? 'POST' : 'PUT', { group, assignedQualIds });
+        await fetchApplicationData();
     };
-    const handleDeleteQualificationGroup = (groupId: string) => {
+    const handleDeleteQualificationGroup = async (groupId: string) => {
         if (window.confirm("Êtes-vous sûr de vouloir supprimer ce groupe ? Les qualifications ne seront pas supprimées mais désassignées.")) {
-            setQualificationGroups(prev => prev.filter(g => g.id !== groupId));
-            setQualifications(prev => prev.map(q => q.groupId === groupId ? { ...q, groupId: null } : q));
+            await apiCall(`/api/qualification-groups/${groupId}`, 'DELETE');
+            await fetchApplicationData();
         }
     };
-
-    // DIDs and Trunks
-    const handleSaveDid = (did: Did) => {
-        setDids(prev => {
-            const index = prev.findIndex(d => d.id === did.id);
-            if (index > -1) {
-                const newDids = [...prev];
-                newDids[index] = did;
-                return newDids;
-            }
-            return [...prev, did];
-        });
-    };
-    const handleDeleteDid = (didId: string) => setDids(prev => prev.filter(d => d.id !== didId));
-    const handleSaveTrunk = (trunk: Trunk) => {
-        setTrunks(prev => {
-            const index = prev.findIndex(t => t.id === trunk.id);
-            if (index > -1) {
-                const newTrunks = [...prev];
-                newTrunks[index] = trunk;
-                return newTrunks;
-            }
-            return [...prev, trunk];
-        });
-    };
-    const handleDeleteTrunk = (trunkId: string) => setTrunks(prev => prev.filter(t => t.id !== trunkId));
     
-    // Sites
-    const handleSaveSite = (site: Site) => {
-        setSites(prev => {
-            const index = prev.findIndex(s => s.id === site.id);
-            if (index > -1) {
-                const newSites = [...prev];
-                newSites[index] = site;
-                return newSites;
-            }
-            return [...prev, site];
-        });
-    };
-    const handleDeleteSite = (siteId: string) => setSites(prev => prev.filter(s => s.id !== siteId));
-
-    // Audio Files
-    const handleSaveAudioFile = (file: AudioFile) => {
-        setAudioFiles(prev => {
-            const index = prev.findIndex(f => f.id === file.id);
-            if (index > -1) {
-                const newFiles = [...prev];
-                newFiles[index] = file;
-                return newFiles;
-            }
-            return [...prev, file];
-        });
-    };
-    const handleDeleteAudioFile = (fileId: string) => setAudioFiles(prev => prev.filter(f => f.id !== fileId));
-
-    // Planning
-    const handleSavePlanningEvent = (event: PlanningEvent) => {
-        setPlanningEvents(prev => {
-            const index = prev.findIndex(e => e.id === event.id);
-            if (index > -1) {
-                const newEvents = [...prev];
-                newEvents[index] = event;
-                return newEvents;
-            }
-            return [...prev, event];
-        });
-    };
-    const handleDeletePlanningEvent = (eventId: string) => setPlanningEvents(prev => prev.filter(e => e.id !== eventId));
+    // Generic handlers for simple CRUD (can be expanded)
+    const createCrudHandlers = <T extends { id: string }>(pluralName: string, setData: React.Dispatch<React.SetStateAction<T[]>>) => ({
+        save: async (item: T) => {
+            const isNew = item.id.includes('-'); // Simplified check
+            const url = isNew ? `/api/${pluralName}` : `/api/${pluralName}/${item.id}`;
+            await apiCall(url, isNew ? 'POST' : 'PUT', item);
+            await fetchApplicationData();
+        },
+        delete: async (id: string) => {
+            await apiCall(`/api/${pluralName}/${id}`, 'DELETE');
+            await fetchApplicationData();
+        }
+    });
     
+    const didHandlers = createCrudHandlers('dids', setDids);
+    const trunkHandlers = createCrudHandlers('trunks', setTrunks);
+    const siteHandlers = createCrudHandlers('sites', setSites);
+    const audioHandlers = createCrudHandlers('audio-files', setAudioFiles);
+    const planningEventHandlers = createCrudHandlers('planning-events', setPlanningEvents);
+
     const handleRunBackup = () => {
          setBackupLogs(prev => [
             { id: `log-${Date.now()}`, timestamp: new Date().toISOString(), status: 'success', fileName: `backup-manual-${new Date().toISOString().split('T')[0]}.zip` },
@@ -333,11 +275,13 @@ const App: React.FC = () => {
         />;
     }
     
-    // Props for the currently active component
+    if (isLoading) {
+        return <div className="h-screen w-screen flex items-center justify-center">Loading application data...</div>;
+    }
+    
     const featureComponentProps: any = {
         feature: activeFeature,
         currentUser,
-        // Pass all data and handlers
         users, onSaveUser: handleSaveUser, onDeleteUser: handleDeleteUser, onGenerateUsers: handleGenerateUsers, onImportUsers: handleGenerateUsers,
         userGroups, onSaveUserGroup: handleSaveUserGroup, onDeleteUserGroup: handleDeleteUserGroup,
         campaigns, onSaveCampaign: handleSaveCampaign, onDeleteCampaign: handleDeleteCampaign, onImportContacts: handleImportContacts,
@@ -345,27 +289,21 @@ const App: React.FC = () => {
         ivrFlows, onSaveOrUpdateIvrFlow: handleSaveOrUpdateIvrFlow, onDeleteIvrFlow: handleDeleteIvrFlow, onDuplicateIvrFlow: handleDuplicateIvrFlow,
         qualifications, onSaveQualification: handleSaveQualification, onDeleteQualification: handleDeleteQualification,
         qualificationGroups, onSaveQualificationGroup: handleSaveQualificationGroup, onDeleteQualificationGroup: handleDeleteQualificationGroup,
-        dids, onSaveDid: handleSaveDid, onDeleteDid: handleDeleteDid,
-        trunks, onSaveTrunk: handleSaveTrunk, onDeleteTrunk: handleDeleteTrunk,
-        sites, onSaveSite: handleSaveSite, onDeleteSite: handleDeleteSite,
-        audioFiles, onSaveAudioFile: handleSaveAudioFile, onDeleteAudioFile: handleDeleteAudioFile,
-        planningEvents, onSavePlanningEvent: handleSavePlanningEvent, onDeletePlanningEvent: handleDeletePlanningEvent,
+        dids, onSaveDid: didHandlers.save, onDeleteDid: didHandlers.delete,
+        trunks, onSaveTrunk: trunkHandlers.save, onDeleteTrunk: trunkHandlers.delete,
+        sites, onSaveSite: siteHandlers.save, onDeleteSite: siteHandlers.delete,
+        audioFiles, onSaveAudioFile: audioHandlers.save, onDeleteAudioFile: audioHandlers.delete,
+        planningEvents, onSavePlanningEvent: planningEventHandlers.save, onDeletePlanningEvent: planningEventHandlers.delete,
         personalCallbacks,
         systemConnectionSettings, onSaveSystemConnectionSettings: setSystemConnectionSettings,
-        // For ModuleSettingsManager
         features, moduleVisibility, onSaveVisibilitySettings: setModuleVisibility,
-        // For Supervision & Reporting
         callHistory: mockData.callHistory as CallHistoryRecord[],
         agentSessions: mockData.agentSessions as AgentSession[],
-        // For Monitoring
         systemLogs: mockData.systemLogs as SystemLog[],
         versionInfo: mockData.versionInfo as VersionInfo,
         connectivityServices: mockData.connectivityServices as ConnectivityService[],
-        backupLogs,
-        backupSchedule,
-        onSaveBackupSchedule: setBackupSchedule,
-        onRunBackup: handleRunBackup,
-        activityTypes: mockData.activityTypes as ActivityType[],
+        backupLogs, backupSchedule, onSaveBackupSchedule: setBackupSchedule, onRunBackup: handleRunBackup,
+        activityTypes,
     };
 
     const ActiveComponent = activeFeature?.component;
