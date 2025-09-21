@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import type { Feature, Qualification, QualificationGroup } from '../types.ts';
 import { PlusIcon, EditIcon, TrashIcon, ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './Icons.tsx';
@@ -252,7 +253,6 @@ interface QualificationsManagerProps {
     qualificationGroups: QualificationGroup[];
     onSaveQualification: (qualification: Qualification) => void;
     onDeleteQualification: (qualificationId: string) => void;
-    // Fix: Updated prop signature to correctly handle saving group name and assigned qualifications together.
     onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => void;
     onDeleteQualificationGroup: (groupId: string) => void;
 }
@@ -261,7 +261,6 @@ const QualificationsManager: React.FC<QualificationsManagerProps> = ({ feature, 
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [editingGroup, setEditingGroup] = useState<QualificationGroup | null>(null);
 
-    // Fix: Updated handler to pass both group and assigned IDs, simplifying logic and removing redundant calls.
     const handleSaveGroup = (group: QualificationGroup, assignedQualIds: string[]) => {
         onSaveQualificationGroup(group, assignedQualIds);
         setIsGroupModalOpen(false);

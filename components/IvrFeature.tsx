@@ -1,10 +1,8 @@
 
+
 import React, { useState } from 'react';
-// Fix: added .ts extension to import path
 import type { Feature, IvrFlow, IvrNode } from '../types.ts';
-// Fix: added .tsx extension to import path
 import IvrDesigner from './IvrDesigner.tsx';
-// Fix: added .tsx extension to import path
 import { EditIcon, DuplicateIcon, TrashIcon, PlusIcon } from './Icons.tsx';
 
 interface IvrFeatureProps {

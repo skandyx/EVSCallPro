@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { features } from './data/features.ts';
 import { mockData } from './data/mockData.ts';
@@ -295,14 +296,6 @@ const App: React.FC = () => {
         });
     };
 
-    const handleUpdateGroupQualifications = async (groupId: string, qualIds: string[]) => {
-        if (!data) return;
-        const group = data.qualificationGroups.find(g => g.id === groupId);
-        if (group) {
-            await handleSaveQualificationGroup(group, qualIds);
-        }
-    };
-
     const createSimpleHandler = <T extends {id: string}>(resource: string, dataKey: keyof NonNullable<AppData>, idPrefix: string) => {
         const handleSave = async (item: T) => {
             const isNew = item.id.startsWith(idPrefix);
@@ -310,7 +303,6 @@ const App: React.FC = () => {
             const method = isNew ? 'POST' : 'PUT';
             const savedItem = await handleApiCall(endpoint, method, item);
             updateData(draft => {
-                // Fix: Cast to unknown first to satisfy TypeScript's stricter generic type checking.
                 const collection = draft[dataKey] as unknown as T[];
                 if (isNew) { collection.push(savedItem); }
                 else { const idx = collection.findIndex(i => i.id === savedItem.id); if (idx > -1) collection[idx] = savedItem; }
@@ -319,9 +311,7 @@ const App: React.FC = () => {
         const handleDelete = async (itemId: string) => {
             await handleApiCall(`/${resource}/${itemId}`, 'DELETE');
             updateData(draft => {
-                // Fix: Cast to unknown first to satisfy TypeScript's stricter generic type checking.
                 const collection = draft[dataKey] as unknown as T[];
-                // Fix: Cast to unknown first to satisfy TypeScript's stricter generic type checking.
                 (draft[dataKey] as unknown as T[]) = collection.filter(i => i.id !== itemId);
             });
         };
@@ -380,7 +370,6 @@ const App: React.FC = () => {
             case 'scripts': return <ScriptFeature feature={activeFeature} savedScripts={data.savedScripts} onSaveOrUpdateScript={handleSaveOrUpdateScript} onDeleteScript={handleDeleteScript} onDuplicateScript={handleDuplicateScript} />;
             case 'ivr': return <IvrFeature feature={activeFeature} ivrFlows={data.savedIvrFlows} onSaveOrUpdateIvrFlow={handleSaveOrUpdateIvrFlow} onDeleteIvrFlow={handleDeleteIvrFlow} onDuplicateIvrFlow={handleDuplicateIvrFlow}/>;
             case 'outbound': return <OutboundCampaignsManager feature={activeFeature} campaigns={data.campaigns} users={data.users} savedScripts={data.savedScripts} qualificationGroups={data.qualificationGroups} onSaveCampaign={handleSaveCampaign} onDeleteCampaign={handleDeleteCampaign} onImportContacts={handleImportContacts} />;
-            // Fix: Removed `onUpdateGroupQualifications` prop as it is redundant. The logic is handled by `onSaveQualificationGroup`.
             case 'qualifications': return <QualificationsManager feature={activeFeature} qualifications={data.qualifications} qualificationGroups={data.qualificationGroups} onSaveQualification={handleSaveQualification} onDeleteQualification={handleDeleteQualification} onSaveQualificationGroup={handleSaveQualificationGroup} onDeleteQualificationGroup={handleDeleteQualificationGroup} />;
             case 'trunks': return <TrunkManager feature={activeFeature} trunks={data.trunks} onSaveTrunk={handleSaveTrunk} onDeleteTrunk={handleDeleteTrunk} />;
             case 'dids': return <DidManager feature={activeFeature} dids={data.dids} trunks={data.trunks} ivrFlows={data.savedIvrFlows} onSaveDid={handleSaveDid} onDeleteDid={handleDeleteDid} />;
