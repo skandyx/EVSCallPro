@@ -107,6 +107,7 @@ export interface ScriptBlock {
     content: any;
     displayCondition: DisplayCondition | null;
     parentId: string | null;
+    readOnly?: boolean;
     backgroundColor?: string;
     textColor?: string;
     fontFamily?: string;
@@ -122,7 +123,7 @@ export interface DisplayCondition {
 }
 
 export interface ButtonAction {
-    type: 'none' | 'save' | 'navigate' | 'next' | 'previous';
+    type: 'none' | 'save' | 'navigate' | 'next' | 'previous' | 'insert_contact';
     pageId?: string;
 }
 

@@ -22,7 +22,7 @@ const getAllApplicationData = async () => {
         userGroupMembersRes, campaignAgentsRes, contactsRes
     ] = await Promise.all([
         pool.query('SELECT * FROM sites ORDER BY name'),
-        pool.query('SELECT * FROM users ORDER BY first_name, last_name'),
+        pool.query('SELECT id, login_id, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at FROM users ORDER BY first_name, last_name'),
         pool.query('SELECT * FROM user_groups ORDER BY name'),
         pool.query('SELECT * FROM campaigns ORDER BY name'),
         pool.query('SELECT * FROM scripts ORDER BY name'),

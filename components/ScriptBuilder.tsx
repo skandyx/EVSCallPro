@@ -19,20 +19,35 @@ const BLOCK_PALETTE: { type: BlockType; icon: React.FC<any>; label: string; defa
     { type: 'group', icon: GroupIcon, label: 'Groupe', default: { width: 400, height: 250, backgroundColor: 'rgba(226, 232, 240, 0.5)', content: {} } },
     { type: 'label', icon: LabelIcon, label: 'Titre', default: { width: 300, height: 40, content: { text: 'Titre' }, fontSize: 18, textAlign: 'left' } },
     { type: 'text', icon: TextBlockIcon, label: 'Texte', default: { width: 300, height: 80, content: { text: 'Paragraphe de texte...' }, textAlign: 'left' } },
-    { type: 'input', icon: InputIcon, label: 'Champ de Saisie', default: { width: 300, height: 70, content: { placeholder: 'Saisir ici', format: 'text' } } },
-    { type: 'textarea', icon: TextareaIcon, label: 'Texte Multi-ligne', default: { width: 300, height: 120, content: { placeholder: 'Saisir ici...' } } },
-    { type: 'email', icon: EmailIcon, label: 'Email', default: { width: 300, height: 70, content: { placeholder: 'email@example.com' } } },
-    { type: 'phone', icon: PhoneIcon, label: 'Téléphone', default: { width: 300, height: 70, content: { placeholder: '0123456789' } } },
-    { type: 'date', icon: DateIcon, label: 'Date', default: { width: 200, height: 70, content: { } } },
-    { type: 'time', icon: TimeIcon, label: 'Heure', default: { width: 200, height: 70, content: { } } },
-    { type: 'radio', icon: RadioIcon, label: 'Choix Unique', default: { width: 300, height: 120, content: { question: 'Question ?', options: ['Option 1', 'Option 2'] } } },
-    { type: 'checkbox', icon: CheckboxIcon, label: 'Choix Multiples', default: { width: 300, height: 120, content: { question: 'Question ?', options: ['Option A', 'Option B'] } } },
-    { type: 'dropdown', icon: DropdownIcon, label: 'Liste Déroulante', default: { width: 300, height: 70, content: { options: ['Valeur 1', 'Valeur 2'] } } },
+    { type: 'input', icon: InputIcon, label: 'Champ de Saisie', default: { width: 300, height: 70, content: { placeholder: 'Saisir ici', format: 'text' }, readOnly: false } },
+    { type: 'textarea', icon: TextareaIcon, label: 'Texte Multi-ligne', default: { width: 300, height: 120, content: { placeholder: 'Saisir ici...' }, readOnly: false } },
+    { type: 'email', icon: EmailIcon, label: 'Email', default: { width: 300, height: 70, content: { placeholder: 'email@example.com' }, readOnly: false } },
+    { type: 'phone', icon: PhoneIcon, label: 'Téléphone', default: { width: 300, height: 70, content: { placeholder: '0123456789' }, readOnly: false } },
+    { type: 'date', icon: DateIcon, label: 'Date', default: { width: 200, height: 70, content: { }, readOnly: false } },
+    { type: 'time', icon: TimeIcon, label: 'Heure', default: { width: 200, height: 70, content: { }, readOnly: false } },
+    { type: 'radio', icon: RadioIcon, label: 'Choix Unique', default: { width: 300, height: 120, content: { question: 'Question ?', options: ['Option 1', 'Option 2'] }, readOnly: false } },
+    { type: 'checkbox', icon: CheckboxIcon, label: 'Choix Multiples', default: { width: 300, height: 120, content: { question: 'Question ?', options: ['Option A', 'Option B'] }, readOnly: false } },
+    { type: 'dropdown', icon: DropdownIcon, label: 'Liste Déroulante', default: { width: 300, height: 70, content: { options: ['Valeur 1', 'Valeur 2'] }, readOnly: false } },
     { type: 'button', icon: ButtonIcon, label: 'Bouton', default: { width: 200, height: 50, content: { text: 'Cliquer', action: { type: 'none' } }, backgroundColor: '#4f46e5', textColor: '#ffffff', textAlign: 'center' } },
     { type: 'history', icon: HistoryIcon, label: 'Historique', default: { width: 400, height: 200, content: {} } },
 ];
 
 const FONT_FAMILIES = ['Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'];
+
+const ToggleSwitch: React.FC<{ enabled: boolean; onChange: (enabled: boolean) => void; }> = ({ enabled, onChange }) => (
+    <button
+        type="button"
+        onClick={() => onChange(!enabled)}
+        className={`${enabled ? 'bg-indigo-600' : 'bg-slate-200'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out`}
+        role="switch"
+        aria-checked={enabled}
+    >
+        <span
+            aria-hidden="true"
+            className={`${enabled ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+        />
+    </button>
+);
 
 const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, onPreview }) => {
     const [editedScript, setEditedScript] = useState<SavedScript>(() => JSON.parse(JSON.stringify(script)));
@@ -321,6 +336,8 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                     handleBlockUpdate(selectedBlock.id, { name: trimmedName });
                 }
             };
+            const isInputType = ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(selectedBlock.type);
+
              return (
                 <div className="flex flex-col h-full">
                      <div>
@@ -343,9 +360,9 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                     </div>
                     <div className="py-4 space-y-4 flex-1 overflow-y-auto text-sm">
                         {propertiesTab === 'content' && (
-                           <>
+                           <div className="space-y-4">
                            { (selectedBlock.type === 'label' || selectedBlock.type === 'text') && <textarea value={selectedBlock.content.text} onChange={(e) => handleBlockContentUpdate(selectedBlockId!, { text: e.target.value })} className="w-full p-2 border rounded-md" rows={4}/> }
-                           { (selectedBlock.type === 'input' || selectedBlock.type === 'email' || selectedBlock.type === 'phone' || selectedBlock.type === 'textarea') && <><div><label className="font-medium">Placeholder</label><input type="text" value={selectedBlock.content.placeholder} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {placeholder: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div> {selectedBlock.type === 'input' && <div><label className="font-medium">Format</label><select value={selectedBlock.content.format} onChange={e => handleBlockContentUpdate(selectedBlockId!, { format: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white"><option value="text">Texte</option><option value="number">Nombre</option><option value="password">Mot de passe</option></select></div>}</>}
+                           { (selectedBlock.type === 'input' || selectedBlock.type === 'email' || selectedBlock.type === 'phone' || selectedBlock.type === 'textarea') && <div className="space-y-4"><div><label className="font-medium">Placeholder</label><input type="text" value={selectedBlock.content.placeholder} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {placeholder: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div> {selectedBlock.type === 'input' && <div><label className="font-medium">Format</label><select value={selectedBlock.content.format} onChange={e => handleBlockContentUpdate(selectedBlockId!, { format: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white"><option value="text">Texte</option><option value="number">Nombre</option><option value="password">Mot de passe</option></select></div>}</div>}
                            { (selectedBlock.type === 'button') && <><div><label className="font-medium">Texte du bouton</label><input type="text" value={selectedBlock.content.text} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {text: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div></> }
                            { (selectedBlock.type === 'radio' || selectedBlock.type === 'checkbox') && (
                                 <div className="space-y-4">
@@ -422,7 +439,19 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                                     })()}
                                 </div>
                            )}
-                           </>
+                           {isInputType && (
+                                <div className="flex items-center justify-between pt-4 border-t">
+                                    <div>
+                                        <label className="font-medium">Lecture seule</label>
+                                        <p className="text-xs text-slate-400">L'agent ne pourra pas modifier ce champ.</p>
+                                    </div>
+                                    <ToggleSwitch 
+                                        enabled={!!selectedBlock.readOnly} 
+                                        onChange={isEnabled => handleBlockUpdate(selectedBlock.id, { readOnly: isEnabled })}
+                                    />
+                                </div>
+                            )}
+                           </div>
                         )}
                         {propertiesTab === 'style' && (
                              <div className="space-y-4">
@@ -468,6 +497,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                                                 <option value="previous">Page précédente</option>
                                                 <option value="navigate">Aller à la page...</option>
                                                 <option value="save">Enregistrer les données</option>
+                                                <option value="insert_contact">Insérer une fiche</option>
                                             </select>
                                         </div>
 

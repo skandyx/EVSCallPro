@@ -47,9 +47,51 @@ const importContacts = async (campaignId, contacts) => {
     }
 };
 
+const createSingleContact = async (campaignId, contactData, phoneNumber) => {
+    const contact = {
+        id: `contact-${Date.now()}`,
+        campaign_id: campaignId,
+        first_name: '',
+        last_name: '',
+        phone_number: phoneNumber,
+        postal_code: '',
+        status: 'pending',
+        custom_fields: contactData,
+    };
+
+    // Heuristique pour peupler les champs standards à partir des champs personnalisés
+    for (const key in contact.custom_fields) {
+        const value = contact.custom_fields[key];
+        if (typeof value !== 'string') continue;
+
+        const lowerKey = key.toLowerCase();
+        if (!contact.first_name && (lowerKey.includes('prenom') || lowerKey.includes('first'))) {
+            contact.first_name = value;
+        }
+        if (!contact.last_name && (lowerKey.includes('nom') || lowerKey.includes('last'))) {
+            contact.last_name = value;
+        }
+        if (!contact.postal_code && (lowerKey.includes('postal') || lowerKey.includes('cp'))) {
+            contact.postal_code = value;
+        }
+    }
+
+    if (!contact.first_name && !contact.last_name) {
+        contact.last_name = `Contact ${phoneNumber}`;
+    }
+
+    const res = await pool.query(
+        'INSERT INTO contacts (id, campaign_id, first_name, last_name, phone_number, postal_code, status, custom_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+        [contact.id, contact.campaign_id, contact.first_name, contact.last_name, contact.phone_number, contact.postal_code, contact.status, JSON.stringify(contact.custom_fields)]
+    );
+    return keysToCamel(res.rows[0]);
+};
+
+
 module.exports = {
     getCampaigns,
     saveCampaign,
     deleteCampaign,
     importContacts,
+    createSingleContact,
 };

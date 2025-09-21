@@ -25,6 +25,7 @@ interface AgentViewProps {
     onLogout: () => void;
     apiCall: (url: string, method: string, body?: any) => Promise<any>;
     onSaveContactNote: (contactId: string, campaignId: string, note: string) => Promise<void>;
+    onInsertContact: (campaignId: string, contactData: Record<string, any>, phoneNumber: string) => Promise<void>;
 }
 
 const CallSimulationModal: React.FC<{ log: string[]; }> = ({ log }) => {
@@ -113,7 +114,7 @@ const DialpadPopover: React.FC<{
     );
 };
 
-const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScripts, sites, personalCallbacks, qualifications, qualificationGroups, onLogout, apiCall, onSaveContactNote }) => {
+const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScripts, sites, personalCallbacks, qualifications, qualificationGroups, onLogout, apiCall, onSaveContactNote, onInsertContact }) => {
     const [ctiStatus, setCtiStatus] = useState<AgentCtiStatus>('LOGGED_OUT');
     const [statusTimer, setStatusTimer] = useState(0);
     const [currentContact, setCurrentContact] = useState<Contact | null>(null);
@@ -460,7 +461,7 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
             return <CallSimulationModal log={simulationLog} />;
         }
     
-        if (ctiStatus === 'IN_CALL' && agentScript && currentContact) {
+        if (agentScript && activeCampaign && (ctiStatus === 'IN_CALL' || ctiStatus === 'WAITING')) {
             return <AgentPreview 
                 script={agentScript} 
                 onClose={() => {}} 
@@ -471,6 +472,8 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
                 newNote={newNote}
                 setNewNote={setNewNote}
                 onSaveNote={handleSaveNote}
+                campaign={activeCampaign}
+                onInsertContact={onInsertContact}
             />;
         }
     

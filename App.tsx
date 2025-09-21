@@ -1,5 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, CallHistoryRecord, ContactNote } from './types.ts';
+// Fix: Add missing 'CallHistoryRecord' type import.
+import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, ContactNote, CallHistoryRecord } from './types.ts';
 import { features } from './data/features.ts';
 import { mockData } from './data/mockData.ts'; // Kept for simulated data not yet in DB
 import Sidebar from './components/Sidebar.tsx';
@@ -204,6 +206,15 @@ const App: React.FC = () => {
         await apiCall(`/api/campaigns/${campaignId}/contacts`, 'POST', { contacts });
         await fetchApplicationData();
     };
+    const handleInsertContact = async (campaignId: string, contactData: Record<string, any>, phoneNumber: string) => {
+        try {
+            await apiCall(`/api/campaigns/${campaignId}/contacts/single`, 'POST', { contactData, phoneNumber });
+            await fetchApplicationData(); 
+        } catch (error) {
+            console.error("Failed to insert contact:", error);
+            throw error;
+        }
+    };
     
     // Scripts
     const handleSaveOrUpdateScript = async (script: SavedScript) => {
@@ -323,6 +334,7 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             apiCall={apiCall}
             onSaveContactNote={handleSaveContactNote}
+            onInsertContact={handleInsertContact}
         />;
     }
     

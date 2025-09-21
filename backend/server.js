@@ -286,7 +286,7 @@ app.delete('/api/groups/:id', authMiddleware, handleRequest(async (req, res) => 
  *       204: { description: "Campagne supprimée." }
  * /campaigns/{id}/contacts:
  *   post:
- *     summary: Importe des contacts dans une campagne.
+ *     summary: Importe des contacts en masse dans une campagne.
  *     tags: [Campagnes]
  *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
  *     responses:
@@ -297,7 +297,7 @@ app.put('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => 
 app.delete('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteCampaign(req.params.id); res.status(204).send(); }));
 app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.importContacts(req.params.id, req.body.contacts))));
 
-// Contact Notes
+// Contact Notes & Single Contact creation
 /**
  * @openapi
  * /contacts/{contactId}/notes:
@@ -326,6 +326,30 @@ app.post('/api/contacts/:contactId/notes', authMiddleware, handleRequest(async (
     const agentId = req.user.id;
     const newNote = await db.createNote({ contactId, agentId, campaignId, note });
     res.status(201).json(newNote);
+}));
+
+/**
+ * @openapi
+ * /campaigns/{campaignId}/contacts/single:
+ *   post:
+ *     summary: Crée une seule fiche contact dans une campagne (depuis l'interface agent).
+ *     tags: [Contacts]
+ *     parameters: [ { in: path, name: campaignId, required: true, schema: { type: string } } ]
+ *     requestBody:
+ *       required: true
+ *       content: { application/json: { schema: { type: object, properties: { contactData: { type: object, description: "Données du script" }, phoneNumber: { type: string } } } } }
+ *     responses:
+ *       201: { description: "Contact créé." }
+ *       400: { description: "Numéro de téléphone manquant ou invalide." }
+ */
+app.post('/api/campaigns/:campaignId/contacts/single', authMiddleware, handleRequest(async (req, res) => {
+    const { campaignId } = req.params;
+    const { contactData, phoneNumber } = req.body;
+    if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.trim().length < 10) {
+        return res.status(400).json({ error: "Un numéro de téléphone valide est requis." });
+    }
+    const newContact = await db.createSingleContact(campaignId, contactData, phoneNumber);
+    res.status(201).json(newContact);
 }));
 
 
