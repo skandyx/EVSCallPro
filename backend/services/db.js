@@ -143,15 +143,17 @@ const createUser = async (user, groupIds) => {
         const newUser = userRes.rows[0];
 
         if (groupIds && groupIds.length > 0) {
-            const groupValues = groupIds.map((groupId, i) => `($1, $${i + 2})`).join(',');
-            const groupQuery = `INSERT INTO user_group_members (user_id, group_id) VALUES ${groupValues};`;
-            await client.query(groupQuery, [newUser.id, ...groupIds]);
+            for (const groupId of groupIds) {
+                await client.query(
+                    'INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)',
+                    [newUser.id, groupId]
+                );
+            }
         }
         
         if (user.campaignIds && user.campaignIds.length > 0) {
             const campaignValues = user.campaignIds.map((campaignId, i) => `($${i + 2}, $1)`).join(',');
-            const campaignQuery = `INSERT INTO campaign_agents (campaign_id, user_id) VALUES ${campaignValues};`;
-            await client.query(campaignQuery, [newUser.id, ...user.campaignIds]);
+            await client.query(`INSERT INTO campaign_agents (campaign_id, user_id) VALUES ${campaignValues}`, [newUser.id, ...user.campaignIds]);
         }
 
         await client.query('COMMIT');
@@ -207,11 +209,15 @@ const updateUser = async (userId, user, groupIds) => {
             throw new Error('User not found for update.');
         }
 
-        // Step 2: Update group memberships
+        // Step 2: Update group memberships (Rewritten for robustness)
         await client.query('DELETE FROM user_group_members WHERE user_id = $1', [userId]);
         if (groupIds && groupIds.length > 0) {
-            const groupValues = groupIds.map((groupId, i) => `($1, $${i + 2})`).join(',');
-            await client.query(`INSERT INTO user_group_members (user_id, group_id) VALUES ${groupValues}`, [userId, ...groupIds]);
+            for (const groupId of groupIds) {
+                await client.query(
+                    'INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)',
+                    [userId, groupId]
+                );
+            }
         }
         
         // Step 3: Update campaign assignments
@@ -223,7 +229,6 @@ const updateUser = async (userId, user, groupIds) => {
         
         await client.query('COMMIT');
         
-        // The user was updated, return the updated record. No need to re-query.
         return keysToCamel(updatedUserRows[0]);
 
     } catch (e) {
@@ -258,11 +263,15 @@ const saveUserGroup = async (group, id) => {
             savedGroup = res.rows[0];
         }
         
+        // Step 2: Update group memberships (Rewritten for robustness)
         await client.query('DELETE FROM user_group_members WHERE group_id = $1', [savedGroup.id]);
         if (group.memberIds && group.memberIds.length > 0) {
-            // Harmonize column order with other functions for consistency and robustness.
-            const values = group.memberIds.map((userId, i) => `($${i + 2}, $1)`).join(',');
-            await client.query(`INSERT INTO user_group_members (user_id, group_id) VALUES ${values}`, [savedGroup.id, ...group.memberIds]);
+            for (const userId of group.memberIds) {
+                 await client.query(
+                    'INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)',
+                    [userId, savedGroup.id]
+                );
+            }
         }
         
         await client.query('COMMIT');
