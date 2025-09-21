@@ -3,7 +3,7 @@ import type { User } from '../types.ts';
 import { LogoIcon } from './Icons.tsx';
 
 interface LoginScreenProps {
-    users: User[];
+    users: User[]; // This prop is kept for potential UI hints, but not for auth
     onLoginSuccess: (user: User) => void;
 }
 
@@ -11,23 +11,38 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess }) => {
     const [loginId, setLoginId] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsLoading(true);
 
-        const user = users.find(u => u.loginId === loginId);
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ loginId, password }),
+            });
 
-        // In a real application, never compare passwords in plaintext.
-        // This would be a request to a backend that compares a salted hash.
-        if (user && user.password === password) {
-            if (user.isActive) {
-                onLoginSuccess(user);
+            if (response.ok) {
+                const user = await response.json();
+                if (user.isActive) {
+                    onLoginSuccess(user);
+                } else {
+                     setError("Ce compte utilisateur est désactivé.");
+                }
             } else {
-                setError("Ce compte utilisateur est désactivé.");
+                const errorData = await response.json();
+                setError(errorData.error || "Identifiant ou mot de passe incorrect.");
             }
-        } else {
-            setError("Identifiant ou mot de passe incorrect.");
+        } catch (err) {
+            console.error("Login request failed:", err);
+            setError("Erreur de connexion au serveur.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -83,9 +98,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLoginSuccess }) => {
                         <div>
                             <button
                                 type="submit"
-                                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                disabled={isLoading}
+                                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400"
                             >
-                                Entrer
+                                {isLoading ? 'Connexion...' : 'Entrer'}
                             </button>
                         </div>
                     </form>

@@ -37,6 +37,21 @@ app.get('/api/application-data', handleRequest(async (req, res) => {
     res.json(data);
 }));
 
+// NEW Authentication Route
+app.post('/api/login', handleRequest(async (req, res) => {
+    const { loginId, password } = req.body;
+    if (!loginId || !password) {
+        return res.status(400).json({ error: 'Identifiant et mot de passe requis.' });
+    }
+    const user = await db.authenticateUser(loginId, password);
+    if (user) {
+        res.json(user);
+    } else {
+        res.status(401).json({ error: 'Identifiants invalides.' });
+    }
+}));
+
+
 // Users
 app.get('/api/users', handleRequest(async (req, res) => res.json(await db.getUsers())));
 app.post('/api/users', handleRequest(async (req, res) => res.status(201).json(await db.createUser(req.body.user, req.body.groupIds))));

@@ -123,6 +123,28 @@ async function getAllApplicationData() {
     }
 }
 
+// --- AUTHENTICATION ---
+async function authenticateUser(loginId, password) {
+    const res = await pool.query('SELECT * FROM users WHERE login_id = $1', [loginId]);
+    const user = res.rows[0];
+
+    if (!user) {
+        return null;
+    }
+
+    // IMPORTANT: In a real production app, use a library like bcrypt to compare hashed passwords.
+    // const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    const passwordMatch = (password === user.password_hash);
+
+    if (passwordMatch) {
+        const { password_hash, ...userWithoutPassword } = user;
+        return keysToCamel(userWithoutPassword);
+    }
+
+    return null;
+}
+
+
 // --- USERS ---
 async function getUsers() {
     const res = await pool.query('SELECT id, login_id, first_name, last_name, email, "role", is_active, site_id FROM users ORDER BY last_name, first_name');
@@ -372,6 +394,7 @@ async function deletePlanningEvent(id) { await pool.query('DELETE FROM planning_
 
 module.exports = {
     getAllApplicationData,
+    authenticateUser,
     getUsers,
     createUser,
     updateUser,
