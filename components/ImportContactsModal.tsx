@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { Campaign, SavedScript, Contact, ScriptBlock } from '../types.ts';
 import { ArrowUpTrayIcon, ArrowRightIcon, CheckIcon, XMarkIcon } from './Icons.tsx';
@@ -63,7 +62,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                 return h.includes(fieldNameLower);
             });
             if (matchingHeader) {
-                initialMappings[field.name] = matchingHeader;
+                initialMappings[field.fieldName] = matchingHeader;
             }
         });
         setMappings(initialMappings);
@@ -74,11 +73,11 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
         const invalids: { row: CsvRow; reason: string }[] = [];
         
         const phoneField = scriptInputFields.find(f => f.type === 'phone');
-        if (!phoneField || !mappings[phoneField.name]) {
+        if (!phoneField || !mappings[phoneField.fieldName]) {
             alert("Erreur: Vous devez faire correspondre un champ de type 'Téléphone' du script.");
             return;
         }
-        const phoneHeader = mappings[phoneField.name];
+        const phoneHeader = mappings[phoneField.fieldName];
 
         csvData.forEach((row, index) => {
             const phoneNumber = row[phoneHeader] || '';
@@ -91,10 +90,10 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
             let firstName = '', lastName = '', postalCode = '';
 
             scriptInputFields.forEach(field => {
-                const header = mappings[field.name];
+                const header = mappings[field.fieldName];
                 const value = header ? row[header] : '';
                 if (value) {
-                    customFields[field.name] = value;
+                    customFields[field.fieldName] = value;
                     const nameLower = field.name.toLowerCase();
                     if (nameLower.includes('prénom') || nameLower.includes('first')) firstName = value;
                     if (nameLower.includes('nom') || nameLower.includes('last')) lastName = value;
@@ -143,9 +142,9 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                         <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination du script (à gauche). Un champ de type "Téléphone" est obligatoire.</p>
                         <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
                             {scriptInputFields.map(field => (
-                                <div key={field.name} className="grid grid-cols-2 gap-4 items-center p-1">
+                                <div key={field.id} className="grid grid-cols-2 gap-4 items-center p-1">
                                     <span className="font-medium text-slate-700 truncate" title={field.name}>{field.name}</span>
-                                    <select value={mappings[field.name] || ''} onChange={e => setMappings(prev => ({ ...prev, [field.name]: e.target.value }))} className="w-full p-2 border bg-white rounded-md">
+                                    <select value={mappings[field.fieldName] || ''} onChange={e => setMappings(prev => ({ ...prev, [field.fieldName]: e.target.value }))} className="w-full p-2 border bg-white rounded-md">
                                         <option value="">Ignorer ce champ</option>
                                         {csvHeaders.map(header => <option key={header} value={header}>{header}</option>)}
                                     </select>
@@ -197,7 +196,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
         if (step === 1 && !file) return true;
         if (step === 2) {
             const phoneField = scriptInputFields.find(f => f.type === 'phone');
-            if (!phoneField || !mappings[phoneField.name]) {
+            if (!phoneField || !mappings[phoneField.fieldName]) {
                 return true;
             }
         }

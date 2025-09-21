@@ -98,7 +98,8 @@ export type BlockType = 'group' | 'label' | 'text' | 'input' | 'email' | 'phone'
 
 export interface ScriptBlock {
     id: string;
-    name: string;
+    name: string; // User-visible name, e.g., "Code Postal"
+    fieldName: string; // Sanitized technical name, e.g., "code_postal"
     type: BlockType;
     x: number;
     y: number;
@@ -118,7 +119,7 @@ export interface ScriptBlock {
 }
 
 export interface DisplayCondition {
-    blockName: string;
+    blockFieldName: string;
     value: any;
 }
 

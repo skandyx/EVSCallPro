@@ -34,6 +34,22 @@ const BLOCK_PALETTE: { type: BlockType; icon: React.FC<any>; label: string; defa
 
 const FONT_FAMILIES = ['Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'];
 
+const sanitizeForTechnicalName = (name: string): string => {
+  let technicalName = name.trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_') // Replace spaces with underscores
+    .replace(/[^\p{L}\p{N}_]/gu, ''); // Keep only unicode letters, numbers, and underscore
+
+  if (/^\d/.test(technicalName)) {
+      technicalName = '_' + technicalName;
+  }
+  
+  if (!technicalName) {
+      return `field_${Date.now()}`;
+  }
+  return technicalName;
+};
+
 const ToggleSwitch: React.FC<{ enabled: boolean; onChange: (enabled: boolean) => void; }> = ({ enabled, onChange }) => (
     <button
         type="button"
@@ -149,15 +165,21 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
         const baseName = paletteItem.label;
         const existingNames = new Set(activePage.blocks.map(b => b.name));
         let counter = 1;
-        let uniqueName = `${baseName} ${counter}`;
-        while (existingNames.has(uniqueName)) {
-            counter++;
-            uniqueName = `${baseName} ${counter}`;
+        let uniqueName = baseName;
+        if(existingNames.has(uniqueName)) {
+             uniqueName = `${baseName} ${counter}`;
+             while (existingNames.has(uniqueName)) {
+                counter++;
+                uniqueName = `${baseName} ${counter}`;
+            }
         }
+
+        const uniqueFieldName = sanitizeForTechnicalName(uniqueName);
 
         const newBlock: ScriptBlock = {
             id: `block-${Date.now()}`,
             name: uniqueName,
+            fieldName: uniqueFieldName,
             type,
             x: parent ? x - parent.x : x,
             y: parent ? y - parent.y : y,
@@ -330,10 +352,18 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
 
                 const isNameTaken = activePage.blocks.some(b => b.id !== selectedBlock.id && b.name === trimmedName);
                 if (isNameTaken) {
-                    alert(`Le nom de bloc "${trimmedName}" est déjà utilisé sur cette page. Veuillez choisir un nom unique.`);
+                    alert(`Le nom de bloc "${trimmedName}" est déjà utilisé sur cette page.`);
+                    setTempBlockName(selectedBlock.name);
+                    return;
+                }
+                
+                const newFieldName = sanitizeForTechnicalName(trimmedName);
+                const isFieldNameTaken = activePage.blocks.some(b => b.id !== selectedBlock.id && b.fieldName === newFieldName);
+                if (isFieldNameTaken) {
+                    alert(`Ce nom génère un identifiant technique ("${newFieldName}") qui est déjà utilisé. Veuillez choisir un nom légèrement différent.`);
                     setTempBlockName(selectedBlock.name);
                 } else {
-                    handleBlockUpdate(selectedBlock.id, { name: trimmedName });
+                    handleBlockUpdate(selectedBlock.id, { name: trimmedName, fieldName: newFieldName });
                 }
             };
             const isInputType = ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(selectedBlock.type);
@@ -341,7 +371,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
              return (
                 <div className="flex flex-col h-full">
                      <div>
-                        <label className="font-medium text-xs text-slate-500">Nom unique du bloc</label>
+                        <label className="font-medium text-xs text-slate-500">Nom du bloc (visible par l'agent)</label>
                         <input
                             type="text"
                             value={tempBlockName}
@@ -349,7 +379,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                             onBlur={e => handleNameChangeValidation(e.target.value)}
                             className="w-full mt-1 p-1 border rounded-md font-bold text-lg text-slate-800 focus:ring-2 focus:ring-indigo-300"
                         />
-                         <p className="text-xs text-slate-400 mt-1">Sert de label pour l'agent et de nom de champ pour la BDD.</p>
+                         <p className="text-xs text-slate-400 mt-1">Nom technique: <span className="font-mono bg-slate-100 p-0.5 rounded">{selectedBlock.fieldName}</span></p>
                     </div>
 
                     <div className="border-b border-slate-200 mt-3">
@@ -567,8 +597,8 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                 case 'history': return <div className="space-y-1 h-full flex flex-col"><label className="block font-semibold text-xs border-b pb-1">Historique des appels</label><div className="text-xs text-slate-400 italic flex-1 flex items-center justify-center">Aperçu de l'historique</div></div>
                 case 'date': case 'time': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><input type={block.type} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
                 case 'dropdown': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><select disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"><option>{block.content.options[0] || 'Option'}</option></select></div>
-                case 'radio': return <div className="space-y-1 text-left overflow-hidden"><p className="font-semibold text-xs mb-1 truncate">{block.content.question}</p>{(block.content.options || []).slice(0, 2).map((opt: string) => (<div key={opt} className="flex items-center"><input type="radio" disabled className="mr-2"/><label className="text-sm truncate">{opt}</label></div>))}</div>
-                case 'checkbox': return <div className="space-y-1 text-left overflow-hidden"><p className="font-semibold text-xs mb-1 truncate">{block.content.question}</p>{(block.content.options || []).slice(0, 2).map((opt: string) => (<div key={opt} className="flex items-center"><input type="checkbox" disabled className="mr-2"/><label className="text-sm truncate">{opt}</label></div>))}</div>
+                case 'radio': return <div className="space-y-1 text-left overflow-hidden"><p className="font-semibold text-xs mb-1 truncate">{block.name}</p>{(block.content.options || []).slice(0, 2).map((opt: string) => (<div key={opt} className="flex items-center"><input type="radio" disabled className="mr-2"/><label className="text-sm truncate">{opt}</label></div>))}</div>
+                case 'checkbox': return <div className="space-y-1 text-left overflow-hidden"><p className="font-semibold text-xs mb-1 truncate">{block.name}</p>{(block.content.options || []).slice(0, 2).map((opt: string) => (<div key={opt} className="flex items-center"><input type="checkbox" disabled className="mr-2"/><label className="text-sm truncate">{opt}</label></div>))}</div>
                 case 'button': return <button disabled className="w-full h-full font-semibold" style={{backgroundColor: block.backgroundColor, color: block.textColor}}>{block.content.text}</button>
                 default: return <span className="p-1 text-xs text-center truncate pointer-events-none">{block.content?.label || block.content?.text || block.content?.question || block.type}</span>;
              }

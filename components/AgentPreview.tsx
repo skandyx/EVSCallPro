@@ -16,8 +16,8 @@ interface AgentPreviewProps {
 }
 
 const checkCondition = (condition: DisplayCondition | null, values: Record<string, any>): boolean => {
-    if (!condition || !condition.blockName) return true;
-    const targetValue = values[condition.blockName];
+    if (!condition || !condition.blockFieldName) return true;
+    const targetValue = values[condition.blockFieldName];
     if (Array.isArray(targetValue)) {
         return targetValue.includes(condition.value);
     }
@@ -48,17 +48,17 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
   }, [contact, script.startPageId]);
 
 
-  const handleValueChange = (name: string, value: any) => {
-      setFormValues(prev => ({ ...prev, [name]: value }));
+  const handleValueChange = (fieldName: string, value: any) => {
+      setFormValues(prev => ({ ...prev, [fieldName]: value }));
   };
 
-  const handleCheckboxChange = (name: string, option: string, checked: boolean) => {
+  const handleCheckboxChange = (fieldName: string, option: string, checked: boolean) => {
     setFormValues(prev => {
-        const existing: string[] = prev[name] || [];
+        const existing: string[] = prev[fieldName] || [];
         if (checked) {
-            return { ...prev, [name]: [...existing, option] };
+            return { ...prev, [fieldName]: [...existing, option] };
         } else {
-            return { ...prev, [name]: existing.filter(item => item !== option) };
+            return { ...prev, [fieldName]: existing.filter(item => item !== option) };
         }
     });
   };
@@ -71,7 +71,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'insert_contact':
             if (onInsertContact && campaign) {
                 const phoneBlock = script.pages.flatMap(p => p.blocks).find(b => b.type === 'phone');
-                const phoneNumber = phoneBlock ? formValues[phoneBlock.name] : '';
+                const phoneNumber = phoneBlock ? formValues[phoneBlock.fieldName] : '';
 
                 if (!phoneNumber || !/^\d{10,}$/.test(phoneNumber.replace(/\s/g, ''))) {
                     alert("Veuillez renseigner un numéro de téléphone valide dans le script avant d'insérer une fiche.");
@@ -140,8 +140,8 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                        value={formValues[block.name] || ''}
-                        onChange={e => handleValueChange(block.name, e.target.value)}
+                        value={formValues[block.fieldName] || ''}
+                        onChange={e => handleValueChange(block.fieldName, e.target.value)}
                         disabled={block.readOnly}
                     />
                 </div>
@@ -154,11 +154,11 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300 flex-1 resize-none disabled:bg-slate-100 disabled:cursor-not-allowed"
-                        value={block.name.toLowerCase().includes('historique') ? newNote : (formValues[block.name] || '')}
-                        onChange={e => block.name.toLowerCase().includes('historique') ? setNewNote(e.target.value) : handleValueChange(block.name, e.target.value)}
+                        value={block.fieldName.toLowerCase().includes('historique') ? newNote : (formValues[block.fieldName] || '')}
+                        onChange={e => block.fieldName.toLowerCase().includes('historique') ? setNewNote(e.target.value) : handleValueChange(block.fieldName, e.target.value)}
                         disabled={block.readOnly}
                     />
-                    {block.name.toLowerCase().includes('historique') && (
+                    {block.fieldName.toLowerCase().includes('historique') && (
                         <button onClick={onSaveNote} className="mt-2 w-full text-sm bg-indigo-100 text-indigo-700 font-semibold py-1.5 px-3 rounded-md hover:bg-indigo-200 disabled:opacity-50" disabled={!newNote.trim()}>
                             Enregistrer la note
                         </button>
@@ -193,7 +193,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                     <div className="space-y-1">
                         {block.content.options.map((opt: string) => (
                             <label key={opt} className={`flex items-center ${block.readOnly ? 'cursor-not-allowed text-slate-400' : ''}`}>
-                                <input type="radio" name={block.name} value={opt} checked={formValues[block.name] === opt} onChange={e => handleValueChange(block.name, e.target.value)} className="mr-2" disabled={block.readOnly} />
+                                <input type="radio" name={block.fieldName} value={opt} checked={formValues[block.fieldName] === opt} onChange={e => handleValueChange(block.fieldName, e.target.value)} className="mr-2" disabled={block.readOnly} />
                                 {opt}
                             </label>
                         ))}
@@ -207,7 +207,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                     <div className="space-y-1">
                         {block.content.options.map((opt: string) => (
                             <label key={opt} className={`flex items-center ${block.readOnly ? 'cursor-not-allowed text-slate-400' : ''}`}>
-                                <input type="checkbox" name={`${block.name}-${opt}`} value={opt} checked={Array.isArray(formValues[block.name]) && formValues[block.name].includes(opt)} onChange={e => handleCheckboxChange(block.name, opt, e.target.checked)} className="mr-2" disabled={block.readOnly} />
+                                <input type="checkbox" name={`${block.fieldName}-${opt}`} value={opt} checked={Array.isArray(formValues[block.fieldName]) && formValues[block.fieldName].includes(opt)} onChange={e => handleCheckboxChange(block.fieldName, opt, e.target.checked)} className="mr-2" disabled={block.readOnly} />
                                 {opt}
                             </label>
                         ))}
@@ -221,8 +221,8 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                     <select
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                        value={formValues[block.name] || ''}
-                        onChange={e => handleValueChange(block.name, e.target.value)}
+                        value={formValues[block.fieldName] || ''}
+                        onChange={e => handleValueChange(block.fieldName, e.target.value)}
                         disabled={block.readOnly}
                     >
                         <option value="">-- Sélectionnez --</option>
@@ -238,8 +238,8 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                         type="date"
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                        value={formValues[block.name] || ''}
-                        onChange={e => handleValueChange(block.name, e.target.value)}
+                        value={formValues[block.fieldName] || ''}
+                        onChange={e => handleValueChange(block.fieldName, e.target.value)}
                         disabled={block.readOnly}
                     />
                 </div>
@@ -253,8 +253,8 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                        value={formValues[block.name] || ''}
-                        onChange={e => handleValueChange(block.name, e.target.value)}
+                        value={formValues[block.fieldName] || ''}
+                        onChange={e => handleValueChange(block.fieldName, e.target.value)}
                         disabled={block.readOnly}
                     />
                 </div>
@@ -274,8 +274,8 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                        value={formValues[block.name] || ''}
-                        onChange={e => handleValueChange(block.name, e.target.value)}
+                        value={formValues[block.fieldName] || ''}
+                        onChange={e => handleValueChange(block.fieldName, e.target.value)}
                         disabled={block.readOnly}
                     />
                 </div>
@@ -288,8 +288,8 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                         type="time"
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                        value={formValues[block.name] || ''}
-                        onChange={e => handleValueChange(block.name, e.target.value)}
+                        value={formValues[block.fieldName] || ''}
+                        onChange={e => handleValueChange(block.fieldName, e.target.value)}
                         disabled={block.readOnly}
                     />
                 </div>

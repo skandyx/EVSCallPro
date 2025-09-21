@@ -133,9 +133,10 @@ const firstPage: Page = {
     id: `page-1659540000000`,
     name: "Page 1",
     blocks: [
-        { id: 'block-1', name: 'Titre Accueil', type: 'label', x: 50, y: 30, width: 400, height: 50, content: { text: 'Bienvenue - Script de Vente' }, displayCondition: null, parentId: null, fontSize: 24, textAlign: 'center' },
-        { id: 'block-2', name: 'Pitch', type: 'text', x: 50, y: 100, width: 400, height: 100, content: { text: 'Bonjour [Nom Contact], je suis [Nom Agent] de [Société].\nComment allez-vous aujourd\'hui ?' }, displayCondition: null, parentId: null },
-        { id: 'block-3', name: 'Nom Contact', type: 'input', x: 50, y: 220, width: 300, height: 70, content: { label: 'Nom du contact', placeholder: 'Saisir le nom ici' }, displayCondition: null, parentId: null },
+        // FIX: Added missing 'fieldName' property to ScriptBlock objects.
+        { id: 'block-1', name: 'Titre Accueil', fieldName: 'titre_accueil', type: 'label', x: 50, y: 30, width: 400, height: 50, content: { text: 'Bienvenue - Script de Vente' }, displayCondition: null, parentId: null, fontSize: 24, textAlign: 'center' },
+        { id: 'block-2', name: 'Pitch', fieldName: 'pitch', type: 'text', x: 50, y: 100, width: 400, height: 100, content: { text: 'Bonjour [Nom Contact], je suis [Nom Agent] de [Société].\nComment allez-vous aujourd\'hui ?' }, displayCondition: null, parentId: null },
+        { id: 'block-3', name: 'Nom Contact', fieldName: 'nom_contact', type: 'input', x: 50, y: 220, width: 300, height: 70, content: { label: 'Nom du contact', placeholder: 'Saisir le nom ici' }, displayCondition: null, parentId: null },
     ]
 };
 
