@@ -1,4 +1,5 @@
 
+
 require('dotenv').config();
 const { Pool } = require('pg');
 
@@ -16,7 +17,9 @@ const toCamel = (s) => s.replace(/([-_][a-z])/ig, ($1) => $1.toUpperCase().repla
 
 const keysToCamel = (obj) => {
     if (Array.isArray(obj)) return obj.map(v => keysToCamel(v));
-    if (obj !== null && obj.constructor === Object) {
+    // The original check `obj !== null` is true for `undefined`, leading to a crash.
+    // `obj != null` correctly checks for both `null` and `undefined`.
+    if (obj != null && obj.constructor === Object) {
         const newObj = {};
         for (const key in obj) {
             const camelKey = toCamel(key);

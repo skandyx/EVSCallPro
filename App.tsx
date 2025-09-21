@@ -165,13 +165,25 @@ const App: React.FC = () => {
     };
 
     const handleSaveOrUpdateScript = async (script: SavedScript) => {
-        const isNew = !script.id.startsWith('script-'); // Logic assumes existing IDs dont start with pattern
+        // This logic was incorrect. A more robust check is to see if the ID exists in the current state.
+        const isNew = data ? !data.savedScripts.some(s => s.id === script.id) : true;
         const endpoint = isNew ? '/scripts' : `/scripts/${script.id}`;
         const method = isNew ? 'POST' : 'PUT';
         const savedScript = await handleApiCall(endpoint, method, script);
+    
+        // If the API call returns nothing (e.g. on a failed update), don't try to update state
+        if (!savedScript) {
+            console.warn("API call for saving script did not return a script object. State not updated.");
+            return;
+        }
+    
         updateData(draft => {
-            if (isNew) { draft.savedScripts.push(savedScript); }
-            else { const idx = draft.savedScripts.findIndex(s => s.id === savedScript.id); if (idx > -1) draft.savedScripts[idx] = savedScript; }
+            if (isNew) {
+                draft.savedScripts.push(savedScript);
+            } else {
+                const idx = draft.savedScripts.findIndex(s => s.id === savedScript.id);
+                if (idx > -1) draft.savedScripts[idx] = savedScript;
+            }
         });
     };
 
