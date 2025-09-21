@@ -21,6 +21,7 @@ const MOCK_CSV_DATA: { headers: string[], data: CsvRow[] } = {
         { telephone: "0699887766", nom: "Bernard", prenom: "Luc", code_postal: "69002", ville: "Lyon", date_rdv: "2024-09-17" },
         { telephone: "invalid-phone", nom: "Durand", prenom: "Sophie", code_postal: "31000", ville: "Toulouse", date_rdv: "2024-09-18" },
         { telephone: "0612345678", nom: "", prenom: "Pierre", code_postal: "59000", ville: "Lille", date_rdv: "2024-09-19" },
+        { telephone: "0601020304", nom: "العربي", prenom: "محمد", code_postal: "92100", ville: "Boulogne", date_rdv: "2024-09-20" },
     ]
 };
 
@@ -32,7 +33,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
     const [mappings, setMappings] = useState<Record<string, string>>({});
     const [summary, setSummary] = useState<{ total: number; valids: Contact[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
     
-    const scriptFields = useMemo(() => {
+    const scriptInputFields = useMemo(() => {
         if (!script) return [];
         const inputBlocks: ScriptBlock[] = [];
         script.pages.forEach(page => {
@@ -42,16 +43,8 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                 }
             });
         });
-        return inputBlocks.map(block => ({ id: block.name, name: block.name }));
+        return inputBlocks.sort((a,b) => a.type === 'phone' ? -1 : 1); // Prioritize phone field
     }, [script]);
-
-    const MAPPING_FIELDS = useMemo(() => [
-        { id: 'phoneNumber', name: 'Numéro de téléphone (Obligatoire)' },
-        { id: 'firstName', name: 'Prénom' },
-        { id: 'lastName', name: 'Nom' },
-        { id: 'postalCode', name: 'Code Postal' },
-        ...scriptFields.map(field => ({ id: `custom:${field.id}`, name: `Script: ${field.name}` })),
-    ], [scriptFields]);
 
     const handleFileSelect = (selectedFile: File) => {
         setFile(selectedFile);
@@ -60,17 +53,17 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
         setCsvData(MOCK_CSV_DATA.data);
         // Auto-map obvious fields
         const initialMappings: Record<string, string> = {};
-        MOCK_CSV_DATA.headers.forEach(header => {
-            const h = header.toLowerCase();
-            if (h.includes('phone') || h.includes('tel') || h.includes('num')) initialMappings[header] = 'phoneNumber';
-            if (h.includes('prénom') || h.includes('first')) initialMappings[header] = 'firstName';
-            if (h.includes('nom') || h.includes('last')) initialMappings[header] = 'lastName';
-            if (h.includes('postal') || h.includes('cp')) initialMappings[header] = 'postalCode';
-            
-            // Auto-map custom script fields
-            const matchingScriptField = scriptFields.find(sf => h.includes(sf.name.toLowerCase()));
-            if (matchingScriptField) {
-                initialMappings[header] = `custom:${matchingScriptField.id}`;
+        scriptInputFields.forEach(field => {
+            const fieldNameLower = field.name.toLowerCase();
+            const matchingHeader = MOCK_CSV_DATA.headers.find(header => {
+                const h = header.toLowerCase();
+                 if (field.type === 'phone') {
+                    return h.includes('phone') || h.includes('tel') || h.includes('num');
+                }
+                return h.includes(fieldNameLower);
+            });
+            if (matchingHeader) {
+                initialMappings[field.name] = matchingHeader;
             }
         });
         setMappings(initialMappings);
@@ -79,33 +72,42 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
     const processAndGoToSummary = () => {
         const valids: Contact[] = [];
         const invalids: { row: CsvRow; reason: string }[] = [];
+        
+        const phoneField = scriptInputFields.find(f => f.type === 'phone');
+        if (!phoneField || !mappings[phoneField.name]) {
+            alert("Erreur: Vous devez faire correspondre un champ de type 'Téléphone' du script.");
+            return;
+        }
+        const phoneHeader = mappings[phoneField.name];
 
         csvData.forEach((row, index) => {
-            const getVal = (fieldId: string) => {
-                const header = Object.keys(mappings).find(h => mappings[h] === fieldId);
-                return header ? row[header] || '' : '';
-            };
-            
-            const phoneNumber = getVal('phoneNumber');
+            const phoneNumber = row[phoneHeader] || '';
             if (!phoneNumber || !/^\d{10,}$/.test(phoneNumber.replace(/\s/g, ''))) {
                 invalids.push({ row, reason: "Numéro de téléphone manquant ou invalide." });
                 return;
             }
 
             const customFields: Record<string, any> = {};
-            scriptFields.forEach(sf => {
-                const value = getVal(`custom:${sf.id}`);
+            let firstName = '', lastName = '', postalCode = '';
+
+            scriptInputFields.forEach(field => {
+                const header = mappings[field.name];
+                const value = header ? row[header] : '';
                 if (value) {
-                    customFields[sf.id] = value;
+                    customFields[field.name] = value;
+                    const nameLower = field.name.toLowerCase();
+                    if (nameLower.includes('prénom') || nameLower.includes('first')) firstName = value;
+                    if (nameLower.includes('nom') || nameLower.includes('last')) lastName = value;
+                    if (nameLower.includes('postal') || nameLower.includes('cp')) postalCode = value;
                 }
             });
 
             valids.push({
                 id: `contact-import-${Date.now() + index}`,
                 phoneNumber,
-                firstName: getVal('firstName'),
-                lastName: getVal('lastName'),
-                postalCode: getVal('postalCode'),
+                firstName,
+                lastName,
+                postalCode,
                 status: 'pending',
                 customFields,
             });
@@ -126,7 +128,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
             case 1:
                 return (
                     <div className="space-y-4">
-                         <p className="text-sm text-slate-600">Sélectionnez un fichier CSV à importer dans la campagne <span className="font-semibold">{campaign.name}</span>. Le fichier doit contenir une colonne pour le numéro de téléphone.</p>
+                         <p className="text-sm text-slate-600">Sélectionnez un fichier CSV à importer dans la campagne <span className="font-semibold">{campaign.name}</span>. Le fichier doit être encodé en UTF-8 pour supporter les caractères spéciaux (ex: Arabe).</p>
                         <label className="block w-full cursor-pointer rounded-lg border-2 border-dashed border-slate-300 p-8 text-center hover:border-indigo-500">
                             <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-slate-400" />
                             <span className="mt-2 block text-sm font-medium text-slate-900">{file ? file.name : "Téléverser un fichier CSV"}</span>
@@ -138,14 +140,14 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
             case 2:
                 return (
                     <div className="space-y-3">
-                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier aux champs de destination. Le numéro de téléphone est obligatoire.</p>
+                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination du script (à gauche). Un champ de type "Téléphone" est obligatoire.</p>
                         <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
-                            {csvHeaders.map(header => (
-                                <div key={header} className="grid grid-cols-2 gap-4 items-center p-1">
-                                    <span className="font-medium text-slate-700 truncate">{header}</span>
-                                    <select value={mappings[header] || ''} onChange={e => setMappings(prev => ({ ...prev, [header]: e.target.value }))} className="w-full p-2 border bg-white rounded-md">
-                                        <option value="">Ignorer cette colonne</option>
-                                        {MAPPING_FIELDS.map(field => <option key={field.id} value={field.id}>{field.name}</option>)}
+                            {scriptInputFields.map(field => (
+                                <div key={field.name} className="grid grid-cols-2 gap-4 items-center p-1">
+                                    <span className="font-medium text-slate-700 truncate" title={field.name}>{field.name}</span>
+                                    <select value={mappings[field.name] || ''} onChange={e => setMappings(prev => ({ ...prev, [field.name]: e.target.value }))} className="w-full p-2 border bg-white rounded-md">
+                                        <option value="">Ignorer ce champ</option>
+                                        {csvHeaders.map(header => <option key={header} value={header}>{header}</option>)}
                                     </select>
                                 </div>
                             ))}
@@ -193,9 +195,14 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
     
     const isNextDisabled = useMemo(() => {
         if (step === 1 && !file) return true;
-        if (step === 2 && !Object.values(mappings).includes('phoneNumber')) return true;
+        if (step === 2) {
+            const phoneField = scriptInputFields.find(f => f.type === 'phone');
+            if (!phoneField || !mappings[phoneField.name]) {
+                return true;
+            }
+        }
         return false;
-    }, [step, file, mappings]);
+    }, [step, file, mappings, scriptInputFields]);
 
     return (
         <div className="fixed inset-0 bg-slate-800 bg-opacity-75 flex items-center justify-center p-4 z-[60]">
