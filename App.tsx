@@ -265,10 +265,9 @@ const App: React.FC = () => {
         }
     };
     
-    const createCrudHandlers = <T extends { id: string }>(pluralName: string) => ({
+    const createCrudHandlers = <T extends { id: string }>(pluralName: string, dataState: T[]) => ({
         save: async (item: T) => {
-            const currentData: T[] = (eval(pluralName) as T[]) || [];
-            const isNew = !currentData.some(d => d.id === item.id);
+            const isNew = !dataState.some(d => d.id === item.id);
             const url = isNew ? `/api/${pluralName}` : `/api/${pluralName}/${item.id}`;
             await apiCall(url, isNew ? 'POST' : 'PUT', item);
             await fetchApplicationData();
@@ -279,11 +278,11 @@ const App: React.FC = () => {
         }
     });
     
-    const didHandlers = createCrudHandlers('dids');
-    const trunkHandlers = createCrudHandlers('trunks');
-    const siteHandlers = createCrudHandlers('sites');
-    const audioHandlers = createCrudHandlers('audio-files');
-    const planningEventHandlers = createCrudHandlers('planning-events');
+    const didHandlers = createCrudHandlers('dids', dids);
+    const trunkHandlers = createCrudHandlers('trunks', trunks);
+    const siteHandlers = createCrudHandlers('sites', sites);
+    const audioHandlers = createCrudHandlers('audio-files', audioFiles);
+    const planningEventHandlers = createCrudHandlers('planning-events', planningEvents);
 
     const handleRunBackup = () => {
          setBackupLogs(prev => [

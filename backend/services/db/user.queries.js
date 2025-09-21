@@ -36,8 +36,9 @@ const createUser = async (user, groupIds) => {
         }
         
         if (user.campaignIds && user.campaignIds.length > 0) {
-            const campaignValues = user.campaignIds.map((campaignId, i) => `($1, $${i + 2})`).join(',');
-            await client.query(`INSERT INTO campaign_agents (user_id, campaign_id) VALUES ${campaignValues}`, [newUser.id, ...user.campaignIds]);
+            for (const campaignId of user.campaignIds) {
+                await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [newUser.id, campaignId]);
+            }
         }
 
         await client.query('COMMIT');

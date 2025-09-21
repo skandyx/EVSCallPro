@@ -43,7 +43,7 @@ const swaggerOptions = {
             bearerAuth: {
                 type: 'http',
                 scheme: 'bearer',
-                bearerFormat: 'JWT', // or 'Token' or whatever format you use
+                bearerFormat: 'JWT',
             },
         },
     },
@@ -53,15 +53,14 @@ const swaggerOptions = {
         },
     ],
   },
-  // Path is now more robust, pointing to the current file where annotations are.
   apis: [path.resolve(__dirname, 'server.js')], 
 };
 
 const openapiSpecification = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiSpecification));
+// Correction: Changed URL to /api/docs to work with existing proxy setups
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpecification));
 
 // --- Security: Simple In-Memory Session Store ---
-// NOTE: For production, this should be replaced with a persistent store like Redis.
 const sessionStore = new Map(); // { token -> user }
 
 // --- Security: Authentication Middleware ---
@@ -96,10 +95,10 @@ const handleRequest = (handler) => async (req, res) => {
 /**
  * @openapi
  * tags:
+ *   - name: Authentification
+ *     description: Connexion et gestion de session
  *   - name: Application
  *     description: Actions globales sur l'application
- *   - name: Authentification
- *     description: Connexion des utilisateurs
  *   - name: Utilisateurs
  *     description: Gestion des utilisateurs et de leurs droits
  *   - name: Groupes
@@ -111,7 +110,7 @@ const handleRequest = (handler) => async (req, res) => {
  *   - name: SVI
  *     description: Gestion des flux de Serveur Vocal Interactif
  *   - name: Qualifications
- *     description: Gestion des qualifications d'appel et de leurs groupes
+ *     description: Gestion des qualifications d'appel
  *   - name: Téléphonie
  *     description: Gestion des Trunks SIP et des numéros SDA/DID
  *   - name: Sites
@@ -128,25 +127,17 @@ const handleRequest = (handler) => async (req, res) => {
  * @openapi
  * /login:
  *   post:
- *     summary: Authentifie un utilisateur et retourne ses informations avec un token de session.
+ *     summary: Authentifie un utilisateur et retourne un token de session.
  *     tags: [Authentification]
  *     security: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               loginId:
- *                 type: string
- *               password:
- *                 type: string
+ *           schema: { type: object, properties: { loginId: { type: string }, password: { type: string } } }
  *     responses:
  *       200:
- *         description: Authentification réussie, retourne l'objet utilisateur et un token.
- *       400:
- *         description: Identifiant ou mot de passe manquant.
+ *         description: Authentification réussie.
  *       401:
  *         description: Identifiants invalides.
  */
@@ -172,13 +163,11 @@ app.post('/api/login', handleRequest(async (req, res) => {
  * @openapi
  * /me:
  *   get:
- *     summary: Récupère les informations de l'utilisateur actuellement authentifié via son token.
+ *     summary: Récupère les informations de l'utilisateur authentifié.
  *     tags: [Authentification]
  *     responses:
  *       200:
- *         description: Retourne l'objet utilisateur correspondant au token.
- *       401:
- *         description: Non autorisé si le token est manquant ou invalide.
+ *         description: Objet utilisateur.
  */
 app.get('/api/me', authMiddleware, handleRequest(async (req, res) => {
     res.json(req.user);
@@ -188,13 +177,11 @@ app.get('/api/me', authMiddleware, handleRequest(async (req, res) => {
  * @openapi
  * /application-data:
  *   get:
- *     summary: Récupère toutes les données de configuration initiales de l'application.
+ *     summary: Récupère toutes les données de configuration initiales.
  *     tags: [Application]
  *     responses:
  *       200:
- *         description: Un objet contenant toutes les données de l'application (utilisateurs, campagnes, etc.).
- *       500:
- *         description: Erreur interne du serveur.
+ *         description: Un objet contenant toutes les données de l'application.
  */
 app.get('/api/application-data', authMiddleware, handleRequest(async (req, res) => {
     const data = await db.getAllApplicationData();
@@ -206,113 +193,65 @@ app.get('/api/application-data', authMiddleware, handleRequest(async (req, res) 
 app.get('/api/users', authMiddleware, handleRequest(async (req, res) => res.json(await db.getUsers())));
 app.post('/api/users', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.createUser(req.body.user, req.body.groupIds))));
 app.put('/api/users/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.updateUser(req.params.id, req.body.user, req.body.groupIds))));
-app.delete('/api/users/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteUser(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/users/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteUser(req.params.id); res.status(204).send(); }));
 
 // Groups
-app.get('/api/groups', authMiddleware, handleRequest(async (req, res) => res.json(await db.getUserGroups())));
 app.post('/api/groups', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveUserGroup(req.body))));
 app.put('/api/groups/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveUserGroup(req.body, req.params.id))));
-app.delete('/api/groups/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteUserGroup(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/groups/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteUserGroup(req.params.id); res.status(204).send(); }));
 
 // Campaigns
-app.get('/api/campaigns', authMiddleware, handleRequest(async (req, res) => res.json(await db.getCampaigns())));
 app.post('/api/campaigns', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveCampaign(req.body))));
 app.put('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveCampaign(req.body, req.params.id))));
-app.delete('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteCampaign(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteCampaign(req.params.id); res.status(204).send(); }));
 app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.importContacts(req.params.id, req.body.contacts))));
 
 // Scripts
-app.get('/api/scripts', authMiddleware, handleRequest(async (req, res) => res.json(await db.getScripts())));
 app.post('/api/scripts', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveScript(req.body))));
 app.put('/api/scripts/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveScript(req.body, req.params.id))));
-app.delete('/api/scripts/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteScript(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/scripts/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteScript(req.params.id); res.status(204).send(); }));
 app.post('/api/scripts/:id/duplicate', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.duplicateScript(req.params.id))));
 
-
 // IVR Flows
-app.get('/api/ivr-flows', authMiddleware, handleRequest(async (req, res) => res.json(await db.getIvrFlows())));
 app.post('/api/ivr-flows', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveIvrFlow(req.body))));
 app.put('/api/ivr-flows/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveIvrFlow(req.body, req.params.id))));
-app.delete('/api/ivr-flows/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteIvrFlow(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/ivr-flows/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteIvrFlow(req.params.id); res.status(204).send(); }));
 app.post('/api/ivr-flows/:id/duplicate', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.duplicateIvrFlow(req.params.id))));
 
-
-// Qualifications & Groups
-app.get('/api/qualifications', authMiddleware, handleRequest(async (req, res) => res.json(await db.getQualifications())));
+// Qualifications
 app.post('/api/qualifications', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveQualification(req.body))));
 app.put('/api/qualifications/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveQualification(req.body, req.params.id))));
-app.delete('/api/qualifications/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteQualification(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/qualifications/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteQualification(req.params.id); res.status(204).send(); }));
 
-app.get('/api/qualification-groups', authMiddleware, handleRequest(async (req, res) => res.json(await db.getQualificationGroups())));
+// Qualification Groups
 app.post('/api/qualification-groups', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveQualificationGroup(req.body.group, req.body.assignedQualIds))));
 app.put('/api/qualification-groups/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveQualificationGroup(req.body.group, req.body.assignedQualIds, req.params.id))));
-app.delete('/api/qualification-groups/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteQualificationGroup(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/qualification-groups/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteQualificationGroup(req.params.id); res.status(204).send(); }));
 
 // Trunks
-app.get('/api/trunks', authMiddleware, handleRequest(async (req, res) => res.json(await db.getTrunks())));
 app.post('/api/trunks', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveTrunk(req.body))));
 app.put('/api/trunks/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveTrunk(req.body, req.params.id))));
-app.delete('/api/trunks/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteTrunk(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/trunks/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteTrunk(req.params.id); res.status(204).send(); }));
 
 // DIDs
-app.get('/api/dids', authMiddleware, handleRequest(async (req, res) => res.json(await db.getDids())));
 app.post('/api/dids', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveDid(req.body))));
 app.put('/api/dids/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveDid(req.body, req.params.id))));
-app.delete('/api/dids/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteDid(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/dids/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteDid(req.params.id); res.status(204).send(); }));
 
 // Sites
-app.get('/api/sites', authMiddleware, handleRequest(async (req, res) => res.json(await db.getSites())));
 app.post('/api/sites', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveSite(req.body))));
 app.put('/api/sites/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveSite(req.body, req.params.id))));
-app.delete('/api/sites/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteSite(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/sites/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteSite(req.params.id); res.status(204).send(); }));
 
 // Audio Files
-app.get('/api/audio-files', authMiddleware, handleRequest(async (req, res) => res.json(await db.getAudioFiles())));
 app.post('/api/audio-files', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveAudioFile(req.body))));
 app.put('/api/audio-files/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveAudioFile(req.body, req.params.id))));
-app.delete('/api/audio-files/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deleteAudioFile(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/audio-files/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteAudioFile(req.params.id); res.status(204).send(); }));
 
 // Planning
-app.get('/api/planning-events', authMiddleware, handleRequest(async (req, res) => res.json(await db.getPlanningEvents())));
 app.post('/api/planning-events', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.savePlanningEvent(req.body))));
 app.put('/api/planning-events/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.savePlanningEvent(req.body, req.params.id))));
-app.delete('/api/planning-events/:id', authMiddleware, handleRequest(async (req, res) => {
-    await db.deletePlanningEvent(req.params.id);
-    res.status(204).send();
-}));
+app.delete('/api/planning-events/:id', authMiddleware, handleRequest(async (req, res) => { await db.deletePlanningEvent(req.params.id); res.status(204).send(); }));
 
 // --- Start the API server ---
 app.listen(API_PORT, () => {

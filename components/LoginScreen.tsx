@@ -28,7 +28,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
             if (response.ok) {
                 const data = await response.json(); // Expects { user, token }
-                if (data.user.isActive) {
+                if (data.user && data.user.isActive) {
                     onLoginSuccess(data);
                 } else {
                      setError("Ce compte utilisateur est désactivé.");

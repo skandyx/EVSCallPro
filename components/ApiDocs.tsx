@@ -21,7 +21,7 @@ const ApiDocs: React.FC<ApiDocsProps> = ({ feature }) => {
             
             <div className="flex-1 w-full border border-slate-300 rounded-lg shadow-inner">
                 <iframe
-                    src="/api-docs"
+                    src="/api/docs"
                     title="Documentation API Interactive (Swagger UI)"
                     className="w-full h-full border-0 rounded-lg"
                 />
