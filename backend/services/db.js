@@ -1,4 +1,4 @@
-// backend/services/db.js
+-- backend/services/db.js
 const { Pool } = require('pg');
 
 const pool = new Pool({
@@ -47,6 +47,47 @@ const parseJsonFields = (rows, fields) => {
         return newRow;
     });
 };
+
+async function getAllApplicationData() {
+    // This function will fetch all necessary data for the application's initial load.
+    // It's a placeholder and should be implemented to fetch from all relevant tables.
+    const [
+        users, userGroups, campaigns, savedScripts, ivrFlows,
+        qualifications, qualificationGroups, trunks, dids, sites,
+        audioFiles, planningEvents,
+        // The following are more for reporting/supervision, might not be needed on initial load
+        // callHistory, agentSessions, personalCallbacks
+    ] = await Promise.all([
+        getUsers(),
+        getUserGroups(),
+        getCampaigns(),
+        getScripts(),
+        getIvrFlows(),
+        getQualifications(),
+        getQualificationGroups(),
+        getTrunks(),
+        getDids(),
+        getSites(),
+        getAudioFiles(),
+        getPlanningEvents(),
+    ]);
+
+    return {
+        users,
+        userGroups,
+        campaigns,
+        savedScripts,
+        ivrFlows,
+        qualifications,
+        qualificationGroups,
+        trunks,
+        dids,
+        sites,
+        audioFiles,
+        planningEvents,
+        // Add other data sets as needed
+    };
+}
 
 
 // --- DATA FETCHERS ---
@@ -179,21 +220,43 @@ async function createUser(user, groupIds = []) {
 }
 
 async function updateUser(userId, user, groupIds = []) {
-     const client = await pool.connect();
+    const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
+        // Build the UPDATE query dynamically to avoid overwriting the password
+        const updates = {
+            login_id: user.loginId,
+            first_name: user.firstName,
+            last_name: user.lastName,
+            email: user.email || null,
+            "role": user.role,
+            is_active: user.isActive,
+            site_id: user.siteId || null
+        };
+
+        // Only add password to the update if it's provided and not empty
+        if (user.password && user.password.length > 0) {
+            updates.password_hash = user.password;
+        }
+
+        const setClauses = Object.keys(updates).map((key, i) => `${key} = $${i + 1}`).join(', ');
+        const values = Object.values(updates);
+
         const userRes = await client.query(
-            `UPDATE users SET
-                login_id = $1, first_name = $2, last_name = $3, email = $4, "role" = $5,
-                is_active = $6, password_hash = $7, site_id = $8, updated_at = NOW()
-             WHERE id = $9
+            `UPDATE users SET ${setClauses}, updated_at = NOW()
+             WHERE id = $${values.length + 1}
              RETURNING id, login_id, first_name, last_name, email, "role", is_active, site_id`,
-            [user.loginId, user.firstName, user.lastName, user.email || null, user.role, user.isActive, user.password, user.siteId || null, userId]
+            [...values, userId]
         );
         const updatedUser = userRes.rows[0];
+        
+        if (!updatedUser) {
+            throw new Error(`User with id ${userId} not found.`);
+        }
 
         await client.query('DELETE FROM user_group_members WHERE user_id = $1', [userId]);
-        if (groupIds.length > 0) {
+        if (groupIds && groupIds.length > 0) {
             for (const groupId of groupIds) {
                 await client.query('INSERT INTO user_group_members (user_id, group_id) VALUES ($1, $2)', [userId, groupId]);
             }
@@ -211,11 +274,13 @@ async function updateUser(userId, user, groupIds = []) {
         return keysToCamel(updatedUser);
     } catch (e) {
         await client.query('ROLLBACK');
+        console.error("Error in updateUser transaction:", e);
         throw e;
     } finally {
         client.release();
     }
 }
+
 
 async function deleteUser(userId) {
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
@@ -444,17 +509,19 @@ async function deleteQualificationGroup(groupId) {
 }
 
 async function saveGeneric(table, data, id = null) {
-    const keys = Object.keys(data).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
+    const keys = Object.keys(data).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at' && k !== 'password' || (k === 'password' && data[k]));
+    const columns = keys.map(k => k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`));
+    
     if (id) {
-        const setString = keys.map((key, i) => `${key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)} = $${i + 1}`).join(', ');
+        const setString = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
         const values = keys.map(key => data[key]);
         const res = await pool.query(`UPDATE ${table} SET ${setString}, updated_at = NOW() WHERE id = $${keys.length + 1} RETURNING *`, [...values, id]);
         return keysToCamel(res.rows[0]);
     }
-    const columns = ['id', ...keys].map(k => k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`));
-    const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');
+    const allColumns = ['id', ...columns];
+    const placeholders = allColumns.map((_, i) => `$${i + 1}`).join(',');
     const values = [data.id, ...keys.map(key => data[key])];
-    const res = await pool.query(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${placeholders}) RETURNING *`, values);
+    const res = await pool.query(`INSERT INTO ${table} (${allColumns.join(',')}) VALUES (${placeholders}) RETURNING *`, values);
     return keysToCamel(res.rows[0]);
 }
 
