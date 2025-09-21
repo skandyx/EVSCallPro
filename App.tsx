@@ -99,7 +99,17 @@ const App: React.FC = () => {
 
     // --- EVENT HANDLERS ---
     const handleLoginSuccess = (user: User) => setCurrentUser(user);
-    const handleLogout = () => setCurrentUser(null);
+    
+    const handleLogout = () => {
+        // Secure cleanup: Clear any sensitive data stored locally in the browser.
+        localStorage.clear();
+        sessionStorage.clear();
+        console.log("Local storage and session storage cleared for security.");
+        
+        // Reset the application state to return to the login screen.
+        setCurrentUser(null);
+    };
+
     const handleSelectFeature = (id: FeatureId) => setActiveFeatureId(id);
 
     // --- DATA MUTATION HANDLERS (API CALLS) ---
