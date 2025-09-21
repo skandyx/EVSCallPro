@@ -17,17 +17,17 @@ interface ScriptBuilderProps {
 
 const BLOCK_PALETTE: { type: BlockType; icon: React.FC<any>; label: string; default: Partial<ScriptBlock> }[] = [
     { type: 'group', icon: GroupIcon, label: 'Groupe', default: { width: 400, height: 250, backgroundColor: 'rgba(226, 232, 240, 0.5)', content: {} } },
-    { type: 'label', icon: LabelIcon, label: 'Titre / Label', default: { width: 300, height: 40, content: { text: 'Titre' }, fontSize: 18, textAlign: 'left' } },
+    { type: 'label', icon: LabelIcon, label: 'Titre', default: { width: 300, height: 40, content: { text: 'Titre' }, fontSize: 18, textAlign: 'left' } },
     { type: 'text', icon: TextBlockIcon, label: 'Texte', default: { width: 300, height: 80, content: { text: 'Paragraphe de texte...' }, textAlign: 'left' } },
-    { type: 'input', icon: InputIcon, label: 'Champ de Saisie', default: { width: 300, height: 70, content: { label: 'Label', placeholder: 'Saisir ici', format: 'text' } } },
-    { type: 'textarea', icon: TextareaIcon, label: 'Texte Multi-ligne', default: { width: 300, height: 120, content: { label: 'Commentaires', placeholder: 'Saisir ici...' } } },
-    { type: 'email', icon: EmailIcon, label: 'Email', default: { width: 300, height: 70, content: { label: 'Email', placeholder: 'email@example.com' } } },
-    { type: 'phone', icon: PhoneIcon, label: 'Téléphone', default: { width: 300, height: 70, content: { label: 'Téléphone', placeholder: '0123456789' } } },
-    { type: 'date', icon: DateIcon, label: 'Date', default: { width: 200, height: 70, content: { label: 'Date' } } },
-    { type: 'time', icon: TimeIcon, label: 'Heure', default: { width: 200, height: 70, content: { label: 'Heure' } } },
+    { type: 'input', icon: InputIcon, label: 'Champ de Saisie', default: { width: 300, height: 70, content: { placeholder: 'Saisir ici', format: 'text' } } },
+    { type: 'textarea', icon: TextareaIcon, label: 'Texte Multi-ligne', default: { width: 300, height: 120, content: { placeholder: 'Saisir ici...' } } },
+    { type: 'email', icon: EmailIcon, label: 'Email', default: { width: 300, height: 70, content: { placeholder: 'email@example.com' } } },
+    { type: 'phone', icon: PhoneIcon, label: 'Téléphone', default: { width: 300, height: 70, content: { placeholder: '0123456789' } } },
+    { type: 'date', icon: DateIcon, label: 'Date', default: { width: 200, height: 70, content: { } } },
+    { type: 'time', icon: TimeIcon, label: 'Heure', default: { width: 200, height: 70, content: { } } },
     { type: 'radio', icon: RadioIcon, label: 'Choix Unique', default: { width: 300, height: 120, content: { question: 'Question ?', options: ['Option 1', 'Option 2'] } } },
     { type: 'checkbox', icon: CheckboxIcon, label: 'Choix Multiples', default: { width: 300, height: 120, content: { question: 'Question ?', options: ['Option A', 'Option B'] } } },
-    { type: 'dropdown', icon: DropdownIcon, label: 'Liste Déroulante', default: { width: 300, height: 70, content: { label: 'Sélectionnez', options: ['Valeur 1', 'Valeur 2'] } } },
+    { type: 'dropdown', icon: DropdownIcon, label: 'Liste Déroulante', default: { width: 300, height: 70, content: { options: ['Valeur 1', 'Valeur 2'] } } },
     { type: 'button', icon: ButtonIcon, label: 'Bouton', default: { width: 200, height: 50, content: { text: 'Cliquer', action: { type: 'none' } }, backgroundColor: '#4f46e5', textColor: '#ffffff', textAlign: 'center' } },
     { type: 'history', icon: HistoryIcon, label: 'Historique', default: { width: 400, height: 200, content: {} } },
 ];
@@ -131,14 +131,13 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
         
         const parent = parentId ? activePage.blocks.find(b => b.id === parentId) : null;
         
-        const defaultContent = paletteItem.default.content || {};
-        const baseName = defaultContent.label || defaultContent.question || defaultContent.text || paletteItem.label;
+        const baseName = paletteItem.label;
         const existingNames = new Set(activePage.blocks.map(b => b.name));
-        let uniqueName = baseName;
-        let counter = 2;
+        let counter = 1;
+        let uniqueName = `${baseName} ${counter}`;
         while (existingNames.has(uniqueName)) {
-            uniqueName = `${baseName} ${counter}`;
             counter++;
+            uniqueName = `${baseName} ${counter}`;
         }
 
         const newBlock: ScriptBlock = {
@@ -333,7 +332,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                             onBlur={e => handleNameChangeValidation(e.target.value)}
                             className="w-full mt-1 p-1 border rounded-md font-bold text-lg text-slate-800 focus:ring-2 focus:ring-indigo-300"
                         />
-                         <p className="text-xs text-slate-400 mt-1">Utilisé pour la logique conditionnelle et la sauvegarde.</p>
+                         <p className="text-xs text-slate-400 mt-1">Sert de label pour l'agent et de nom de champ pour la BDD.</p>
                     </div>
 
                     <div className="border-b border-slate-200 mt-3">
@@ -346,16 +345,16 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                         {propertiesTab === 'content' && (
                            <>
                            { (selectedBlock.type === 'label' || selectedBlock.type === 'text') && <textarea value={selectedBlock.content.text} onChange={(e) => handleBlockContentUpdate(selectedBlockId!, { text: e.target.value })} className="w-full p-2 border rounded-md" rows={4}/> }
-                           { (selectedBlock.type === 'input' || selectedBlock.type === 'email' || selectedBlock.type === 'phone' || selectedBlock.type === 'textarea') && <><div><label className="font-medium">Label</label><input type="text" value={selectedBlock.content.label} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {label: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div><div><label className="font-medium">Placeholder</label><input type="text" value={selectedBlock.content.placeholder} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {placeholder: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div> {selectedBlock.type === 'input' && <div><label className="font-medium">Format</label><select value={selectedBlock.content.format} onChange={e => handleBlockContentUpdate(selectedBlockId!, { format: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white"><option value="text">Texte</option><option value="number">Nombre</option><option value="password">Mot de passe</option></select></div>}</>}
+                           { (selectedBlock.type === 'input' || selectedBlock.type === 'email' || selectedBlock.type === 'phone' || selectedBlock.type === 'textarea') && <><div><label className="font-medium">Placeholder</label><input type="text" value={selectedBlock.content.placeholder} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {placeholder: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div> {selectedBlock.type === 'input' && <div><label className="font-medium">Format</label><select value={selectedBlock.content.format} onChange={e => handleBlockContentUpdate(selectedBlockId!, { format: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white"><option value="text">Texte</option><option value="number">Nombre</option><option value="password">Mot de passe</option></select></div>}</>}
                            { (selectedBlock.type === 'button') && <><div><label className="font-medium">Texte du bouton</label><input type="text" value={selectedBlock.content.text} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {text: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div></> }
-                           { (selectedBlock.type === 'radio' || selectedBlock.type === 'checkbox' || selectedBlock.type === 'dropdown') && (
+                           { (selectedBlock.type === 'radio' || selectedBlock.type === 'checkbox') && (
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="font-medium">{selectedBlock.type === 'dropdown' ? 'Label' : 'Question'}</label>
+                                        <label className="font-medium">Question</label>
                                         <input 
                                             type="text" 
-                                            value={selectedBlock.content.question || selectedBlock.content.label} 
-                                            onChange={e => handleBlockContentUpdate(selectedBlockId!, { [selectedBlock.type === 'dropdown' ? 'label' : 'question']: e.target.value })}
+                                            value={selectedBlock.content.question} 
+                                            onChange={e => handleBlockContentUpdate(selectedBlockId!, { question: e.target.value })}
                                             className="w-full mt-1 p-2 border rounded-md"
                                         />
                                     </div>
@@ -380,6 +379,22 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                                             <PlusIcon className="w-4 h-4" /> Ajouter une option
                                         </button>
                                     </div>
+                                </div>
+                            )}
+                            { selectedBlock.type === 'dropdown' && (
+                                <div>
+                                    <label className="font-medium block">Options</label>
+                                    <div className="space-y-2 mt-1">
+                                        {(selectedBlock.content.options || []).map((option: string, index: number) => (
+                                            <div key={index} className="flex items-center gap-2">
+                                                <input type="text" value={option} onChange={e => handleOptionChange(selectedBlockId!, index, e.target.value)} className="w-full p-2 border rounded-md text-sm"/>
+                                                <button onClick={() => handleDeleteOption(selectedBlockId!, index)} className="p-1 text-slate-400 hover:text-red-600"><TrashIcon className="w-4 h-4" /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => handleAddOption(selectedBlockId!)} className="text-sm font-medium text-indigo-600 hover:text-indigo-700 mt-2 inline-flex items-center gap-1">
+                                        <PlusIcon className="w-4 h-4" /> Ajouter une option
+                                    </button>
                                 </div>
                             )}
                             { selectedBlock.type === 'history' && <p className="text-slate-500 italic text-center p-4">Ce bloc n'a pas de propriétés configurables. Il affichera l'historique des appels du contact.</p>}
@@ -438,6 +453,41 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                                     <div><label className="font-medium">Fond</label><input type="color" value={selectedBlock.backgroundColor || (selectedBlock.type === 'group' ? 'transparent' : '#ffffff')} onChange={e => handleBlockUpdate(selectedBlockId!, { backgroundColor: e.target.value })} className="w-full h-8 p-1 mt-1 border rounded" /></div>
                                     <div><label className="font-medium">Texte</label><input type="color" value={selectedBlock.textColor || '#000000'} onChange={e => handleBlockUpdate(selectedBlockId!, { textColor: e.target.value })} className="w-full h-8 p-1 mt-1 border rounded" /></div>
                                 </div>
+                                {selectedBlock.type === 'button' && (
+                                    <div className="pt-4 border-t">
+                                        <h4 className="font-medium text-slate-700 mb-2">Action du Bouton</h4>
+                                        <div>
+                                            <label className="font-medium">Action</label>
+                                            <select 
+                                                value={selectedBlock.content.action.type} 
+                                                onChange={e => handleBlockContentUpdate(selectedBlockId!, { action: { ...selectedBlock.content.action, type: e.target.value } })} 
+                                                className="w-full mt-1 p-2 border rounded-md bg-white"
+                                            >
+                                                <option value="none">Aucune action</option>
+                                                <option value="next">Page suivante</option>
+                                                <option value="previous">Page précédente</option>
+                                                <option value="navigate">Aller à la page...</option>
+                                                <option value="save">Enregistrer les données</option>
+                                            </select>
+                                        </div>
+
+                                        {selectedBlock.content.action.type === 'navigate' && (
+                                            <div className="mt-2">
+                                                <label className="font-medium">Page de destination</label>
+                                                <select 
+                                                    value={selectedBlock.content.action.pageId || ''}
+                                                    onChange={e => handleBlockContentUpdate(selectedBlockId!, { action: { ...selectedBlock.content.action, pageId: e.target.value } })}
+                                                    className="w-full mt-1 p-2 border rounded-md bg-white"
+                                                >
+                                                    <option value="">Sélectionner une page</option>
+                                                    {editedScript.pages.filter(p => p.id !== activePageId).map(p => (
+                                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                              </div>
                         )}
                     </div>
@@ -482,11 +532,11 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                 case 'group': return null;
                 case 'label': return <p className="font-bold whitespace-pre-wrap break-words">{block.content.text}</p>;
                 case 'text': return <p className="whitespace-pre-wrap break-words">{block.content.text}</p>;
-                case 'input': case 'email': case 'phone': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><input type="text" placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
-                case 'textarea': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><textarea placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm h-full resize-none"/></div>
+                case 'input': case 'email': case 'phone': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><input type="text" placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
+                case 'textarea': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><textarea placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm h-full resize-none"/></div>
                 case 'history': return <div className="space-y-1 h-full flex flex-col"><label className="block font-semibold text-xs border-b pb-1">Historique des appels</label><div className="text-xs text-slate-400 italic flex-1 flex items-center justify-center">Aperçu de l'historique</div></div>
-                case 'date': case 'time': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><input type={block.type} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
-                case 'dropdown': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><select disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"><option>{block.content.options[0] || 'Option'}</option></select></div>
+                case 'date': case 'time': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><input type={block.type} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
+                case 'dropdown': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><select disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"><option>{block.content.options[0] || 'Option'}</option></select></div>
                 case 'radio': return <div className="space-y-1 text-left overflow-hidden"><p className="font-semibold text-xs mb-1 truncate">{block.content.question}</p>{(block.content.options || []).slice(0, 2).map((opt: string) => (<div key={opt} className="flex items-center"><input type="radio" disabled className="mr-2"/><label className="text-sm truncate">{opt}</label></div>))}</div>
                 case 'checkbox': return <div className="space-y-1 text-left overflow-hidden"><p className="font-semibold text-xs mb-1 truncate">{block.content.question}</p>{(block.content.options || []).slice(0, 2).map((opt: string) => (<div key={opt} className="flex items-center"><input type="checkbox" disabled className="mr-2"/><label className="text-sm truncate">{opt}</label></div>))}</div>
                 case 'button': return <button disabled className="w-full h-full font-semibold" style={{backgroundColor: block.backgroundColor, color: block.textColor}}>{block.content.text}</button>
@@ -523,7 +573,20 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
     return (
         <div className="h-full flex flex-col bg-slate-200">
             <header className="flex-shrink-0 bg-white shadow-md p-3 flex justify-between items-center z-10">
-                <input type="text" value={editedScript.name} onChange={e => updateScript(d => { d.name = e.target.value; })} className="text-xl font-bold p-1 border-b-2 border-transparent focus:border-indigo-500 outline-none"/>
+                <div className="flex items-center gap-4">
+                    <input type="text" value={editedScript.name} onChange={e => updateScript(d => { d.name = e.target.value; })} className="text-xl font-bold p-1 border-b-2 border-transparent focus:border-indigo-500 outline-none"/>
+                    <div className="flex items-center gap-2">
+                        <label htmlFor="script-bg-color" className="text-sm font-medium text-slate-600">Fond:</label>
+                        <input
+                            id="script-bg-color"
+                            type="color"
+                            value={editedScript.backgroundColor}
+                            onChange={e => updateScript(d => { d.backgroundColor = e.target.value; })}
+                            className="w-8 h-8 p-0 border rounded-md bg-transparent cursor-pointer"
+                            title="Changer la couleur de fond du script"
+                        />
+                    </div>
+                </div>
                 <div className="space-x-2">
                     <button onClick={() => onPreview(editedScript)} className="font-semibold py-2 px-4 rounded-lg inline-flex items-center bg-slate-200 hover:bg-slate-300"><EyeIcon className="w-5 h-5 mr-2" /> Prévisualiser</button>
                     <button onClick={onClose} className="font-semibold py-2 px-4 rounded-lg">Fermer</button>

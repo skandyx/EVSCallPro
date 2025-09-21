@@ -112,7 +112,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'input':
             return (
                 <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <label className="block font-semibold mb-1">{block.name}</label>
                     <input
                         type={block.content.format || 'text'}
                         placeholder={block.content.placeholder}
@@ -126,7 +126,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'textarea':
              return (
                 <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <label className="block font-semibold mb-1">{block.name}</label>
                     <textarea
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
@@ -191,7 +191,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'dropdown':
              return (
                 <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <label className="block font-semibold mb-1">{block.name}</label>
                     <select
                         style={commonInputStyles}
                         className="w-full p-2 border rounded-md border-slate-300"
@@ -206,7 +206,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'date':
             return (
                 <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <label className="block font-semibold mb-1">{block.name}</label>
                     <input
                         type="date"
                         style={commonInputStyles}
@@ -219,7 +219,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'phone':
              return (
                 <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <label className="block font-semibold mb-1">{block.name}</label>
                     <input
                         type="tel"
                         placeholder={block.content.placeholder}
@@ -239,7 +239,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'email':
             return (
                 <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <label className="block font-semibold mb-1">{block.name}</label>
                     <input
                         type="email"
                         placeholder={block.content.placeholder}
@@ -253,7 +253,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
         case 'time':
             return (
                 <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <label className="block font-semibold mb-1">{block.name}</label>
                     <input
                         type="time"
                         style={commonInputStyles}
