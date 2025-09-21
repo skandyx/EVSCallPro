@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, CallHistoryRecord } from './types.ts';
+import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, CallHistoryRecord, ContactNote } from './types.ts';
 import { features } from './data/features.ts';
 import { mockData } from './data/mockData.ts'; // Kept for simulated data not yet in DB
 import Sidebar from './components/Sidebar.tsx';
@@ -290,6 +290,16 @@ const App: React.FC = () => {
             ...prev
         ]);
     };
+    
+    const handleSaveContactNote = async (contactId: string, campaignId: string, note: string) => {
+        if (!contactId || !campaignId || !note.trim()) return;
+        try {
+            await apiCall(`/api/contacts/${contactId}/notes`, 'POST', { campaignId, note });
+        } catch (error) {
+            console.error("Failed to save contact note:", error);
+            // Optionally show an error to the user
+        }
+    };
 
     // --- RENDER LOGIC ---
     if (isLoading) {
@@ -302,7 +312,8 @@ const App: React.FC = () => {
 
     if (currentUser.role === 'Agent') {
         return <AgentView 
-            agent={currentUser} 
+            agent={currentUser}
+            users={users}
             campaigns={campaigns}
             savedScripts={savedScripts}
             sites={sites}
@@ -310,6 +321,8 @@ const App: React.FC = () => {
             qualifications={qualifications}
             qualificationGroups={qualificationGroups}
             onLogout={handleLogout}
+            apiCall={apiCall}
+            onSaveContactNote={handleSaveContactNote}
         />;
     }
     

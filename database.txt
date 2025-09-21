@@ -266,6 +266,19 @@ CREATE TABLE personal_callbacks (
 COMMENT ON TABLE personal_callbacks IS 'Stocke les rappels manuels que les agents se programment.';
 CREATE INDEX idx_personal_callbacks_agent_id_status ON personal_callbacks(agent_id, status);
 
+-- Table pour l'historique des remarques sur une fiche contact
+CREATE TABLE contact_notes (
+    id TEXT PRIMARY KEY,
+    contact_id TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    agent_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    note TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+COMMENT ON TABLE contact_notes IS 'Historique des remarques laissées par les agents sur une fiche contact.';
+CREATE INDEX idx_contact_notes_contact_id ON contact_notes(contact_id);
+
 -- =============================================================================
 -- SECTION 4 : TABLES POUR LES PLANNIGS
 -- =============================================================================
@@ -312,6 +325,11 @@ $$ LANGUAGE plpgsql;
 -- Exemple pour la table `users` :
 CREATE TRIGGER set_timestamp
 BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION trigger_set_timestamp();
+
+CREATE TRIGGER set_timestamp
+BEFORE UPDATE ON contact_notes
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();
 

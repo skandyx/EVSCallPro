@@ -104,6 +104,8 @@ const handleRequest = (handler) => async (req, res) => {
  *     description: Gestion des groupes d'agents
  *   - name: Campagnes
  *     description: Gestion des campagnes d'appels sortants
+ *   - name: Contacts
+ *     description: Gestion des fiches contacts et des notes associées
  *   - name: Scripts
  *     description: Gestion des scripts d'agents
  *   - name: SVI
@@ -294,6 +296,38 @@ app.post('/api/campaigns', authMiddleware, handleRequest(async (req, res) => res
 app.put('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveCampaign(req.body, req.params.id))));
 app.delete('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteCampaign(req.params.id); res.status(204).send(); }));
 app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.importContacts(req.params.id, req.body.contacts))));
+
+// Contact Notes
+/**
+ * @openapi
+ * /contacts/{contactId}/notes:
+ *   get:
+ *     summary: Récupère l'historique des notes pour un contact.
+ *     tags: [Contacts]
+ *     parameters: [ { in: path, name: contactId, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Liste des notes." }
+ *   post:
+ *     summary: Ajoute une nouvelle note à un contact.
+ *     tags: [Contacts]
+ *     parameters: [ { in: path, name: contactId, required: true, schema: { type: string } } ]
+ *     requestBody:
+ *       required: true
+ *       content: { application/json: { schema: { type: object, properties: { campaignId: { type: string }, note: { type: string } } } } }
+ *     responses:
+ *       201: { description: "Note créée." }
+ */
+app.get('/api/contacts/:contactId/notes', authMiddleware, handleRequest(async (req, res) => {
+    res.json(await db.getNotesForContact(req.params.contactId));
+}));
+app.post('/api/contacts/:contactId/notes', authMiddleware, handleRequest(async (req, res) => {
+    const { contactId } = req.params;
+    const { campaignId, note } = req.body;
+    const agentId = req.user.id;
+    const newNote = await db.createNote({ contactId, agentId, campaignId, note });
+    res.status(201).json(newNote);
+}));
+
 
 // Scripts
 /**

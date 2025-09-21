@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import type { SavedScript, ScriptBlock, DisplayCondition, Page, ButtonAction, Contact } from '../types.ts';
+import type { SavedScript, ScriptBlock, DisplayCondition, Page, ButtonAction, Contact, ContactNote, User } from '../types.ts';
 
 interface AgentPreviewProps {
   script: SavedScript;
   onClose: () => void;
   embedded?: boolean;
   contact?: Contact | null;
+  contactNotes?: ContactNote[];
+  users?: User[];
+  newNote?: string;
+  setNewNote?: (note: string) => void;
+  onSaveNote?: () => void;
 }
 
 const checkCondition = (condition: DisplayCondition | null, values: Record<string, any>): boolean => {
@@ -17,7 +22,10 @@ const checkCondition = (condition: DisplayCondition | null, values: Record<strin
     return targetValue === condition.value;
 };
 
-const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded = false, contact = null }) => {
+const AgentPreview: React.FC<AgentPreviewProps> = ({ 
+    script, onClose, embedded = false, contact = null, 
+    contactNotes = [], users = [], newNote = '', setNewNote = () => {}, onSaveNote = () => {} 
+}) => {
   const [formValues, setFormValues] = useState<Record<string, any>>(() => {
     if (contact?.customFields) {
         return { ...contact.customFields };
@@ -113,6 +121,43 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({ script, onClose, embedded =
                         value={formValues[block.name] || ''}
                         onChange={e => handleValueChange(block.name, e.target.value)}
                     />
+                </div>
+            );
+        case 'textarea':
+             return (
+                <div {...commonContainerProps}>
+                    <label className="block font-semibold mb-1">{block.content.label}</label>
+                    <textarea
+                        placeholder={block.content.placeholder}
+                        style={commonInputStyles}
+                        className="w-full p-2 border rounded-md border-slate-300 flex-1 resize-none"
+                        value={newNote}
+                        onChange={e => setNewNote(e.target.value)}
+                    />
+                    <button onClick={onSaveNote} className="mt-2 w-full text-sm bg-indigo-100 text-indigo-700 font-semibold py-1.5 px-3 rounded-md hover:bg-indigo-200 disabled:opacity-50" disabled={!newNote.trim()}>
+                        Enregistrer la note
+                    </button>
+                </div>
+            );
+         case 'history':
+            const findAgentName = (agentId: string) => {
+                const agent = users.find(u => u.id === agentId);
+                return agent ? `${agent.firstName} ${agent.lastName}` : 'Inconnu';
+            };
+            return (
+                <div {...commonContainerProps}>
+                    <h4 className="font-semibold mb-2 border-b pb-1 text-slate-700 flex-shrink-0">Historique des remarques</h4>
+                    <div className="space-y-3 overflow-y-auto text-xs flex-1 pr-1">
+                        {contactNotes.length > 0 ? contactNotes.map((note) => (
+                             <div key={note.id} className="p-2 rounded bg-slate-50">
+                                 <div className="flex justify-between items-baseline text-slate-500 mb-1">
+                                     <span className="font-semibold">{findAgentName(note.agentId)}</span>
+                                     <span>{new Date(note.createdAt).toLocaleString('fr-FR')}</span>
+                                 </div>
+                                 <p className="text-slate-800 whitespace-pre-wrap">{note.note}</p>
+                             </div>
+                        )) : <p className="text-center italic text-slate-400 pt-4">Aucune remarque pour ce contact.</p>}
+                    </div>
                 </div>
             );
         case 'radio':

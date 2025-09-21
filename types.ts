@@ -94,7 +94,7 @@ export interface Page {
     blocks: ScriptBlock[];
 }
 
-export type BlockType = 'group' | 'label' | 'text' | 'input' | 'email' | 'phone' | 'date' | 'time' | 'radio' | 'checkbox' | 'dropdown' | 'button' | 'web-view';
+export type BlockType = 'group' | 'label' | 'text' | 'input' | 'email' | 'phone' | 'date' | 'time' | 'radio' | 'checkbox' | 'dropdown' | 'button' | 'web-view' | 'textarea' | 'history';
 
 export interface ScriptBlock {
     id: string;
@@ -185,6 +185,15 @@ export interface Contact {
     postalCode: string;
     status: 'pending' | 'called' | 'qualified';
     customFields?: Record<string, any>;
+}
+
+export interface ContactNote {
+    id: string;
+    contactId: string;
+    agentId: string;
+    campaignId: string;
+    note: string;
+    createdAt: string; // ISO String
 }
 
 export interface Qualification {

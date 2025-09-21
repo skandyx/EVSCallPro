@@ -4,7 +4,7 @@ import {
     PlusIcon, TrashIcon, EyeIcon, SettingsIcon, PaletteIcon, XMarkIcon, ArrowLeftIcon, ArrowRightIcon,
     TextBlockIcon, InputIcon, RadioIcon, CheckboxIcon, DropdownIcon, WebBrowserIcon, DateIcon,
     PhoneIcon, EmailIcon, TimeIcon, ButtonIcon, LabelIcon, GroupIcon, MinusIcon, ResetViewIcon,
-    AlignLeftIcon, AlignCenterIcon, AlignRightIcon
+    AlignLeftIcon, AlignCenterIcon, AlignRightIcon, TextareaIcon, UserJourneyIcon as HistoryIcon
 } from './Icons.tsx';
 
 // Props definition
@@ -20,6 +20,7 @@ const BLOCK_PALETTE: { type: BlockType; icon: React.FC<any>; label: string; defa
     { type: 'label', icon: LabelIcon, label: 'Titre / Label', default: { width: 300, height: 40, content: { text: 'Titre' }, fontSize: 18, textAlign: 'left' } },
     { type: 'text', icon: TextBlockIcon, label: 'Texte', default: { width: 300, height: 80, content: { text: 'Paragraphe de texte...' }, textAlign: 'left' } },
     { type: 'input', icon: InputIcon, label: 'Champ de Saisie', default: { width: 300, height: 70, content: { label: 'Label', placeholder: 'Saisir ici', format: 'text' } } },
+    { type: 'textarea', icon: TextareaIcon, label: 'Texte Multi-ligne', default: { width: 300, height: 120, content: { label: 'Commentaires', placeholder: 'Saisir ici...' } } },
     { type: 'email', icon: EmailIcon, label: 'Email', default: { width: 300, height: 70, content: { label: 'Email', placeholder: 'email@example.com' } } },
     { type: 'phone', icon: PhoneIcon, label: 'Téléphone', default: { width: 300, height: 70, content: { label: 'Téléphone', placeholder: '0123456789' } } },
     { type: 'date', icon: DateIcon, label: 'Date', default: { width: 200, height: 70, content: { label: 'Date' } } },
@@ -28,6 +29,7 @@ const BLOCK_PALETTE: { type: BlockType; icon: React.FC<any>; label: string; defa
     { type: 'checkbox', icon: CheckboxIcon, label: 'Choix Multiples', default: { width: 300, height: 120, content: { question: 'Question ?', options: ['Option A', 'Option B'] } } },
     { type: 'dropdown', icon: DropdownIcon, label: 'Liste Déroulante', default: { width: 300, height: 70, content: { label: 'Sélectionnez', options: ['Valeur 1', 'Valeur 2'] } } },
     { type: 'button', icon: ButtonIcon, label: 'Bouton', default: { width: 200, height: 50, content: { text: 'Cliquer', action: { type: 'none' } }, backgroundColor: '#4f46e5', textColor: '#ffffff', textAlign: 'center' } },
+    { type: 'history', icon: HistoryIcon, label: 'Historique', default: { width: 400, height: 200, content: {} } },
 ];
 
 const FONT_FAMILIES = ['Arial', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New'];
@@ -344,7 +346,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                         {propertiesTab === 'content' && (
                            <>
                            { (selectedBlock.type === 'label' || selectedBlock.type === 'text') && <textarea value={selectedBlock.content.text} onChange={(e) => handleBlockContentUpdate(selectedBlockId!, { text: e.target.value })} className="w-full p-2 border rounded-md" rows={4}/> }
-                           { (selectedBlock.type === 'input' || selectedBlock.type === 'email' || selectedBlock.type === 'phone') && <><div><label className="font-medium">Label</label><input type="text" value={selectedBlock.content.label} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {label: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div><div><label className="font-medium">Placeholder</label><input type="text" value={selectedBlock.content.placeholder} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {placeholder: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div> {selectedBlock.type === 'input' && <div><label className="font-medium">Format</label><select value={selectedBlock.content.format} onChange={e => handleBlockContentUpdate(selectedBlockId!, { format: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white"><option value="text">Texte</option><option value="number">Nombre</option><option value="password">Mot de passe</option></select></div>}</>}
+                           { (selectedBlock.type === 'input' || selectedBlock.type === 'email' || selectedBlock.type === 'phone' || selectedBlock.type === 'textarea') && <><div><label className="font-medium">Label</label><input type="text" value={selectedBlock.content.label} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {label: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div><div><label className="font-medium">Placeholder</label><input type="text" value={selectedBlock.content.placeholder} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {placeholder: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div> {selectedBlock.type === 'input' && <div><label className="font-medium">Format</label><select value={selectedBlock.content.format} onChange={e => handleBlockContentUpdate(selectedBlockId!, { format: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white"><option value="text">Texte</option><option value="number">Nombre</option><option value="password">Mot de passe</option></select></div>}</>}
                            { (selectedBlock.type === 'button') && <><div><label className="font-medium">Texte du bouton</label><input type="text" value={selectedBlock.content.text} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {text: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div></> }
                            { (selectedBlock.type === 'radio' || selectedBlock.type === 'checkbox' || selectedBlock.type === 'dropdown') && (
                                 <div className="space-y-4">
@@ -380,6 +382,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                                     </div>
                                 </div>
                             )}
+                            { selectedBlock.type === 'history' && <p className="text-slate-500 italic text-center p-4">Ce bloc n'a pas de propriétés configurables. Il affichera l'historique des appels du contact.</p>}
                            { selectedBlock.type === 'group' && (
                                 <div>
                                     <h4 className="font-medium text-slate-700 mb-2">Blocs dans le groupe</h4>
@@ -418,7 +421,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                                         <input type="number" value={Math.round(selectedBlock.height)} onChange={e => handleBlockUpdate(selectedBlockId!, { height: parseInt(e.target.value) })} className="w-full mt-1 p-2 border rounded-md"/>
                                     </div>
                                 </div>
-                                {['label', 'text', 'button', 'input', 'email', 'phone'].includes(selectedBlock.type) &&
+                                {['label', 'text', 'button', 'input', 'email', 'phone', 'textarea'].includes(selectedBlock.type) &&
                                 <>
                                 <div><label className="font-medium">Police</label><select value={selectedBlock.fontFamily || 'Arial'} onChange={e => handleBlockUpdate(selectedBlockId!, { fontFamily: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white">{FONT_FAMILIES.map(f => <option key={f}>{f}</option>)}</select></div>
                                 <div>
@@ -480,6 +483,8 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                 case 'label': return <p className="font-bold whitespace-pre-wrap break-words">{block.content.text}</p>;
                 case 'text': return <p className="whitespace-pre-wrap break-words">{block.content.text}</p>;
                 case 'input': case 'email': case 'phone': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><input type="text" placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
+                case 'textarea': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><textarea placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm h-full resize-none"/></div>
+                case 'history': return <div className="space-y-1 h-full flex flex-col"><label className="block font-semibold text-xs border-b pb-1">Historique des appels</label><div className="text-xs text-slate-400 italic flex-1 flex items-center justify-center">Aperçu de l'historique</div></div>
                 case 'date': case 'time': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><input type={block.type} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
                 case 'dropdown': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.content.label}</label><select disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"><option>{block.content.options[0] || 'Option'}</option></select></div>
                 case 'radio': return <div className="space-y-1 text-left overflow-hidden"><p className="font-semibold text-xs mb-1 truncate">{block.content.question}</p>{(block.content.options || []).slice(0, 2).map((opt: string) => (<div key={opt} className="flex items-center"><input type="radio" disabled className="mr-2"/><label className="text-sm truncate">{opt}</label></div>))}</div>

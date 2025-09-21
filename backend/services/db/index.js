@@ -12,6 +12,7 @@ const telephonyQueries = require('./telephony.queries');
 const siteQueries = require('./site.queries');
 const mediaQueries = require('./media.queries');
 const planningQueries = require('./planning.queries');
+const noteQueries = require('./note.queries');
 
 const getAllApplicationData = async () => {
     const [
@@ -92,4 +93,5 @@ module.exports = {
     ...siteQueries,
     ...mediaQueries,
     ...planningQueries,
+    ...noteQueries,
 };

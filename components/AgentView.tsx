@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import type { User, Campaign, SavedScript, Contact, Site, PersonalCallback, Qualification, QualificationGroup } from '../types.ts';
+import type { User, Campaign, SavedScript, Contact, Site, PersonalCallback, Qualification, QualificationGroup, ContactNote } from '../types.ts';
 import AgentPreview from './AgentPreview.tsx';
 import { PhoneIcon, PauseIcon, PlayIcon, UserCircleIcon, PhoneXMarkIcon, PhoneArrowUpRightIcon, BellAlertIcon, InformationCircleIcon, XMarkIcon, CalendarDaysIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon } from './Icons.tsx';
 
@@ -15,6 +15,7 @@ const CTI_STATUS_CONFIG: { [key in AgentCtiStatus]: { text: string; color: strin
 
 interface AgentViewProps {
     agent: User;
+    users: User[];
     campaigns: Campaign[];
     savedScripts: SavedScript[];
     sites: Site[];
@@ -22,6 +23,8 @@ interface AgentViewProps {
     qualifications: Qualification[];
     qualificationGroups: QualificationGroup[];
     onLogout: () => void;
+    apiCall: (url: string, method: string, body?: any) => Promise<any>;
+    onSaveContactNote: (contactId: string, campaignId: string, note: string) => Promise<void>;
 }
 
 const CallSimulationModal: React.FC<{ log: string[]; }> = ({ log }) => {
@@ -110,7 +113,7 @@ const DialpadPopover: React.FC<{
     );
 };
 
-const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, sites, personalCallbacks, qualifications, qualificationGroups, onLogout }) => {
+const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScripts, sites, personalCallbacks, qualifications, qualificationGroups, onLogout, apiCall, onSaveContactNote }) => {
     const [ctiStatus, setCtiStatus] = useState<AgentCtiStatus>('LOGGED_OUT');
     const [statusTimer, setStatusTimer] = useState(0);
     const [currentContact, setCurrentContact] = useState<Contact | null>(null);
@@ -122,6 +125,10 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
     const [showBellIndicator, setShowBellIndicator] = useState(false);
     const [selectedQualId, setSelectedQualId] = useState<string | null>(null);
     const [callbackDateTime, setCallbackDateTime] = useState<string>('');
+
+    // State for Contact Notes
+    const [contactNotes, setContactNotes] = useState<ContactNote[]>([]);
+    const [newNote, setNewNote] = useState('');
     
     // State for Callbacks Popover
     const [isCallbacksPopoverOpen, setIsCallbacksPopoverOpen] = useState(false);
@@ -153,6 +160,37 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
         if (!activeCampaign?.scriptId) return null;
         return savedScripts.find(s => s.id === activeCampaign.scriptId);
     }, [activeCampaign, savedScripts]);
+
+    // Fetch notes when contact changes
+    useEffect(() => {
+        const fetchNotes = async () => {
+            if (currentContact) {
+                try {
+                    const notes = await apiCall(`/api/contacts/${currentContact.id}/notes`, 'GET');
+                    setContactNotes(notes || []);
+                } catch (error) {
+                    console.error("Failed to fetch contact notes:", error);
+                    setContactNotes([]);
+                }
+            } else {
+                setContactNotes([]);
+            }
+        };
+        fetchNotes();
+    }, [currentContact, apiCall]);
+
+    const handleSaveNote = async () => {
+        if (!currentContact || !activeCampaignId || !newNote.trim()) return;
+        try {
+            await onSaveContactNote(currentContact.id, activeCampaignId, newNote);
+            setNewNote('');
+            // Refetch notes to show the new one
+            const updatedNotes = await apiCall(`/api/contacts/${currentContact.id}/notes`, 'GET');
+            setContactNotes(updatedNotes || []);
+        } catch (error) {
+            console.error("Error saving note from AgentView:", error);
+        }
+    };
 
     // Effect to handle clicking outside popovers
     useEffect(() => {
@@ -423,7 +461,17 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, campaigns, savedScripts, s
         }
     
         if (ctiStatus === 'IN_CALL' && agentScript && currentContact) {
-            return <AgentPreview script={agentScript} onClose={() => {}} embedded={true} contact={currentContact} />;
+            return <AgentPreview 
+                script={agentScript} 
+                onClose={() => {}} 
+                embedded={true} 
+                contact={currentContact} 
+                contactNotes={contactNotes}
+                users={users}
+                newNote={newNote}
+                setNewNote={setNewNote}
+                onSaveNote={handleSaveNote}
+            />;
         }
     
         if (ctiStatus === 'WRAP_UP' && activeCampaign) {
