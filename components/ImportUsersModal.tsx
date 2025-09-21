@@ -1,7 +1,9 @@
-
 import React, { useState, useMemo } from 'react';
 import type { User, UserRole } from '../types.ts';
 import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon } from './Icons.tsx';
+
+declare var Papa: any;
+declare var XLSX: any;
 
 interface ImportUsersModalProps {
     onClose: () => void;
@@ -10,20 +12,6 @@ interface ImportUsersModalProps {
 }
 
 type CsvRow = Record<string, string>;
-
-// Mock CSV data for simulation
-const MOCK_CSV_DATA: { headers: string[], data: CsvRow[] } = {
-    headers: ["login", "prenom", "nom", "email", "role"],
-    data: [
-        { login: "2001", prenom: "Import", nom: "Un", email: "import1@example.com", role: "Agent" },
-        { login: "2002", prenom: "Import", nom: "Deux", email: "import2@example.com", role: "Agent" },
-        { login: "1001", prenom: "Doublon", nom: "Existant", email: "doublon@example.com", role: "Agent" },
-        { login: "2003", prenom: "Import", nom: "Trois", email: "", role: "Superviseur" },
-        { login: "", prenom: "Invalide", nom: "LoginManquant", email: "invalid@example.com", role: "Agent" },
-        { login: "2004", prenom: "Invalide", nom: "RoleInconnu", email: "invalid2@example.com", role: "Manager" },
-        { login: "2005", prenom: "Valide", nom: "Quatre", email: "valid4@example.com", role: "Administrateur" },
-    ]
-};
 
 const USER_ROLES: UserRole[] = ['Agent', 'Superviseur', 'Administrateur', 'SuperAdmin'];
 
@@ -37,13 +25,12 @@ const generatePassword = (): string => {
     return password;
 };
 
-
 const ImportUsersModal: React.FC<ImportUsersModalProps> = ({ onClose, onImport, existingUsers }) => {
     const [step, setStep] = useState(1);
     const [file, setFile] = useState<File | null>(null);
     const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
     const [csvData, setCsvData] = useState<CsvRow[]>([]);
-    const [mappings, setMappings] = useState<Record<string, string>>({});
+    const [mappings, setMappings] = useState<Record<string, string>>({}); // { [fieldId]: csvHeader }
     const [summary, setSummary] = useState<{ total: number; valids: User[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
 
     const MAPPING_FIELDS = [
@@ -56,55 +43,97 @@ const ImportUsersModal: React.FC<ImportUsersModalProps> = ({ onClose, onImport, 
 
     const handleFileSelect = (selectedFile: File) => {
         setFile(selectedFile);
-        // Simulate parsing
-        setCsvHeaders(MOCK_CSV_DATA.headers);
-        setCsvData(MOCK_CSV_DATA.data);
-        // Auto-map obvious fields
-        const initialMappings: Record<string, string> = {};
-        MOCK_CSV_DATA.headers.forEach(header => {
-            const h = header.toLowerCase();
-            if (h.includes('login') || h.includes('id')) initialMappings[header] = 'loginId';
-            if (h.includes('prénom') || h.includes('first')) initialMappings[header] = 'firstName';
-            if (h.includes('nom') || h.includes('last')) initialMappings[header] = 'lastName';
-            if (h.includes('email') || h.includes('courriel')) initialMappings[header] = 'email';
-            if (h.includes('role')) initialMappings[header] = 'role';
-        });
-        setMappings(initialMappings);
-    };
+        
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                const fileContent = e.target?.result;
+                if (!fileContent) throw new Error("Le contenu du fichier est vide.");
 
+                let headers: string[] = [];
+                let data: CsvRow[] = [];
+                const fileNameLower = selectedFile.name.toLowerCase();
+
+                if (fileNameLower.endsWith('.xlsx')) {
+                    const workbook = XLSX.read(fileContent, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    // Fix: Remove type argument from untyped function call and use type assertion.
+                    data = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as CsvRow[];
+                    if (data.length > 0) headers = Object.keys(data[0]);
+                } else { // Handle CSV and TXT with Papaparse
+                    const result = Papa.parse(fileContent as string, {
+                        header: true,
+                        skipEmptyLines: true,
+                        encoding: "UTF-8",
+                    });
+                    
+                    if (result.errors.length > 0) console.warn("Erreurs de parsing:", result.errors);
+                    headers = result.meta.fields || [];
+                    data = result.data;
+                }
+
+                setCsvHeaders(headers);
+                setCsvData(data);
+                
+                // Auto-map obvious fields
+                const initialMappings: Record<string, string> = {};
+                const usedHeaders = new Set<string>();
+
+                MAPPING_FIELDS.forEach(field => {
+                    const fieldNameLower = field.name.toLowerCase().replace(/[\s/]+/g, '');
+                    const foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '') === fieldNameLower);
+
+                    if (foundHeader) {
+                        initialMappings[field.id] = foundHeader;
+                        usedHeaders.add(foundHeader);
+                    }
+                });
+                setMappings(initialMappings);
+
+            } catch (error) {
+                console.error("Erreur lors de la lecture du fichier:", error);
+                alert("Une erreur est survenue lors de la lecture du fichier. Assurez-vous qu'il est valide et non corrompu.");
+            }
+        };
+
+        reader.onerror = () => alert("Impossible de lire le fichier.");
+
+        if (selectedFile.name.toLowerCase().endsWith('.xlsx')) {
+            reader.readAsBinaryString(selectedFile);
+        } else {
+            reader.readAsText(selectedFile, 'UTF-8');
+        }
+    };
+    
     const processAndGoToSummary = () => {
         const valids: User[] = [];
         const invalids: { row: CsvRow; reason: string }[] = [];
         const existingLoginIds = new Set(existingUsers.map(u => u.loginId));
 
         csvData.forEach((row, index) => {
-            const getVal = (fieldId: string) => row[Object.keys(mappings).find(h => mappings[h] === fieldId) || ''] || '';
+            const getVal = (fieldId: string) => row[mappings[fieldId]] || '';
             
-            const loginId = getVal('loginId');
-            const firstName = getVal('firstName');
-            const lastName = getVal('lastName');
-            const email = getVal('email');
-            const role = getVal('role') as UserRole;
+            const loginId = getVal('loginId').trim();
+            const firstName = getVal('firstName').trim();
+            const lastName = getVal('lastName').trim();
+            const email = getVal('email').trim();
+            const role = getVal('role').trim() as UserRole;
 
             if (!loginId || !firstName || !lastName) {
-                invalids.push({ row, reason: "Champs obligatoires (login, prénom, nom) manquants." });
-                return;
+                invalids.push({ row, reason: "Champs obligatoires (login, prénom, nom) manquants." }); return;
             }
             if (existingLoginIds.has(loginId) || valids.some(u => u.loginId === loginId)) {
-                invalids.push({ row, reason: `L'identifiant ${loginId} est déjà utilisé.` });
-                return;
+                invalids.push({ row, reason: `L'identifiant ${loginId} est déjà utilisé.` }); return;
             }
             if (role && !USER_ROLES.includes(role)) {
-                invalids.push({ row, reason: `Rôle '${role}' invalide.` });
-                return;
+                invalids.push({ row, reason: `Rôle '${role}' invalide.` }); return;
             }
 
             valids.push({
                 id: `new-import-${Date.now() + index}`,
-                loginId,
-                firstName,
-                lastName,
-                email,
+                loginId, firstName, lastName, email,
                 role: role || 'Agent',
                 isActive: true,
                 campaignIds: [],
@@ -122,31 +151,52 @@ const ImportUsersModal: React.FC<ImportUsersModalProps> = ({ onClose, onImport, 
         setStep(4);
     };
 
+    const isNextDisabled = useMemo(() => {
+        if (step === 1 && !file) return true;
+        if (step === 2 && (!mappings['loginId'] || !mappings['firstName'] || !mappings['lastName'])) return true;
+        return false;
+    }, [step, file, mappings]);
+    
+    const usedCsvHeaders = Object.values(mappings);
 
     const renderStepContent = () => {
         switch (step) {
             case 1:
                 return (
-                    <div className="space-y-4">
+                     <div className="space-y-4">
                         <label className="block w-full cursor-pointer rounded-lg border-2 border-dashed border-slate-300 p-8 text-center hover:border-indigo-500">
                             <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-slate-400" />
-                            <span className="mt-2 block text-sm font-medium text-slate-900">{file ? file.name : "Téléverser un fichier CSV"}</span>
-                            <input type='file' className="sr-only" accept=".csv" onChange={e => e.target.files && handleFileSelect(e.target.files[0])} />
+                            <span className="mt-2 block text-sm font-medium text-slate-900">{file ? file.name : "Téléverser un fichier (CSV, TXT, XLSX)"}</span>
+                            <input type='file' className="sr-only" accept=".csv,.txt,.xlsx" onChange={e => e.target.files && handleFileSelect(e.target.files[0])} />
                         </label>
-                         {file && <p className="text-center text-xs text-slate-500">Simulation: Le contenu du fichier a été chargé à partir de données de démonstration.</p>}
                     </div>
                 );
             case 2:
                 return (
                      <div className="space-y-3">
-                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier aux champs de destination. Les champs Prénom, Nom et Identifiant sont obligatoires.</p>
+                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination (à gauche). Prénom, Nom et Identifiant sont obligatoires.</p>
                         <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
-                            {csvHeaders.map(header => (
-                                <div key={header} className="grid grid-cols-2 gap-4 items-center p-1">
-                                    <span className="font-medium text-slate-700 truncate">{header}</span>
-                                    <select value={mappings[header] || ''} onChange={e => setMappings(prev => ({...prev, [header]: e.target.value}))} className="w-full p-2 border bg-white rounded-md">
-                                        <option value="">Ignorer cette colonne</option>
-                                        {MAPPING_FIELDS.map(field => <option key={field.id} value={field.id}>{field.name}</option>)}
+                            {MAPPING_FIELDS.map(field => (
+                                <div key={field.id} className="grid grid-cols-2 gap-4 items-center p-1">
+                                    <span className="font-medium text-slate-700 truncate">{field.name} <span className="text-red-500">*</span></span>
+                                    <select
+                                        value={mappings[field.id] || ''}
+                                        onChange={e => {
+                                            const newCsvHeader = e.target.value;
+                                            setMappings(prev => {
+                                                const newMappings = { ...prev };
+                                                Object.keys(newMappings).forEach(key => { if(newMappings[key] === newCsvHeader) delete newMappings[key]; });
+                                                if (newCsvHeader) newMappings[field.id] = newCsvHeader;
+                                                else delete newMappings[field.id];
+                                                return newMappings;
+                                            });
+                                        }}
+                                        className="w-full p-2 border bg-white rounded-md"
+                                    >
+                                        <option value="">Ignorer ce champ</option>
+                                        {csvHeaders.map(header => (
+                                            <option key={header} value={header} disabled={usedCsvHeaders.includes(header) && mappings[field.id] !== header}>{header}</option>
+                                        ))}
                                     </select>
                                 </div>
                             ))}
@@ -192,12 +242,6 @@ const ImportUsersModal: React.FC<ImportUsersModalProps> = ({ onClose, onImport, 
         }
     };
 
-    const isNextDisabled = useMemo(() => {
-        if (step === 1 && !file) return true;
-        if (step === 2 && (!mappings['loginId'] || !mappings['firstName'] || !mappings['lastName'])) return true;
-        return false;
-    }, [step, file, mappings]);
-
     return (
         <div className="fixed inset-0 bg-slate-800 bg-opacity-75 flex items-center justify-center p-4 z-[60]">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-[90vh] flex flex-col">
@@ -209,7 +253,9 @@ const ImportUsersModal: React.FC<ImportUsersModalProps> = ({ onClose, onImport, 
                     <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700">Fermer</button>
                     <div className="flex gap-3">
                         {step > 1 && step < 4 && <button onClick={() => setStep(s => s - 1)} className="rounded-md border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 shadow-sm hover:bg-slate-50">Retour</button>}
-                        {step < 3 && <button onClick={() => setStep(s => s + 1)} disabled={isNextDisabled} className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">Suivant <ArrowRightIcon className="w-4 h-4"/></button>}
+                        {step < 3 && <button onClick={() => step === 1 ? setStep(2) : processAndGoToSummary()} disabled={isNextDisabled} className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">
+                            {step === 1 ? 'Suivant' : 'Valider les données'} <ArrowRightIcon className="w-4 h-4"/>
+                        </button>}
                         {step === 3 && <button onClick={handleFinalImport} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-green-700">Confirmer et Importer</button>}
                         {step === 4 && <button onClick={onClose} className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700">Terminer</button>}
                     </div>

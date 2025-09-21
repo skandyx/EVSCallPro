@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import type { Campaign, SavedScript, Contact } from '../types.ts';
+import type { Campaign, SavedScript, Contact, ScriptBlock } from '../types.ts';
 import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon } from './Icons.tsx';
+
+declare var Papa: any;
+declare var XLSX: any;
 
 interface ImportContactsModalProps {
     campaign: Campaign;
@@ -9,113 +12,140 @@ interface ImportContactsModalProps {
     onImport: (newContacts: Contact[]) => void;
 }
 
-// Mocking file parsing for demonstration
 type CsvRow = Record<string, string>;
-
-// A more realistic mock that could be generated from a file upload
-const MOCK_CSV_DATA: { headers: string[], data: CsvRow[] } = {
-    headers: ["nom", "prenom", "telephone", "code_postal", "ville", "info_produit"],
-    data: [
-        { nom: "Durand", prenom: "Pierre", telephone: "0612345678", code_postal: "75001", ville: "Paris", info_produit: "Intéressé par le modèle A" },
-        { nom: "Martin", prenom: "Sophie", telephone: "0787654321", code_postal: "69002", ville: "Lyon", info_produit: "Client existant" },
-        { nom: "Dubois", prenom: "Julien", telephone: "06invalid", code_postal: "13001", ville: "Marseille", info_produit: "" },
-        { nom: "Petit", prenom: "Camille", telephone: "0611223344", code_postal: "31000", ville: "Toulouse", info_produit: "Rappel demandé" },
-        { nom: "Leroy", prenom: "Marie", telephone: "0655555555", code_postal: "invalid", ville: "Nice", info_produit: "A déjà été contacté" },
-    ]
-};
 
 const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, script, onClose, onImport }) => {
     const [step, setStep] = useState(1);
     const [file, setFile] = useState<File | null>(null);
     const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
     const [csvData, setCsvData] = useState<CsvRow[]>([]);
-    const [mappings, setMappings] = useState<Record<string, string>>({});
+    const [mappings, setMappings] = useState<Record<string, string>>({}); // { [scriptFieldId]: csvHeader }
     const [summary, setSummary] = useState<{ total: number; valids: Contact[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
 
-    const MAPPING_FIELDS = useMemo(() => {
-        const standardFields = [
-            { id: 'firstName', name: 'Prénom' },
-            { id: 'lastName', name: 'Nom' },
-            { id: 'phoneNumber', name: 'Numéro de téléphone' },
-            { id: 'postalCode', name: 'Code Postal' },
-        ];
-        const scriptFields: { id: string, name: string }[] = [];
-        if (script) {
-            script.pages.forEach(page => {
-                page.blocks.forEach(block => {
-                    // Only include input-like fields that have a technical fieldName
-                    if (['input', 'textarea', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown'].includes(block.type) && block.fieldName) {
-                        scriptFields.push({ id: `custom_${block.fieldName}`, name: `Script: ${block.name}` });
-                    }
-                });
+    const scriptFields = useMemo(() => {
+        if (!script) return [];
+        const fields: { id: string, name: string, type: 'standard' | 'script' }[] = [];
+        script.pages.forEach(page => {
+            page.blocks.forEach(block => {
+                if (['input', 'textarea', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown'].includes(block.type) && block.fieldName) {
+                    fields.push({ id: block.fieldName, name: block.name, type: 'script' });
+                }
             });
-        }
-        return [...standardFields, ...scriptFields];
+        });
+        return fields;
     }, [script]);
+    
+    const phoneField = scriptFields.find(f => {
+        const block = script?.pages.flatMap(p => p.blocks).find(b => b.fieldName === f.id);
+        return block?.type === 'phone';
+    });
 
     const handleFileSelect = (selectedFile: File) => {
         setFile(selectedFile);
-        // Simulate parsing the file. In a real app, you'd use a library like Papaparse.
-        // For this demo, we use mock data.
-        setCsvHeaders(MOCK_CSV_DATA.headers);
-        setCsvData(MOCK_CSV_DATA.data);
         
-        // Auto-map obvious fields
-        const initialMappings: Record<string, string> = {};
-        MOCK_CSV_DATA.headers.forEach(header => {
-            const h = header.toLowerCase();
-            if (h.includes('nom') && !h.includes('prenom')) initialMappings[header] = 'lastName';
-            if (h.includes('prenom') || h.includes('prénom')) initialMappings[header] = 'firstName';
-            if (h.includes('tel') || h.includes('phone') || h.includes('téléphone')) initialMappings[header] = 'phoneNumber';
-            if (h.includes('postal') || h.includes('cp')) initialMappings[header] = 'postalCode';
-        });
-        setMappings(initialMappings);
-    };
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            try {
+                const fileContent = e.target?.result;
+                if (!fileContent) throw new Error("Le contenu du fichier est vide.");
 
+                let headers: string[] = [];
+                let data: CsvRow[] = [];
+                const fileNameLower = selectedFile.name.toLowerCase();
+
+                if (fileNameLower.endsWith('.xlsx')) {
+                    const workbook = XLSX.read(fileContent, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    // Fix: Remove type argument from untyped function call and use type assertion.
+                    data = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as CsvRow[];
+                    if (data.length > 0) headers = Object.keys(data[0]);
+                } else { // Handle CSV and TXT with Papaparse
+                    const result = Papa.parse(fileContent as string, {
+                        header: true,
+                        skipEmptyLines: true,
+                        encoding: "UTF-8",
+                    });
+                    
+                    if (result.errors.length > 0) console.warn("Erreurs de parsing:", result.errors);
+                    
+                    headers = result.meta.fields || [];
+                    data = result.data;
+                }
+
+                setCsvHeaders(headers);
+                setCsvData(data);
+                
+                // Auto-map fields
+                const initialMappings: Record<string, string> = {};
+                const usedHeaders = new Set<string>();
+
+                scriptFields.forEach(field => {
+                    const fieldNameLower = field.name.toLowerCase().replace(/[\s\-_]+/g, '');
+                    const foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '') === fieldNameLower);
+
+                    if (foundHeader) {
+                        initialMappings[field.id] = foundHeader;
+                        usedHeaders.add(foundHeader);
+                    }
+                });
+                setMappings(initialMappings);
+
+            } catch (error) {
+                console.error("Erreur lors de la lecture du fichier:", error);
+                alert("Une erreur est survenue lors de la lecture du fichier. Assurez-vous qu'il est valide et non corrompu.");
+            }
+        };
+
+        reader.onerror = () => alert("Impossible de lire le fichier.");
+
+        if (selectedFile.name.toLowerCase().endsWith('.xlsx')) {
+            reader.readAsBinaryString(selectedFile);
+        } else {
+            reader.readAsText(selectedFile, 'UTF-8');
+        }
+    };
+    
     const processAndGoToSummary = () => {
         const valids: Contact[] = [];
         const invalids: { row: CsvRow; reason: string }[] = [];
+        const phoneFieldName = phoneField?.id;
 
         csvData.forEach((row, index) => {
-            const newContact: Partial<Contact> & { customFields: Record<string, any> } = {
-                id: `contact-import-${Date.now() + index}`,
-                status: 'pending',
-                customFields: {},
-            };
-            let reason = '';
-
-            // Map fields based on user selection
-            for (const header of csvHeaders) {
-                const mapping = mappings[header];
-                if (mapping) {
-                    const value = row[header];
-                    if (mapping.startsWith('custom_')) {
-                        const fieldName = mapping.replace('custom_', '');
-                        newContact.customFields[fieldName] = value;
-                    } else {
-                        (newContact as any)[mapping] = value;
-                    }
-                }
-            }
+            const customFields: Record<string, any> = {};
+            let phoneNumber = '';
             
-            // Validation
-            if (!newContact.phoneNumber || !/^\d{10,}$/.test(newContact.phoneNumber.replace(/\s/g, ''))) {
+            for (const fieldId in mappings) {
+                const csvHeader = mappings[fieldId];
+                if (csvHeader) customFields[fieldId] = row[csvHeader];
+            }
+            if(phoneFieldName) phoneNumber = customFields[phoneFieldName];
+
+            let reason = '';
+            if (!phoneNumber || !/^\d{9,}$/.test(phoneNumber.replace(/[\s.-]+/g, ''))) {
                 reason = "Numéro de téléphone invalide ou manquant.";
-            } else if (!newContact.lastName && !newContact.firstName) {
-                newContact.lastName = `Contact ${newContact.phoneNumber}`; // Default name if none provided
             }
 
             if (reason) {
                 invalids.push({ row, reason });
             } else {
-                valids.push(newContact as Contact);
+                valids.push({
+                    id: `contact-import-${Date.now() + index}`,
+                    status: 'pending',
+                    firstName: '', // These are now part of customFields
+                    lastName: '',
+                    phoneNumber: phoneNumber,
+                    postalCode: '',
+                    customFields,
+                });
             }
         });
 
         setSummary({ total: csvData.length, valids, invalids });
         setStep(3);
     };
-    
+
     const handleFinalImport = () => {
         if (!summary) return;
         onImport(summary.valids);
@@ -124,44 +154,63 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
 
     const isNextDisabled = useMemo(() => {
         if (step === 1 && !file) return true;
-        if (step === 2 && !Object.values(mappings).includes('phoneNumber')) return true; // Phone number mapping is mandatory
+        if (step === 2 && phoneField && !mappings[phoneField.id]) return true; // Phone number mapping is mandatory
         return false;
-    }, [step, file, mappings]);
+    }, [step, file, mappings, phoneField]);
+    
+    const usedCsvHeaders = Object.values(mappings);
 
     const renderStepContent = () => {
         switch (step) {
             case 1:
                 return (
                     <div className="space-y-4">
-                        <p className="text-sm text-slate-600">
-                            Sélectionnez un fichier CSV à importer. La première ligne de votre fichier doit contenir les en-têtes de colonnes (ex: nom, prenom, telephone).
-                        </p>
                         <label className="block w-full cursor-pointer rounded-lg border-2 border-dashed border-slate-300 p-8 text-center hover:border-indigo-500">
                             <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-slate-400" />
-                            <span className="mt-2 block text-sm font-medium text-slate-900">{file ? file.name : "Téléverser un fichier CSV"}</span>
-                            <input type='file' className="sr-only" accept=".csv" onChange={e => e.target.files && handleFileSelect(e.target.files[0])} />
+                            <span className="mt-2 block text-sm font-medium text-slate-900">{file ? file.name : "Téléverser un fichier (CSV, TXT, XLSX)"}</span>
+                            <input type='file' className="sr-only" accept=".csv,.txt,.xlsx" onChange={e => e.target.files && handleFileSelect(e.target.files[0])} />
                         </label>
-                        {file && <p className="text-center text-xs text-slate-500">Simulation: Le contenu du fichier a été chargé à partir de données de démonstration.</p>}
                     </div>
                 );
             case 2:
                 return (
                     <div className="space-y-3">
-                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier aux champs de destination. Le <span className="font-bold">Numéro de téléphone</span> est obligatoire.</p>
+                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination du script (à gauche). Un champ de type "Téléphone" est obligatoire.</p>
                         <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
-                            {csvHeaders.map(header => (
-                                <div key={header} className="grid grid-cols-2 gap-4 items-center p-1">
-                                    <span className="font-medium text-slate-700 truncate">{header}</span>
-                                    <select value={mappings[header] || ''} onChange={e => setMappings(prev => ({...prev, [header]: e.target.value}))} className="w-full p-2 border bg-white rounded-md">
-                                        <option value="">Ignorer cette colonne</option>
-                                        {MAPPING_FIELDS.map(field => <option key={field.id} value={field.id}>{field.name}</option>)}
+                             {scriptFields.map(field => {
+                                const isPhoneField = phoneField?.id === field.id;
+                                return (
+                                <div key={field.id} className="grid grid-cols-2 gap-4 items-center p-1">
+                                    <span className="font-medium text-slate-700 truncate">
+                                        {field.name}
+                                        {isPhoneField && <span className="text-red-500 ml-1">*</span>}
+                                    </span>
+                                    <select
+                                        value={mappings[field.id] || ''}
+                                        onChange={e => {
+                                            const newCsvHeader = e.target.value;
+                                            setMappings(prev => {
+                                                const newMappings = { ...prev };
+                                                Object.keys(newMappings).forEach(key => { if(newMappings[key] === newCsvHeader) delete newMappings[key]; });
+                                                if (newCsvHeader) newMappings[field.id] = newCsvHeader;
+                                                else delete newMappings[field.id];
+                                                return newMappings;
+                                            });
+                                        }}
+                                        className="w-full p-2 border bg-white rounded-md"
+                                    >
+                                        <option value="">Ignorer ce champ</option>
+                                        {csvHeaders.map(header => (
+                                            <option key={header} value={header} disabled={usedCsvHeaders.includes(header) && mappings[field.id] !== header}>{header}</option>
+                                        ))}
                                     </select>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                     </div>
                 );
             case 3:
+                // ... same as before
                 if (!summary) return null;
                 return (
                     <div className="space-y-4">
@@ -189,7 +238,8 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                     </div>
                 );
             case 4:
-                return (
+                // ... same as before
+                 return (
                     <div className="text-center py-8">
                         <CheckIcon className="mx-auto h-16 w-16 text-green-500"/>
                         <h3 className="text-xl font-semibold text-slate-800 mt-4">Importation terminée !</h3>
