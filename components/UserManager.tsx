@@ -34,10 +34,12 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
         user ? userGroups.filter(g => g.memberIds.includes(user.id)).map(g => g.id) : []
     );
     
-    // Bug fix: Ensure form data updates when the user prop changes (e.g., editing another user)
     useEffect(() => {
         setFormData(user);
-        if (user.id.startsWith('new-') && !user.password) {
+        // Generate a password only for a completely new user being created via the modal.
+        // A user is considered "new from modal" if their ID starts with 'new-' and they don't have a first name yet.
+        // This prevents re-generating passwords for bulk-created users who are being edited.
+        if (user.id.startsWith('new-') && !user.firstName && !user.password) {
             setFormData(prev => ({ ...prev, password: generatePassword() }));
         }
     }, [user]);
@@ -168,7 +170,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
                                             id="password"
                                             value={formData.password || ''}
                                             onChange={handleChange}
-                                            required={isNewUser}
+                                            required={isNewUser && !formData.firstName}
                                             placeholder={isNewUser ? '' : 'Laisser vide pour ne pas changer'}
                                             className="block w-full flex-1 rounded-none rounded-l-md border-slate-300 p-2 border"
                                         />
