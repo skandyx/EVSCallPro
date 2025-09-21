@@ -2,6 +2,8 @@ require('dotenv').config();
 const FastAGI = require('fastagi');
 const express = require('express');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 
@@ -19,6 +21,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --- Swagger / OpenAPI Configuration ---
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'EVSCallPro API',
+      version: '1.0.0',
+      description: 'API pour la solution de centre de contact EVSCallPro, permettant de gérer toutes les ressources de l\'application.',
+    },
+    servers: [
+      {
+        url: '/api',
+        description: 'Serveur principal',
+      },
+    ],
+  },
+  apis: ['./backend/server.js'], 
+};
+
+const openapiSpecification = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiSpecification));
+
+
 // Helper function for consistent error handling
 const handleRequest = (handler) => async (req, res) => {
     try {
@@ -31,13 +56,78 @@ const handleRequest = (handler) => async (req, res) => {
 
 // --- API ROUTES ---
 
-// Master data loader
+/**
+ * @openapi
+ * tags:
+ *   - name: Application
+ *     description: Actions globales sur l'application
+ *   - name: Authentification
+ *     description: Connexion des utilisateurs
+ *   - name: Utilisateurs
+ *     description: Gestion des utilisateurs et de leurs droits
+ *   - name: Groupes
+ *     description: Gestion des groupes d'agents
+ *   - name: Campagnes
+ *     description: Gestion des campagnes d'appels sortants
+ *   - name: Scripts
+ *     description: Gestion des scripts d'agents
+ *   - name: SVI
+ *     description: Gestion des flux de Serveur Vocal Interactif
+ *   - name: Qualifications
+ *     description: Gestion des qualifications d'appel et de leurs groupes
+ *   - name: Téléphonie
+ *     description: Gestion des Trunks SIP et des numéros SDA/DID
+ *   - name: Sites
+ *     description: Gestion des sites physiques
+ *   - name: Média
+ *     description: Gestion de la bibliothèque audio
+ *   - name: Planning
+ *     description: Gestion des plannings agents
+ */
+
+/**
+ * @openapi
+ * /application-data:
+ *   get:
+ *     summary: Récupère toutes les données de configuration initiales de l'application.
+ *     tags: [Application]
+ *     responses:
+ *       200:
+ *         description: Un objet contenant toutes les données de l'application (utilisateurs, campagnes, etc.).
+ *       500:
+ *         description: Erreur interne du serveur.
+ */
 app.get('/api/application-data', handleRequest(async (req, res) => {
     const data = await db.getAllApplicationData();
     res.json(data);
 }));
 
-// NEW Authentication Route
+
+/**
+ * @openapi
+ * /login:
+ *   post:
+ *     summary: Authentifie un utilisateur et retourne ses informations.
+ *     tags: [Authentification]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               loginId:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Authentification réussie, retourne l'objet utilisateur.
+ *       400:
+ *         description: Identifiant ou mot de passe manquant.
+ *       401:
+ *         description: Identifiants invalides.
+ */
 app.post('/api/login', handleRequest(async (req, res) => {
     const { loginId, password } = req.body;
     if (!loginId || !password) {

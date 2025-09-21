@@ -136,7 +136,7 @@ const App: React.FC = () => {
 
     // Users
     const handleSaveUser = async (user: User, groupIds: string[]) => {
-        const isNew = user.id.startsWith('new-');
+        const isNew = !users.some(u => u.id === user.id);
         const url = isNew ? '/api/users' : `/api/users/${user.id}`;
         await apiCall(url, isNew ? 'POST' : 'PUT', { user, groupIds });
         await fetchApplicationData();
@@ -154,7 +154,7 @@ const App: React.FC = () => {
 
     // User Groups
     const handleSaveUserGroup = async (group: UserGroup) => {
-        const isNew = group.id.startsWith('group-');
+        const isNew = !userGroups.some(g => g.id === group.id);
         const url = isNew ? '/api/groups' : `/api/groups/${group.id}`;
         await apiCall(url, isNew ? 'POST' : 'PUT', group);
         await fetchApplicationData();
@@ -166,7 +166,7 @@ const App: React.FC = () => {
 
     // Campaigns
     const handleSaveCampaign = async (campaign: Campaign) => {
-        const isNew = campaign.id.startsWith('campaign-');
+        const isNew = !campaigns.some(c => c.id === campaign.id);
         const url = isNew ? '/api/campaigns' : `/api/campaigns/${campaign.id}`;
         await apiCall(url, isNew ? 'POST' : 'PUT', campaign);
         await fetchApplicationData();
@@ -182,7 +182,7 @@ const App: React.FC = () => {
     
     // Scripts
     const handleSaveOrUpdateScript = async (script: SavedScript) => {
-        const isNew = script.id.startsWith('script-');
+        const isNew = !savedScripts.some(s => s.id === script.id);
         const url = isNew ? '/api/scripts' : `/api/scripts/${script.id}`;
         await apiCall(url, isNew ? 'POST' : 'PUT', script);
         await fetchApplicationData();
@@ -198,7 +198,7 @@ const App: React.FC = () => {
     
     // IVR Flows
     const handleSaveOrUpdateIvrFlow = async (flow: IvrFlow) => {
-        const isNew = flow.id.startsWith('ivr-flow-');
+        const isNew = !ivrFlows.some(f => f.id === flow.id);
         const url = isNew ? '/api/ivr-flows' : `/api/ivr-flows/${flow.id}`;
         await apiCall(url, isNew ? 'POST' : 'PUT', flow);
         await fetchApplicationData();
@@ -214,7 +214,7 @@ const App: React.FC = () => {
 
     // Qualifications
     const handleSaveQualification = async (qual: Qualification) => {
-        const isNew = qual.id.startsWith('qual-');
+        const isNew = !qualifications.some(q => q.id === qual.id);
         const url = isNew ? '/api/qualifications' : `/api/qualifications/${qual.id}`;
         await apiCall(url, isNew ? 'POST' : 'PUT', qual);
         await fetchApplicationData();
@@ -228,7 +228,7 @@ const App: React.FC = () => {
 
     // Qualification Groups
     const handleSaveQualificationGroup = async (group: QualificationGroup, assignedQualIds: string[]) => {
-        const isNew = group.id.startsWith('qg-');
+        const isNew = !qualificationGroups.some(qg => qg.id === group.id);
         const url = isNew ? '/api/qualification-groups' : `/api/qualification-groups/${group.id}`;
         await apiCall(url, isNew ? 'POST' : 'PUT', { group, assignedQualIds });
         await fetchApplicationData();
@@ -241,9 +241,13 @@ const App: React.FC = () => {
     };
     
     // Generic handlers for simple CRUD (can be expanded)
-    const createCrudHandlers = <T extends { id: string }>(pluralName: string, setData: React.Dispatch<React.SetStateAction<T[]>>) => ({
+    const createCrudHandlers = <T extends { id: string }>(
+        pluralName: string, 
+        data: T[], 
+        setData: React.Dispatch<React.SetStateAction<T[]>>
+    ) => ({
         save: async (item: T) => {
-            const isNew = item.id.includes('-'); // Simplified check
+            const isNew = !data.some(d => d.id === item.id);
             const url = isNew ? `/api/${pluralName}` : `/api/${pluralName}/${item.id}`;
             await apiCall(url, isNew ? 'POST' : 'PUT', item);
             await fetchApplicationData();
@@ -254,11 +258,11 @@ const App: React.FC = () => {
         }
     });
     
-    const didHandlers = createCrudHandlers('dids', setDids);
-    const trunkHandlers = createCrudHandlers('trunks', setTrunks);
-    const siteHandlers = createCrudHandlers('sites', setSites);
-    const audioHandlers = createCrudHandlers('audio-files', setAudioFiles);
-    const planningEventHandlers = createCrudHandlers('planning-events', setPlanningEvents);
+    const didHandlers = createCrudHandlers('dids', dids, setDids);
+    const trunkHandlers = createCrudHandlers('trunks', trunks, setTrunks);
+    const siteHandlers = createCrudHandlers('sites', sites, setSites);
+    const audioHandlers = createCrudHandlers('audio-files', audioFiles, setAudioFiles);
+    const planningEventHandlers = createCrudHandlers('planning-events', planningEvents, setPlanningEvents);
 
     const handleRunBackup = () => {
          setBackupLogs(prev => [
