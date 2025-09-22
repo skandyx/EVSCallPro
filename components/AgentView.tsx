@@ -150,7 +150,8 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
     const [isQualified, setIsQualified] = useState(false);
 
     const agentCampaigns = useMemo(() => {
-        return campaigns.filter(c => agent.campaignIds.includes(c.id));
+        // Fix: Added a fallback for agent.campaignIds to prevent crash if it's undefined.
+        return campaigns.filter(c => (agent.campaignIds || []).includes(c.id));
     }, [agent, campaigns]);
 
     const activeCampaign = useMemo(() => {
