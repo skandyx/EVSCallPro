@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Campaign, SavedScript, Contact, ScriptBlock } from '../types.ts';
-import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon } from './Icons.tsx';
+import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon, InformationCircleIcon } from './Icons.tsx';
 
 declare var Papa: any;
 declare var XLSX: any;
@@ -129,7 +129,8 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
         if (deduplicationConfig.enabled) {
             existingValues = new Set(campaign.contacts.map(c => {
                  if (c.customFields && deduplicationConfig.fieldId in c.customFields) return c.customFields[deduplicationConfig.fieldId];
-                 return (c as any)[deduplicationConfig.fieldId] || '';
+                 if (Object.prototype.hasOwnProperty.call(c, deduplicationConfig.fieldId)) return (c as any)[deduplicationConfig.fieldId];
+                 return '';
             }).map(v => String(v).trim().toLowerCase()).filter(Boolean));
         }
         
@@ -205,6 +206,16 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                 return (
                     <div className="space-y-4">
                         <h3 className="text-xl font-semibold text-slate-800">Dédoublonnage</h3>
+                        {!script && (
+                             <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+                                <div className="flex">
+                                    <div className="flex-shrink-0"><InformationCircleIcon className="h-5 w-5 text-blue-400"/></div>
+                                    <div className="ml-3"><p className="text-sm text-blue-700">
+                                        <b>Astuce :</b> Pour dédoublonner sur plus de champs (ex: un email, un numéro de client), assignez un script d'agent à cette campagne.
+                                    </p></div>
+                                </div>
+                            </div>
+                        )}
                         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-md border">
                             <div>
                                 <p className="font-medium text-slate-800">Activer le dédoublonnage</p>

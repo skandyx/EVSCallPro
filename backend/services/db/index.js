@@ -56,7 +56,7 @@ const getAllApplicationData = async () => {
 
     const contacts = contactsRes.rows.map(keysToCamel);
 
-    // Attach memberships and contacts
+    // Attach memberships
     const usersWithMemberships = users.map(user => ({
         ...user,
         campaignIds: campaignAgentsRes.rows.filter(ca => ca.user_id === user.id).map(ca => ca.campaign_id),
@@ -67,10 +67,18 @@ const getAllApplicationData = async () => {
         memberIds: userGroupMembersRes.rows.filter(ugm => ugm.group_id === group.id).map(ugm => ugm.user_id),
     }));
     
-    // FIX: Corrected property name from co.campaign_id to co.campaignId for filtering
+    // Efficiently attach contacts to campaigns using a Map
+    const contactsByCampaignId = new Map<string, any[]>();
+    contacts.forEach(contact => {
+        if (!contactsByCampaignId.has(contact.campaignId)) {
+            contactsByCampaignId.set(contact.campaignId, []);
+        }
+        contactsByCampaignId.get(contact.campaignId)!.push(contact);
+    });
+
     const campaignsWithContacts = campaignsRaw.map(c => ({
         ...c,
-        contacts: contacts.filter(co => co.campaignId === c.id)
+        contacts: contactsByCampaignId.get(c.id) || []
     }));
 
 
