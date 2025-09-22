@@ -67,9 +67,10 @@ const getAllApplicationData = async () => {
         memberIds: userGroupMembersRes.rows.filter(ugm => ugm.group_id === group.id).map(ugm => ugm.user_id),
     }));
     
+    // FIX: Corrected property name from co.campaign_id to co.campaignId for filtering
     const campaignsWithContacts = campaignsRaw.map(c => ({
         ...c,
-        contacts: contacts.filter(co => co.campaign_id === c.id)
+        contacts: contacts.filter(co => co.campaignId === c.id)
     }));
 
 

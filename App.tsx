@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 // Fix: Add missing 'CallHistoryRecord' type import.
 import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, ContactNote, CallHistoryRecord } from './types.ts';
@@ -192,7 +193,7 @@ const App: React.FC = () => {
         await fetchApplicationData();
     };
 
-    // Campaigns
+    // Campaigns & Contacts
     const handleSaveCampaign = async (campaign: Campaign) => {
         const isNew = !campaigns.some(c => c.id === campaign.id);
         const url = isNew ? '/api/campaigns' : `/api/campaigns/${campaign.id}`;
@@ -205,6 +206,14 @@ const App: React.FC = () => {
     };
     const handleImportContacts = async (campaignId: string, contacts: Contact[]) => {
         await apiCall(`/api/campaigns/${campaignId}/contacts`, 'POST', { contacts });
+        await fetchApplicationData();
+    };
+    const handleUpdateContact = async (contact: Contact) => {
+        await apiCall(`/api/contacts/${contact.id}`, 'PUT', contact);
+        await fetchApplicationData();
+    };
+    const handleDeleteContacts = async (contactIds: string[]) => {
+        await apiCall('/api/contacts', 'DELETE', { contactIds });
         await fetchApplicationData();
     };
     const handleInsertContact = async (campaignId: string, contactData: Record<string, any>, phoneNumber: string) => {
@@ -344,7 +353,7 @@ const App: React.FC = () => {
         currentUser,
         users, onSaveUser: handleSaveUser, onDeleteUser: handleDeleteUser, onGenerateUsers: handleGenerateUsers, onImportUsers: handleGenerateUsers,
         userGroups, onSaveUserGroup: handleSaveUserGroup, onDeleteUserGroup: handleDeleteUserGroup,
-        campaigns, onSaveCampaign: handleSaveCampaign, onDeleteCampaign: handleDeleteCampaign, onImportContacts: handleImportContacts,
+        campaigns, onSaveCampaign: handleSaveCampaign, onDeleteCampaign: handleDeleteCampaign, onImportContacts: handleImportContacts, onUpdateContact: handleUpdateContact, onDeleteContacts: handleDeleteContacts,
         savedScripts, onSaveOrUpdateScript: handleSaveOrUpdateScript, onDeleteScript: handleDeleteScript, onDuplicateScript: handleDuplicateScript,
         ivrFlows, onSaveOrUpdateIvrFlow: handleSaveOrUpdateIvrFlow, onDeleteIvrFlow: handleDeleteIvrFlow, onDuplicateIvrFlow: handleDuplicateIvrFlow,
         qualifications, onSaveQualification: handleSaveQualification, onDeleteQualification: handleDeleteQualification,

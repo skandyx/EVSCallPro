@@ -136,6 +136,8 @@ interface OutboundCampaignsManagerProps {
     onSaveCampaign: (campaign: Campaign) => void;
     onDeleteCampaign: (campaignId: string) => void;
     onImportContacts: (campaignId: string, contacts: Contact[]) => void;
+    onUpdateContact: (contact: Contact) => void;
+    onDeleteContacts: (contactIds: string[]) => void;
 }
 
 const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
@@ -147,6 +149,8 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
     onSaveCampaign,
     onDeleteCampaign,
     onImportContacts,
+    onUpdateContact,
+    onDeleteContacts,
 }) => {
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
@@ -200,9 +204,8 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
                 script={selectedScript}
                 onBack={() => { setView('list'); setSelectedCampaign(null); }}
                 onSaveCampaign={onSaveCampaign}
-                // Mock handlers for contact updates, to be replaced by props
-                onUpdateContact={(contact) => console.log('Update contact', contact)}
-                onDeleteContacts={(contactIds) => console.log('Delete contacts', contactIds)}
+                onUpdateContact={onUpdateContact}
+                onDeleteContacts={onDeleteContacts}
             />
         )
     }
