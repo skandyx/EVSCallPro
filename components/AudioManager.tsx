@@ -1,7 +1,6 @@
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import type { Feature, AudioFile } from '../types.ts';
-import { PlusIcon, EditIcon, TrashIcon, PlayIcon } from './Icons.tsx';
+import { PlusIcon, EditIcon, TrashIcon, PlayIcon, PauseIcon, XMarkIcon } from './Icons.tsx';
 
 // Helper functions
 const formatBytes = (bytes: number, decimals = 2) => {
@@ -14,6 +13,7 @@ const formatBytes = (bytes: number, decimals = 2) => {
 };
 
 const formatDuration = (seconds: number) => {
+    if (isNaN(seconds) || seconds < 1) return '00:00';
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = Math.round(seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
@@ -99,6 +99,47 @@ const AudioModal: React.FC<AudioModalProps> = ({ audioFile, onSave, onClose }) =
     );
 };
 
+// --- Player Component ---
+interface PlayerProps {
+    file: AudioFile | null;
+    isPlaying: boolean;
+    progress: number;
+    currentTime: number;
+    duration: number;
+    onPlayPause: () => void;
+    onSeek: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onClose: () => void;
+}
+
+const Player: React.FC<PlayerProps> = ({ file, isPlaying, progress, currentTime, duration, onPlayPause, onSeek, onClose }) => {
+    if (!file) return null;
+
+    return (
+        <div className="fixed bottom-4 right-4 left-4 lg:left-auto lg:w-96 bg-slate-800 text-white rounded-lg shadow-2xl p-4 z-50 flex items-center gap-4 animate-fade-in-up">
+            <button onClick={onPlayPause} className="p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 flex-shrink-0">
+                {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+            </button>
+            <div className="flex-1 min-w-0">
+                <p className="font-semibold truncate">{file.name}</p>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>{formatDuration(currentTime)}</span>
+                    <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={progress}
+                        onChange={onSeek}
+                        className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-400"
+                    />
+                    <span>{formatDuration(duration)}</span>
+                </div>
+            </div>
+            <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-700 flex-shrink-0" title="Fermer le lecteur">
+                <XMarkIcon className="w-5 h-5 text-slate-400"/>
+            </button>
+        </div>
+    );
+};
 
 // Main component
 interface AudioManagerProps {
@@ -112,6 +153,82 @@ const AudioManager: React.FC<AudioManagerProps> = ({ feature, audioFiles, onSave
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingFile, setEditingFile] = useState<AudioFile | null>(null);
 
+    // Player state
+    const [playingFileId, setPlayingFileId] = useState<string | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const audioRef = useRef<HTMLAudioElement>(null);
+
+    const playingFile = useMemo(() => audioFiles.find(f => f.id === playingFileId), [audioFiles, playingFileId]);
+
+    // Effect to control audio playback
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        if (playingFileId) {
+            // NOTE: Using a placeholder audio source as we can't access local files.
+            // In a real app, this would be `audio.src = file.url;`
+            const dummyAudioSrc = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3`; 
+            if (audio.src !== dummyAudioSrc) {
+                audio.src = dummyAudioSrc;
+                // Reset progress for new file
+                setProgress(0);
+                setCurrentTime(0);
+            }
+            if (isPlaying) {
+                audio.play().catch(e => console.error("Audio play failed:", e));
+            } else {
+                audio.pause();
+            }
+        } else {
+            audio.pause();
+            audio.src = '';
+        }
+    }, [playingFileId, isPlaying]);
+
+    // Effect for audio event listeners
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        const handleTimeUpdate = () => {
+            setCurrentTime(audio.currentTime);
+            setProgress(audio.duration ? (audio.currentTime / audio.duration) * 100 : 0);
+        };
+        const handleLoadedMetadata = () => setDuration(audio.duration);
+        const handleEnded = () => setIsPlaying(false);
+
+        audio.addEventListener('timeupdate', handleTimeUpdate);
+        audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+        audio.addEventListener('ended', handleEnded);
+
+        return () => {
+            audio.removeEventListener('timeupdate', handleTimeUpdate);
+            audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+            audio.removeEventListener('ended', handleEnded);
+        };
+    }, []);
+
+    const handlePlayPauseClick = (fileId: string) => {
+        if (playingFileId === fileId) {
+            setIsPlaying(!isPlaying);
+        } else {
+            setPlayingFileId(fileId);
+            setIsPlaying(true);
+        }
+    };
+
+    const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const audio = audioRef.current;
+        if (!audio || !isFinite(duration)) return;
+        const newTime = (Number(e.target.value) / 100) * duration;
+        audio.currentTime = newTime;
+        setCurrentTime(newTime);
+    };
+
     const handleAddNew = () => {
         setEditingFile(null);
         setIsModalOpen(true);
@@ -124,6 +241,9 @@ const AudioManager: React.FC<AudioManagerProps> = ({ feature, audioFiles, onSave
     
     const handleDelete = (fileId: string, fileName: string) => {
         if (window.confirm(`Êtes-vous sûr de vouloir supprimer le fichier "${fileName}" ?`)) {
+            if (fileId === playingFileId) {
+                setPlayingFileId(null);
+            }
             onDeleteAudioFile(fileId);
         }
     };
@@ -136,6 +256,9 @@ const AudioManager: React.FC<AudioManagerProps> = ({ feature, audioFiles, onSave
     return (
         <div className="max-w-5xl mx-auto space-y-8">
             {isModalOpen && <AudioModal audioFile={editingFile} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
+            {/* The audio element is hidden but present in the DOM for playback control */}
+            <audio ref={audioRef} />
+
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>
                 <p className="mt-2 text-lg text-slate-600">{feature.description}</p>
@@ -166,8 +289,8 @@ const AudioManager: React.FC<AudioManagerProps> = ({ feature, audioFiles, onSave
                             {audioFiles.map(file => (
                                 <tr key={file.id}>
                                     <td className="px-6 py-4">
-                                        <button className="text-slate-500 hover:text-indigo-600" title="Écouter">
-                                            <PlayIcon className="w-5 h-5"/>
+                                        <button onClick={() => handlePlayPauseClick(file.id)} className="text-slate-500 hover:text-indigo-600" title={playingFileId === file.id && isPlaying ? 'Mettre en pause' : 'Écouter'}>
+                                            {playingFileId === file.id && isPlaying ? <PauseIcon className="w-5 h-5 text-indigo-600"/> : <PlayIcon className="w-5 h-5"/>}
                                         </button>
                                     </td>
                                     <td className="px-6 py-4 font-medium text-slate-800">{file.name}</td>
@@ -186,6 +309,17 @@ const AudioManager: React.FC<AudioManagerProps> = ({ feature, audioFiles, onSave
                      {audioFiles.length === 0 && <p className="text-center py-8 text-slate-500">Aucun fichier audio importé.</p>}
                 </div>
             </div>
+
+            <Player
+                file={playingFile}
+                isPlaying={isPlaying}
+                progress={progress}
+                currentTime={currentTime}
+                duration={duration}
+                onPlayPause={() => playingFileId && handlePlayPauseClick(playingFileId)}
+                onSeek={handleSeek}
+                onClose={() => setPlayingFileId(null)}
+            />
         </div>
     );
 };
