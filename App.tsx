@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 // Fix: Add missing 'CallHistoryRecord' type import.
 import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, ContactNote, CallHistoryRecord } from './types.ts';
@@ -226,6 +222,28 @@ const App: React.FC = () => {
             throw error;
         }
     };
+
+    const handleRequestNextContact = async (campaignId: string): Promise<Contact | null> => {
+        return new Promise(resolve => {
+            let nextContact: Contact | null = null;
+            setCampaigns(prevCampaigns => {
+                const newCampaigns = JSON.parse(JSON.stringify(prevCampaigns));
+                const campaignIndex = newCampaigns.findIndex((c: Campaign) => c.id === campaignId);
+
+                if (campaignIndex > -1) {
+                    const contactIndex = newCampaigns[campaignIndex].contacts.findIndex((c: Contact) => c.status === 'pending');
+                    if (contactIndex > -1) {
+                        // "Lock" the contact by changing its status immediately
+                        newCampaigns[campaignIndex].contacts[contactIndex].status = 'called';
+                        nextContact = newCampaigns[campaignIndex].contacts[contactIndex];
+                    }
+                }
+                return newCampaigns;
+            });
+            // Resolve the promise with the found contact (or null)
+            resolve(nextContact);
+        });
+    };
     
     // Scripts
     const handleSaveOrUpdateScript = async (script: SavedScript) => {
@@ -346,6 +364,7 @@ const App: React.FC = () => {
             apiCall={apiCall}
             onSaveContactNote={handleSaveContactNote}
             onInsertContact={handleInsertContact}
+            onRequestNextContact={handleRequestNextContact}
         />;
     }
     

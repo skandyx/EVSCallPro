@@ -6,47 +6,6 @@ const getCampaigns = async () => {
     return res.rows.map(keysToCamel);
 };
 
-const getNextContactForAgent = async (agentId, campaignId) => {
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        const findQuery = `
-            SELECT id FROM contacts
-            WHERE campaign_id = $1 AND status = 'pending'
-            ORDER BY created_at ASC
-            LIMIT 1
-            FOR UPDATE SKIP LOCKED;
-        `;
-        const findRes = await client.query(findQuery, [campaignId]);
-
-        if (findRes.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return null; // No available contact
-        }
-
-        const contactId = findRes.rows[0].id;
-
-        const updateQuery = `
-            UPDATE contacts 
-            SET status = 'locked', locked_by_agent_id = $1, updated_at = NOW()
-            WHERE id = $2
-            RETURNING *;
-        `;
-        const updateRes = await client.query(updateQuery, [agentId, contactId]);
-        
-        await client.query('COMMIT');
-        return keysToCamel(updateRes.rows[0]);
-
-    } catch (e) {
-        await client.query('ROLLBACK');
-        console.error("Error in getNextContactForAgent transaction:", e);
-        throw e;
-    } finally {
-        client.release();
-    }
-};
-
 const saveCampaign = async (campaign, id) => {
     const { name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime, quotaRules, filterRules } = campaign;
     const quotaRulesJson = JSON.stringify(quotaRules || []);
@@ -84,29 +43,32 @@ const importContacts = async (campaignId, contacts, deduplicationConfig) => {
         let duplicatesFound = 0;
         const validContactsToInsert = [];
         
+        // --- Server-side Deduplication Logic ---
         if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
             const existingKeys = new Set();
             
-            // 1. Fetch existing contacts and build a set of normalized composite keys
-            const { rows: existingContactsData } = await client.query(`
-                SELECT first_name, last_name, phone_number, postal_code, custom_fields 
-                FROM contacts WHERE campaign_id = $1
-            `, [campaignId]);
+            // 1. Build a set of existing composite keys for the target campaign
+            const fieldsToSelect = deduplicationConfig.fieldIds.map(fieldId => {
+                const snakeCaseField = fieldId.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                if (['first_name', 'last_name', 'phone_number', 'postal_code'].includes(snakeCaseField)) {
+                    return snakeCaseField;
+                }
+                return `custom_fields ->> '${fieldId}' AS ${fieldId.replace(/-/g, '_')}`; // Use alias for custom fields
+            }).join(', ');
+
+            const { rows: existingContactsData } = await client.query(`SELECT ${fieldsToSelect} FROM contacts WHERE campaign_id = $1`, [campaignId]);
             
-            existingContactsData.forEach(dbRow => {
-                const contactAsObject = { ...keysToCamel(dbRow), ...(dbRow.custom_fields || {}) };
-                const key = deduplicationConfig.fieldIds
-                    .map(fieldId => String(contactAsObject[fieldId] || '').replace(/\s/g, '').toLowerCase())
-                    .join('||');
+            const createCompositeKey = (data, fields) => fields.map(field => String(data[field.replace(/-/g, '_')] || '').trim().toLowerCase()).join('||');
+            
+            existingContactsData.forEach(row => {
+                const key = createCompositeKey(row, deduplicationConfig.fieldIds);
                 if (key) existingKeys.add(key);
             });
 
             // 2. Filter incoming contacts against existing and in-file keys
             contacts.forEach(contact => {
                 const allContactData = { ...contact, ...(contact.customFields || {}) };
-                const key = deduplicationConfig.fieldIds
-                    .map(fieldId => String(allContactData[fieldId] || '').replace(/\s/g, '').toLowerCase())
-                    .join('||');
+                const key = deduplicationConfig.fieldIds.map(fieldId => String(allContactData[fieldId] || '').trim().toLowerCase()).join('||');
                 
                 if (key && existingKeys.has(key)) {
                     duplicatesFound++;
@@ -116,6 +78,7 @@ const importContacts = async (campaignId, contacts, deduplicationConfig) => {
                 }
             });
         } else {
+            // If deduplication is disabled, all contacts are considered valid for insertion
             validContactsToInsert.push(...contacts);
         }
 
@@ -211,51 +174,6 @@ const updateContact = async (contactId, contactData) => {
 };
 
 
-const updateContactData = async (contactId, data) => {
-    const { tel2, tel3, formValues } = data;
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        // Update standard fields and custom fields from formValues
-        const standardFieldsToUpdate = {};
-        const customFieldsToUpdate = {};
-
-        for (const key in formValues) {
-            if (['firstName', 'lastName', 'phoneNumber', 'postalCode'].includes(key)) {
-                standardFieldsToUpdate[key] = formValues[key];
-            } else {
-                customFieldsToUpdate[key] = formValues[key];
-            }
-        }
-        
-        let query = 'UPDATE contacts SET custom_fields = custom_fields || $2';
-        const params = [contactId, JSON.stringify(customFieldsToUpdate)];
-
-        Object.entries(standardFieldsToUpdate).forEach(([key, value]) => {
-            const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-            params.push(value);
-            query += `, ${dbKey} = $${params.length}`;
-        });
-        
-        if (tel2) { params.push(tel2); query += `, tel2 = $${params.length}`; }
-        if (tel3) { params.push(tel3); query += `, tel3 = $${params.length}`; }
-        
-        query += ' WHERE id = $1 RETURNING *';
-
-        const res = await client.query(query, params);
-
-        await client.query('COMMIT');
-        return keysToCamel(res.rows[0]);
-    } catch (e) {
-        await client.query('ROLLBACK');
-        throw e;
-    } finally {
-        client.release();
-    }
-};
-
-
 const deleteContacts = async (contactIds) => {
     if (!contactIds || contactIds.length === 0) return;
     await pool.query('DELETE FROM contacts WHERE id = ANY($1::text[])', [contactIds]);
@@ -264,12 +182,10 @@ const deleteContacts = async (contactIds) => {
 
 module.exports = {
     getCampaigns,
-    getNextContactForAgent,
     saveCampaign,
     deleteCampaign,
     importContacts,
     createSingleContact,
     updateContact,
-    updateContactData,
     deleteContacts,
 };

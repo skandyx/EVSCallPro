@@ -90,20 +90,11 @@ const CampaignDetailView: React.FC<CampaignDetailViewProps> = ({ campaign, scrip
             { id: 'status', name: 'Statut' },
         ];
         if (!script) return standard;
-        
-        // Get script fields, excluding those marked as standard, and ensuring uniqueness.
         const scriptHeaders = script.pages.flatMap(p => p.blocks)
-            .filter(b => 
-                !b.isStandard && // Exclude fields marked as standard.
-                b.fieldName && 
-                ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(b.type)
-            )
+            .filter(b => ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(b.type))
             .map(b => ({ id: b.fieldName, name: b.name }));
         
-        // Ensure uniqueness among custom script fields
-        const uniqueScriptHeaders = scriptHeaders.filter((sh, i, self) => i === self.findIndex(s => s.id === sh.id));
-        
-        return [...standard, ...uniqueScriptHeaders];
+        return [...standard, ...scriptHeaders.filter((sh, i, self) => i === self.findIndex(s => s.id === sh.id))];
     }, [script]);
 
     const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {

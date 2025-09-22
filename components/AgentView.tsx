@@ -26,22 +26,8 @@ interface AgentViewProps {
     apiCall: (url: string, method: string, body?: any) => Promise<any>;
     onSaveContactNote: (contactId: string, campaignId: string, note: string) => Promise<void>;
     onInsertContact: (campaignId: string, contactData: Record<string, any>, phoneNumber: string) => Promise<void>;
+    onRequestNextContact: (campaignId: string) => Promise<Contact | null>;
 }
-
-const CallSimulationModal: React.FC<{ log: string[]; }> = ({ log }) => {
-    return (
-        <div className="absolute inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center p-4 z-20">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-                <h3 className="text-lg font-semibold text-slate-800 mb-4">Simulation Click-to-Call en cours...</h3>
-                <div className="bg-slate-800 text-white font-mono text-xs rounded-md p-4 h-64 overflow-y-auto">
-                    {log.map((line, index) => (
-                        <p key={index} className="whitespace-pre-wrap animate-fade-in">{`> ${line}`}</p>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const ToastNotification: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => (
     <div className="absolute top-4 right-4 w-full max-w-sm bg-white rounded-lg shadow-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden z-50 animate-fade-in-down">
@@ -114,12 +100,10 @@ const DialpadPopover: React.FC<{
     );
 };
 
-const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScripts, sites, personalCallbacks, qualifications, qualificationGroups, onLogout, apiCall, onSaveContactNote, onInsertContact }) => {
+const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScripts, sites, personalCallbacks, qualifications, qualificationGroups, onLogout, apiCall, onSaveContactNote, onInsertContact, onRequestNextContact }) => {
     const [ctiStatus, setCtiStatus] = useState<AgentCtiStatus>('LOGGED_OUT');
     const [statusTimer, setStatusTimer] = useState(0);
     const [currentContact, setCurrentContact] = useState<Contact | null>(null);
-    const [isSimulatingCall, setIsSimulatingCall] = useState(false);
-    const [simulationLog, setSimulationLog] = useState<string[]>([]);
     const [activeCampaignId, setActiveCampaignId] = useState<string | null>(agent.campaignIds?.[0] || null);
     const [notification, setNotification] = useState<{ id: string, message: string } | null>(null);
     const [shownNotificationIds, setShownNotificationIds] = useState<Set<string>>(new Set());
@@ -149,15 +133,8 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
     const countdownIntervalRef = useRef<number | null>(null);
     const [isQualified, setIsQualified] = useState(false);
 
-    // Fix: Add state to manage agent script form values.
-    const [formValues, setFormValues] = useState<Record<string, any>>({});
-    const handleFormChange = (fieldName: string, value: any) => {
-        setFormValues(prev => ({ ...prev, [fieldName]: value }));
-    };
-
     const agentCampaigns = useMemo(() => {
-        // Fix: Added a fallback for agent.campaignIds to prevent crash if it's undefined.
-        return campaigns.filter(c => (agent.campaignIds || []).includes(c.id));
+        return campaigns.filter(c => agent.campaignIds.includes(c.id));
     }, [agent, campaigns]);
 
     const activeCampaign = useMemo(() => {
@@ -168,22 +145,6 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
         if (!activeCampaign?.scriptId) return null;
         return savedScripts.find(s => s.id === activeCampaign.scriptId);
     }, [activeCampaign, savedScripts]);
-
-    // Fix: Effect to populate form with contact data when a contact is loaded.
-    useEffect(() => {
-        if (currentContact) {
-            const initialFormValues: Record<string, any> = {
-                ...(currentContact.customFields || {}),
-                'first_name': currentContact.firstName || '',
-                'last_name': currentContact.lastName || '',
-                'phone_number': currentContact.phoneNumber || '',
-                'postal_code': currentContact.postalCode || '',
-            };
-            setFormValues(initialFormValues);
-        } else {
-            setFormValues({});
-        }
-    }, [currentContact]);
 
     // Fetch notes when contact changes
     useEffect(() => {
@@ -299,8 +260,6 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
         setWrapUpCountdown(null);
         setCallbackDateTime('');
         setIsQualified(false);
-        // Fix: Clear form values when the wrap-up period ends.
-        setFormValues({});
     }, [previousActiveCampaignIdBeforeCallback]);
 
     useEffect(() => {
@@ -346,34 +305,16 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
         setStatusTimer(0);
     };
     
-    const startCallSimulation = (contact: Contact) => {
-        setIsSimulatingCall(true);
-        setSimulationLog([]);
+    const handleLaunchCall = async () => {
+        if (!activeCampaignId) return;
+        
+        const lockedContact = await onRequestNextContact(activeCampaignId);
 
-        const agentSite = sites.find(s => s.id === agent.siteId);
-        const steps = [
-            { delay: 100, message: "Début de la séquence d'appel..." },
-            { delay: 800, message: `Agent: ${agent.firstName} ${agent.lastName} (Extension: ${agent.loginId})` },
-            { delay: 800, message: `Site de l'agent détecté: ${agentSite ? agentSite.name : 'Inconnu'}` },
-            { delay: 1000, message: `Connexion à l'API du Yeastar PBX: ${agentSite ? agentSite.yeastarIp : 'N/A'}` },
-            { delay: 1500, message: `Envoi de la commande 'Originate' :\n  Canal 1 (Agent)   : SIP/${agent.loginId}\n  Canal 2 (Client)  : ${contact.phoneNumber}` },
-            { delay: 2000, message: "COMMANDE REÇUE PAR LE PBX." },
-            { delay: 2500, message: `Votre téléphone (extension ${agent.loginId}) sonne. Veuillez décrocher pour initier l'appel vers le client.` },
-            { delay: 2000, message: "Agent a décroché." },
-            { delay: 1000, message: `Appel vers le client ${contact.phoneNumber} en cours...` },
-            { delay: 1500, message: "Appel connecté. Transfert vers l'interface agent." },
-        ];
-
-        let cumulativeDelay = 0;
-        steps.forEach(step => {
-            cumulativeDelay += step.delay;
-            setTimeout(() => setSimulationLog(prev => [...prev, step.message]), cumulativeDelay);
-        });
-
-        setTimeout(() => {
-            setIsSimulatingCall(false);
-            startCallSession(contact);
-        }, cumulativeDelay + 1000);
+        if (lockedContact) {
+            startCallSession(lockedContact);
+        } else {
+            alert("Plus de contacts disponibles dans cette campagne pour le moment.");
+        }
     };
 
     const handleCallbackCall = (callback: PersonalCallback) => {
@@ -385,7 +326,7 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
 
         setPreviousActiveCampaignIdBeforeCallback(activeCampaignId);
         setActiveCampaignId(callback.campaignId);
-        startCallSimulation(contact);
+        startCallSession(contact);
     };
 
     const handleManualDial = () => {
@@ -393,7 +334,6 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
             alert("Veuillez d'abord sélectionner une campagne pour pouvoir qualifier l'appel.");
             return;
         }
-        console.log(`Appel manuel initié pour : ${dialedNumber}`);
         setIsDialpadOpen(false);
 
         const manualContact: Contact = {
@@ -402,10 +342,10 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
             lastName: `(${dialedNumber})`,
             phoneNumber: dialedNumber,
             postalCode: '',
-            status: 'pending',
+            status: 'called',
         };
 
-        startCallSimulation(manualContact);
+        startCallSession(manualContact);
         setDialedNumber('');
     };
     
@@ -481,20 +421,8 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
         return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
 
-    // Fix: Wrapper function to clear form after successful contact insertion.
-    const handleInsertContactAndClearForm = async (campaignId: string, contactData: Record<string, any>, phoneNumber: string) => {
-        // The original onInsertContact prop from App.tsx handles the API call.
-        await onInsertContact(campaignId, contactData, phoneNumber);
-        // After the API call succeeds, clear the local form state.
-        setFormValues({});
-    };
-
     const renderMainPanel = () => {
-        if (isSimulatingCall) {
-            return <CallSimulationModal log={simulationLog} />;
-        }
-    
-        if (agentScript && activeCampaign && (ctiStatus === 'IN_CALL' || ctiStatus === 'WAITING')) {
+        if (agentScript && activeCampaign && (ctiStatus === 'IN_CALL' || (ctiStatus === 'WAITING' && currentContact))) {
             return <AgentPreview 
                 script={agentScript} 
                 onClose={() => {}} 
@@ -506,10 +434,7 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
                 setNewNote={setNewNote}
                 onSaveNote={handleSaveNote}
                 campaign={activeCampaign}
-                // Fix: Pass form state, handler, and the new insert function.
-                formValues={formValues}
-                onFormChange={handleFormChange}
-                onInsertContact={handleInsertContactAndClearForm}
+                onInsertContact={onInsertContact}
             />;
         }
     
@@ -680,7 +605,7 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
                             <p className="text-lg text-slate-800 font-bold">{nextContactToCall.firstName} {nextContactToCall.lastName}</p>
                             <div className="flex items-center justify-between mt-2">
                                 <p className="text-md text-slate-600 font-mono">{nextContactToCall.phoneNumber}</p>
-                                <button onClick={() => startCallSimulation(nextContactToCall)} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded-md inline-flex items-center text-sm">
+                                <button onClick={handleLaunchCall} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded-md inline-flex items-center text-sm">
                                     <PhoneArrowUpRightIcon className="w-4 h-4 mr-2"/> Lancer l'appel
                                 </button>
                             </div>
