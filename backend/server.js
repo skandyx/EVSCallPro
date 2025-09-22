@@ -574,7 +574,7 @@ app.post('/api/scripts/:id/duplicate', authMiddleware, handleRequest(async (req,
 app.post('/api/ivr-flows', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveIvrFlow(req.body))));
 app.put('/api/ivr-flows/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveIvrFlow(req.body, req.params.id))));
 app.delete('/api/ivr-flows/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteIvrFlow(req.params.id); res.status(204).send(); }));
-app.post('/api/ivr-flows/:id/duplicate', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.duplicateIvrFlow(req.params.id))));
+app.post('/api/ivr-flows/:id}/duplicate', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.duplicateIvrFlow(req.params.id))));
 
 // Qualifications
 /**

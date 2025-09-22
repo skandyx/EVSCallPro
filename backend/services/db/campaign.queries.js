@@ -40,56 +40,58 @@ const importContacts = async (campaignId, contacts, deduplicationConfig) => {
     try {
         await client.query('BEGIN');
 
-        const insertedContacts = [];
         let duplicatesFound = 0;
-        
-        const existingKeys = new Set();
+        const validContactsToInsert = [];
         
         // --- Server-side Deduplication Logic ---
         if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
+            const existingKeys = new Set();
+            
+            // 1. Build a set of existing composite keys for the target campaign
             const fieldsToSelect = deduplicationConfig.fieldIds.map(fieldId => {
-                 // Convert camelCase to snake_case for DB query
                 const snakeCaseField = fieldId.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
                 if (['first_name', 'last_name', 'phone_number', 'postal_code'].includes(snakeCaseField)) {
                     return snakeCaseField;
                 }
-                // For custom fields, we need to access the JSONB structure
-                return `custom_fields ->> '${fieldId}' AS ${fieldId}`;
+                return `custom_fields ->> '${fieldId}' AS ${fieldId.replace(/-/g, '_')}`; // Use alias for custom fields
             }).join(', ');
 
             const { rows: existingContactsData } = await client.query(`SELECT ${fieldsToSelect} FROM contacts WHERE campaign_id = $1`, [campaignId]);
-
-            const createCompositeKey = (data, fields) => fields.map(field => String(data[field] || '').trim().toLowerCase()).join('||');
+            
+            const createCompositeKey = (data, fields) => fields.map(field => String(data[field.replace(/-/g, '_')] || '').trim().toLowerCase()).join('||');
             
             existingContactsData.forEach(row => {
                 const key = createCompositeKey(row, deduplicationConfig.fieldIds);
                 if (key) existingKeys.add(key);
             });
-        }
-        
-        for (const contact of contacts) {
-            if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
+
+            // 2. Filter incoming contacts against existing and in-file keys
+            contacts.forEach(contact => {
                 const allContactData = { ...contact, ...(contact.customFields || {}) };
                 const key = deduplicationConfig.fieldIds.map(fieldId => String(allContactData[fieldId] || '').trim().toLowerCase()).join('||');
-
+                
                 if (key && existingKeys.has(key)) {
                     duplicatesFound++;
-                    continue; // Skip this contact, it's a duplicate
+                } else {
+                    validContactsToInsert.push(contact);
+                    if (key) existingKeys.add(key); // Add to set to catch duplicates within the file itself
                 }
-                if (key) {
-                    existingKeys.add(key);
-                }
-            }
+            });
+        } else {
+            // If deduplication is disabled, all contacts are considered valid for insertion
+            validContactsToInsert.push(...contacts);
+        }
 
-            const res = await client.query(
-                'INSERT INTO contacts (id, campaign_id, first_name, last_name, phone_number, postal_code, status, custom_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+        // 3. Batch insert the valid contacts
+        for (const contact of validContactsToInsert) {
+             await client.query(
+                'INSERT INTO contacts (id, campaign_id, first_name, last_name, phone_number, postal_code, status, custom_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
                 [contact.id, campaignId, contact.firstName, contact.lastName, contact.phoneNumber, contact.postalCode, 'pending', JSON.stringify(contact.customFields || {})]
             );
-            insertedContacts.push(keysToCamel(res.rows[0]));
         }
         
         await client.query('COMMIT');
-        return { insertedCount: insertedContacts.length, duplicatesFound };
+        return { insertedCount: validContactsToInsert.length, duplicatesFound };
     } catch(e) {
         await client.query('ROLLBACK');
         console.error("Error during contact import transaction:", e);

@@ -7,7 +7,8 @@ declare var XLSX: any;
 
 interface ImportContactsModalProps {
     onClose: () => void;
-    onImport: (newContacts: Contact[]) => void;
+    // Fix: Update the onImport signature to include deduplicationConfig
+    onImport: (newContacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => void;
     campaign: Campaign;
     script: SavedScript | null;
 }
@@ -215,7 +216,8 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
     const handleFinalImport = () => {
         if (!summary) return;
         const contactsToImport = summary.valids.map(({ originalRow, ...contact }) => contact);
-        onImport(contactsToImport);
+        // Fix: Pass deduplicationConfig along with contacts
+        onImport(contactsToImport, deduplicationConfig);
         setStep(5);
     };
     
