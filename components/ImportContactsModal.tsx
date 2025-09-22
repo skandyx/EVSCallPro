@@ -47,7 +47,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
         const scriptFields = script.pages
             .flatMap(page => page.blocks)
             .filter((block: ScriptBlock) => 
-                ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(block.type) && block.fieldName
+                ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(block.type) && block.fieldName && !block.isStandard
             )
             .map((block: ScriptBlock) => ({ id: block.fieldName, name: block.name, required: false }));
 
@@ -85,24 +85,34 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                 if (!fileContent) throw new Error("Le contenu du fichier est vide.");
 
                 let headers: string[] = [];
-                let data: CsvRow[] = [];
+                let parsedData: any[] = [];
                 const fileNameLower = selectedFile.name.toLowerCase();
 
                 if (fileNameLower.endsWith('.xlsx')) {
                     const workbook = XLSX.read(fileContent, { type: 'binary' });
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
-                    data = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as CsvRow[];
-                    if (data.length > 0) headers = Object.keys(data[0]);
+                    parsedData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
                 } else {
                     const result = Papa.parse(fileContent as string, { header: true, skipEmptyLines: true, encoding: "UTF-8" });
                     if (result.errors.length > 0) console.warn("Erreurs de parsing:", result.errors);
-                    headers = result.meta.fields || [];
-                    data = result.data as CsvRow[];
+                    parsedData = result.data;
+                }
+
+                // --- DATA NORMALIZATION STEP ---
+                // Crucial fix: Ensure all values are strings to prevent type mismatches (e.g., numbers from Excel).
+                const normalizedData = parsedData.map(row => 
+                    Object.fromEntries(
+                        Object.entries(row).map(([key, value]) => [key, String(value).trim()])
+                    )
+                );
+
+                if (normalizedData.length > 0) {
+                    headers = Object.keys(normalizedData[0]);
                 }
 
                 setCsvHeaders(headers);
-                setCsvData(data);
+                setCsvData(normalizedData as CsvRow[]);
                 
                 const initialMappings: Record<string, string> = {};
                 const usedHeaders = new Set<string>();
@@ -141,26 +151,30 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
         
         const getVal = (row: CsvRow, fieldId: string) => (mappings[fieldId] ? row[mappings[fieldId]] : '') || '';
         
+        const createCompositeKey = (data: Record<string, any>, fields: string[], customFields?: Record<string, any>) => {
+            return fields.map(fieldId => {
+                if (customFields && fieldId in customFields) return String(customFields[fieldId]);
+                if (Object.prototype.hasOwnProperty.call(data, fieldId)) return String((data as any)[fieldId]);
+                return '';
+            }).map(v => v.trim().toLowerCase()).join('||');
+        };
+
         let existingValues = new Set<string>();
         if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
-            const existingContactsKeys = campaign.contacts.map(c => {
-                return deduplicationConfig.fieldIds.map(fieldId => {
-                    if (c.customFields && fieldId in c.customFields) return c.customFields[fieldId];
-                    if (Object.prototype.hasOwnProperty.call(c, fieldId)) return (c as any)[fieldId];
-                    return '';
-                }).map(v => String(v).trim().toLowerCase()).join('||');
+            campaign.contacts.forEach(c => {
+                 const key = createCompositeKey(c, deduplicationConfig.fieldIds, c.customFields);
+                 if(key) existingValues.add(key);
             });
-            existingValues = new Set(existingContactsKeys.filter(Boolean));
         }
         
         const importedValues = new Set<string>();
 
         csvData.forEach((row) => {
-            const phoneNumber = getVal(row, 'phoneNumber').trim().replace(/\s/g, '');
+            const phoneNumber = getVal(row, 'phoneNumber').replace(/\s/g, '');
             if (!phoneNumber) { invalids.push({ row, reason: "Le numéro de téléphone est manquant." }); return; }
 
             if(deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
-                const compositeKey = deduplicationConfig.fieldIds
+                 const compositeKey = deduplicationConfig.fieldIds
                     .map(fieldId => getVal(row, fieldId).trim().toLowerCase())
                     .join('||');
                 
@@ -184,10 +198,10 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
 
             valids.push({
                 id: `contact-import-${Date.now()}-${Math.random()}`,
-                firstName: getVal(row, 'firstName').trim(),
-                lastName: getVal(row, 'lastName').trim(),
+                firstName: getVal(row, 'firstName'),
+                lastName: getVal(row, 'lastName'),
                 phoneNumber,
-                postalCode: getVal(row, 'postalCode').trim(),
+                postalCode: getVal(row, 'postalCode'),
                 status: 'pending',
                 customFields,
                 originalRow: row
