@@ -31,7 +31,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
     const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
     const [csvData, setCsvData] = useState<CsvRow[]>([]);
     const [mappings, setMappings] = useState<Record<string, string>>({});
-    const [deduplicationConfig, setDeduplicationConfig] = useState({ enabled: true, fieldId: 'phoneNumber' });
+    const [deduplicationConfig, setDeduplicationConfig] = useState({ enabled: true, fieldIds: ['phoneNumber'] });
     const [summary, setSummary] = useState<{ total: number; valids: ValidatedContact[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
 
     const availableFieldsForImport = useMemo(() => {
@@ -58,6 +58,22 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
 
         return [...standardFields, ...uniqueScriptFields];
     }, [script]);
+    
+    const handleDedupeFieldChange = (fieldId: string, isChecked: boolean) => {
+        setDeduplicationConfig(prev => {
+            const currentIds = prev.fieldIds;
+            let newFieldIds;
+            if (isChecked) {
+                newFieldIds = [...currentIds, fieldId];
+            } else {
+                if (currentIds.length === 1 && currentIds[0] === fieldId) {
+                    return prev; 
+                }
+                newFieldIds = currentIds.filter(id => id !== fieldId);
+            }
+            return { ...prev, fieldIds: newFieldIds };
+        });
+    };
 
     const handleFileSelect = (selectedFile: File) => {
         setFile(selectedFile);
@@ -126,12 +142,15 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
         const getVal = (row: CsvRow, fieldId: string) => (mappings[fieldId] ? row[mappings[fieldId]] : '') || '';
         
         let existingValues = new Set<string>();
-        if (deduplicationConfig.enabled) {
-            existingValues = new Set(campaign.contacts.map(c => {
-                 if (c.customFields && deduplicationConfig.fieldId in c.customFields) return c.customFields[deduplicationConfig.fieldId];
-                 if (Object.prototype.hasOwnProperty.call(c, deduplicationConfig.fieldId)) return (c as any)[deduplicationConfig.fieldId];
-                 return '';
-            }).map(v => String(v).trim().toLowerCase()).filter(Boolean));
+        if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
+            const existingContactsKeys = campaign.contacts.map(c => {
+                return deduplicationConfig.fieldIds.map(fieldId => {
+                    if (c.customFields && fieldId in c.customFields) return c.customFields[fieldId];
+                    if (Object.prototype.hasOwnProperty.call(c, fieldId)) return (c as any)[fieldId];
+                    return '';
+                }).map(v => String(v).trim().toLowerCase()).join('||');
+            });
+            existingValues = new Set(existingContactsKeys.filter(Boolean));
         }
         
         const importedValues = new Set<string>();
@@ -140,13 +159,18 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
             const phoneNumber = getVal(row, 'phoneNumber').trim().replace(/\s/g, '');
             if (!phoneNumber) { invalids.push({ row, reason: "Le numéro de téléphone est manquant." }); return; }
 
-            if(deduplicationConfig.enabled) {
-                const dedupeValue = getVal(row, deduplicationConfig.fieldId).trim().toLowerCase();
-                if(dedupeValue) {
-                    if (existingValues.has(dedupeValue) || importedValues.has(dedupeValue)) {
-                        invalids.push({ row, reason: `Doublon sur le critère '${availableFieldsForImport.find(f => f.id === deduplicationConfig.fieldId)?.name}'.` }); return;
+            if(deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
+                const compositeKey = deduplicationConfig.fieldIds
+                    .map(fieldId => getVal(row, fieldId).trim().toLowerCase())
+                    .join('||');
+                
+                if (compositeKey) {
+                    if (existingValues.has(compositeKey) || importedValues.has(compositeKey)) {
+                        const criteriaNames = deduplicationConfig.fieldIds.map(id => availableFieldsForImport.find(f => f.id === id)?.name).join(', ');
+                        invalids.push({ row, reason: `Doublon sur le(s) critère(s) : ${criteriaNames}.` });
+                        return;
                     }
-                    importedValues.add(dedupeValue);
+                    importedValues.add(compositeKey);
                 }
             }
             
@@ -243,10 +267,21 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                         </div>
                         {deduplicationConfig.enabled && (
                             <div>
-                                <label className="block text-sm font-medium text-slate-700">Critère de dédoublonnage</label>
-                                <select value={deduplicationConfig.fieldId} onChange={e => setDeduplicationConfig(c => ({...c, fieldId: e.target.value}))} className="mt-1 w-full p-2 border bg-white rounded-md">
-                                    {availableFieldsForImport.map(field => <option key={field.id} value={field.id}>{field.name}</option>)}
-                                </select>
+                                <label className="block text-sm font-medium text-slate-700">Critères de dédoublonnage (un ou plusieurs)</label>
+                                <div className="mt-1 max-h-48 overflow-y-auto rounded-md border p-2 space-y-2 bg-white">
+                                    {availableFieldsForImport.map(field => (
+                                        <div key={field.id} className="flex items-center p-1 rounded-md hover:bg-slate-50">
+                                            <input
+                                                id={`dedupe-${field.id}`}
+                                                type="checkbox"
+                                                checked={deduplicationConfig.fieldIds.includes(field.id)}
+                                                onChange={e => handleDedupeFieldChange(field.id, e.target.checked)}
+                                                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                                            />
+                                            <label htmlFor={`dedupe-${field.id}`} className="ml-3 text-sm text-slate-600">{field.name}</label>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
