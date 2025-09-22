@@ -154,10 +154,11 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
         
         const createCompositeKey = (data: Record<string, any>, fields: string[], customFields?: Record<string, any>) => {
             return fields.map(fieldId => {
-                if (customFields && fieldId in customFields) return String(customFields[fieldId]);
-                if (Object.prototype.hasOwnProperty.call(data, fieldId)) return String((data as any)[fieldId]);
-                return '';
-            }).map(v => v.trim().toLowerCase()).join('||');
+                let value: any = '';
+                if (customFields && fieldId in customFields) value = customFields[fieldId];
+                else if (Object.prototype.hasOwnProperty.call(data, fieldId)) value = (data as any)[fieldId];
+                return String(value || '').replace(/\s/g, '').toLowerCase();
+            }).join('||');
         };
 
         let existingValues = new Set<string>();
@@ -176,7 +177,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
 
             if(deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
                  const compositeKey = deduplicationConfig.fieldIds
-                    .map(fieldId => getVal(row, fieldId).trim().toLowerCase())
+                    .map(fieldId => getVal(row, fieldId).replace(/\s/g, '').toLowerCase())
                     .join('||');
                 
                 if (compositeKey) {

@@ -43,32 +43,29 @@ const importContacts = async (campaignId, contacts, deduplicationConfig) => {
         let duplicatesFound = 0;
         const validContactsToInsert = [];
         
-        // --- Server-side Deduplication Logic ---
         if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
             const existingKeys = new Set();
             
-            // 1. Build a set of existing composite keys for the target campaign
-            const fieldsToSelect = deduplicationConfig.fieldIds.map(fieldId => {
-                const snakeCaseField = fieldId.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-                if (['first_name', 'last_name', 'phone_number', 'postal_code'].includes(snakeCaseField)) {
-                    return snakeCaseField;
-                }
-                return `custom_fields ->> '${fieldId}' AS ${fieldId.replace(/-/g, '_')}`; // Use alias for custom fields
-            }).join(', ');
-
-            const { rows: existingContactsData } = await client.query(`SELECT ${fieldsToSelect} FROM contacts WHERE campaign_id = $1`, [campaignId]);
+            // 1. Fetch existing contacts and build a set of normalized composite keys
+            const { rows: existingContactsData } = await client.query(`
+                SELECT first_name, last_name, phone_number, postal_code, custom_fields 
+                FROM contacts WHERE campaign_id = $1
+            `, [campaignId]);
             
-            const createCompositeKey = (data, fields) => fields.map(field => String(data[field.replace(/-/g, '_')] || '').trim().toLowerCase()).join('||');
-            
-            existingContactsData.forEach(row => {
-                const key = createCompositeKey(row, deduplicationConfig.fieldIds);
+            existingContactsData.forEach(dbRow => {
+                const contactAsObject = { ...keysToCamel(dbRow), ...(dbRow.custom_fields || {}) };
+                const key = deduplicationConfig.fieldIds
+                    .map(fieldId => String(contactAsObject[fieldId] || '').replace(/\s/g, '').toLowerCase())
+                    .join('||');
                 if (key) existingKeys.add(key);
             });
 
             // 2. Filter incoming contacts against existing and in-file keys
             contacts.forEach(contact => {
                 const allContactData = { ...contact, ...(contact.customFields || {}) };
-                const key = deduplicationConfig.fieldIds.map(fieldId => String(allContactData[fieldId] || '').trim().toLowerCase()).join('||');
+                const key = deduplicationConfig.fieldIds
+                    .map(fieldId => String(allContactData[fieldId] || '').replace(/\s/g, '').toLowerCase())
+                    .join('||');
                 
                 if (key && existingKeys.has(key)) {
                     duplicatesFound++;
@@ -78,7 +75,6 @@ const importContacts = async (campaignId, contacts, deduplicationConfig) => {
                 }
             });
         } else {
-            // If deduplication is disabled, all contacts are considered valid for insertion
             validContactsToInsert.push(...contacts);
         }
 
