@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 // Fix: Add missing 'CallHistoryRecord' type import.
 import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, ContactNote, CallHistoryRecord } from './types.ts';
@@ -351,6 +352,7 @@ const App: React.FC = () => {
     const featureComponentProps: any = {
         feature: activeFeature,
         currentUser,
+        apiCall, // <-- FIX: Pass the apiCall function to all feature components
         users, onSaveUser: handleSaveUser, onDeleteUser: handleDeleteUser, onGenerateUsers: handleGenerateUsers, onImportUsers: handleGenerateUsers,
         userGroups, onSaveUserGroup: handleSaveUserGroup, onDeleteUserGroup: handleDeleteUserGroup,
         campaigns, onSaveCampaign: handleSaveCampaign, onDeleteCampaign: handleDeleteCampaign, onImportContacts: handleImportContacts, onUpdateContact: handleUpdateContact, onDeleteContacts: handleDeleteContacts,
@@ -395,7 +397,6 @@ const App: React.FC = () => {
                             systemLogs={mockData.systemLogs}
                             versionInfo={mockData.versionInfo}
                             connectivityServices={mockData.connectivityServices}
-// Fix: Pass the missing `apiCall` prop to the MonitoringDashboard component.
                             apiCall={apiCall}
                         />
                     ) : (
