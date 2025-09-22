@@ -68,12 +68,12 @@ const getAllApplicationData = async () => {
     }));
     
     // Efficiently attach contacts to campaigns using a Map
-    const contactsByCampaignId = new Map<string, any[]>();
+    const contactsByCampaignId = new Map();
     contacts.forEach(contact => {
         if (!contactsByCampaignId.has(contact.campaignId)) {
             contactsByCampaignId.set(contact.campaignId, []);
         }
-        contactsByCampaignId.get(contact.campaignId)!.push(contact);
+        contactsByCampaignId.get(contact.campaignId).push(contact);
     });
 
     const campaignsWithContacts = campaignsRaw.map(c => ({
