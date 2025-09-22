@@ -426,6 +426,19 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
     };
 
     const renderMainPanel = () => {
+        if (ctiStatus !== 'LOGGED_OUT' && agentCampaigns.length === 0) {
+            return (
+                <div className="w-full h-full flex flex-col items-center justify-center text-center p-8">
+                    <InformationCircleIcon className="w-16 h-16 text-slate-400 mb-4"/>
+                    <h2 className="text-2xl font-semibold text-slate-800">Aucune campagne assignée</h2>
+                    <p className="text-lg text-slate-500 mt-2 max-w-md">
+                        Votre compte est actif, mais vous n'êtes assigné à aucune campagne d'appel pour le moment.
+                        Veuillez contacter votre administrateur pour qu'il vous ajoute à une campagne.
+                    </p>
+                </div>
+            );
+        }
+
         if (agentScript && activeCampaign && (ctiStatus === 'IN_CALL' || (ctiStatus === 'WAITING' && currentContact))) {
             return <AgentPreview 
                 script={agentScript} 

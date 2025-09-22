@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Feature } from '../types.ts';
 import { DatabaseIcon, PlayIcon, InformationCircleIcon, CheckIcon, XMarkIcon } from './Icons.tsx';
 
@@ -15,16 +15,6 @@ const PREDEFINED_QUERIES = [
     { name: 'Lister les scripts', query: 'SELECT id, name FROM scripts;' },
 ];
 
-const SCHEMA_INFO: Record<string, string[]> = {
-    'users': ['id', 'login_id', 'first_name', 'last_name', 'email', 'role', 'is_active', 'password_hash', 'site_id'],
-    'campaigns': ['id', 'name', 'description', 'script_id', 'qualification_group_id', 'caller_id', 'is_active', 'dialing_mode', 'wrap_up_time', 'quota_rules', 'filter_rules'],
-    'contacts': ['id', 'campaign_id', 'first_name', 'last_name', 'phone_number', 'postal_code', 'status', 'custom_fields'],
-    'scripts': ['id', 'name', 'pages', 'start_page_id', 'background_color'],
-    'qualifications': ['id', 'code', 'description', 'type', 'group_id', 'is_standard', 'parent_id'],
-    'call_history': ['id', 'timestamp', 'direction', 'agent_id', 'campaign_id', 'caller_number', 'duration', 'qualification_id'],
-    // Add other tables as needed
-};
-
 const ToggleSwitch: React.FC<{ enabled: boolean; onChange: (enabled: boolean) => void; }> = ({ enabled, onChange }) => (
     <button type="button" onClick={() => onChange(!enabled)} className={`${enabled ? 'bg-indigo-600' : 'bg-slate-200'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out`} role="switch" aria-checked={enabled}>
         <span aria-hidden="true" className={`${enabled ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`} />
@@ -37,6 +27,22 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isReadOnly, setIsReadOnly] = useState(true);
+    const [schema, setSchema] = useState<Record<string, string[]> | null>(null);
+    const [isSchemaLoading, setIsSchemaLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchSchema = async () => {
+            try {
+                const schemaData = await apiCall('/api/db-schema', 'GET');
+                setSchema(schemaData);
+            } catch (err) {
+                setError("Impossible de charger le schéma de la base de données.");
+            } finally {
+                setIsSchemaLoading(false);
+            }
+        };
+        fetchSchema();
+    }, [apiCall]);
 
     const isWriteQuery = !isReadOnly && /^(UPDATE|DELETE|INSERT|DROP|CREATE|ALTER|TRUNCATE)\b/i.test(query.trim());
 
@@ -90,6 +96,24 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
         )
     };
 
+    const SchemaViewer: React.FC = () => {
+        if (isSchemaLoading) return <div className="p-2 text-sm text-slate-500">Chargement du schéma...</div>;
+        if (!schema) return <div className="p-2 text-sm text-red-500">Erreur de chargement du schéma.</div>;
+
+        return (
+             <div className="overflow-y-auto text-sm space-y-1">
+                {Object.entries(schema).map(([table, columns]) => (
+                    <details key={table}>
+                        <summary className="font-semibold cursor-pointer p-1 rounded hover:bg-slate-100">{table}</summary>
+                        <ul className="pl-4 mt-1">
+                            {columns.map(col => <li key={col} className="text-xs text-slate-600 font-mono p-0.5">{col}</li>)}
+                        </ul>
+                    </details>
+                ))}
+            </div>
+        )
+    };
+
     return (
         <div className="h-full flex flex-col space-y-6">
             <header>
@@ -112,16 +136,7 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
                 <div className="col-span-3 flex flex-col space-y-4">
                     <div className="bg-white p-3 rounded-lg shadow-sm border h-1/2 flex flex-col">
                         <h3 className="font-semibold text-slate-800 border-b pb-2 mb-2 flex-shrink-0">Schéma</h3>
-                        <div className="overflow-y-auto text-sm space-y-1">
-                            {Object.entries(SCHEMA_INFO).map(([table, columns]) => (
-                                <details key={table}>
-                                    <summary className="font-semibold cursor-pointer p-1 rounded hover:bg-slate-100">{table}</summary>
-                                    <ul className="pl-4 mt-1">
-                                        {columns.map(col => <li key={col} className="text-xs text-slate-600 font-mono p-0.5">{col}</li>)}
-                                    </ul>
-                                </details>
-                            ))}
-                        </div>
+                        <SchemaViewer />
                     </div>
                     <div className="bg-white p-3 rounded-lg shadow-sm border h-1/2 flex flex-col">
                         <h3 className="font-semibold text-slate-800 border-b pb-2 mb-2 flex-shrink-0">Requêtes Prédéfinies</h3>

@@ -270,6 +270,25 @@ app.get('/api/system-stats', authMiddleware, handleRequest(async (req, res) => {
     }
 }));
 
+// DB Schema Endpoint (SuperAdmin Only)
+/**
+ * @openapi
+ * /db-schema:
+ *   get:
+ *     summary: Récupère le schéma de la base de données (tables et colonnes). (SuperAdmin)
+ *     tags: [Base de Données]
+ *     responses:
+ *       200:
+ *         description: "Un objet représentant le schéma de la base de données."
+ *       403:
+ *         description: "Accès refusé."
+ */
+app.get('/api/db-schema', authMiddleware, superAdminOnly, handleRequest(async (req, res) => {
+    const schema = await db.getDatabaseSchema();
+    res.json(schema);
+}));
+
+
 // DB Query Endpoint (SuperAdmin Only)
 /**
  * @openapi
