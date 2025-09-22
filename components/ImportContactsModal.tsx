@@ -7,7 +7,6 @@ declare var XLSX: any;
 
 interface ImportContactsModalProps {
     onClose: () => void;
-    // Fix: Update the onImport signature to include deduplicationConfig
     onImport: (newContacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => void;
     campaign: Campaign;
     script: SavedScript | null;
@@ -100,8 +99,6 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                     parsedData = result.data;
                 }
 
-                // --- DATA NORMALIZATION STEP ---
-                // Crucial fix: Ensure all values are strings to prevent type mismatches (e.g., numbers from Excel).
                 const normalizedData = parsedData.map(row => 
                     Object.fromEntries(
                         Object.entries(row).map(([key, value]) => [key, String(value).trim()])
@@ -115,23 +112,32 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                 setCsvHeaders(headers);
                 setCsvData(normalizedData as CsvRow[]);
                 
-                const initialMappings: Record<string, string> = {};
-                const usedHeaders = new Set<string>();
-
-                availableFieldsForImport.forEach(field => {
-                    const fieldNameLower = field.name.toLowerCase().replace(/[\s/]+/g, '').replace(/[^\w]/g, '');
-                    let foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '').replace(/[^\w]/g, '') === fieldNameLower);
-                    if (!foundHeader) {
+                const initialMappings: Record<string, string> = {}; // {[csvHeader]: destinationFieldId}
+                const usedDestFields = new Set<string>();
+    
+                headers.forEach(header => {
+                    const headerLower = header.toLowerCase().replace(/[\s\-_]+/g, '').replace(/[^\w]/g, '');
+                    
+                    let foundField = availableFieldsForImport.find(field =>
+                        !usedDestFields.has(field.id) &&
+                        field.name.toLowerCase().replace(/[\s/]+/g, '').replace(/[^\w]/g, '') === headerLower
+                    );
+                
+                    if (!foundField) {
                         const flexibleMatches: { [key: string]: string[] } = { phoneNumber: ['telephone', 'phone', 'numero'], firstName: ['prenom', 'first'], lastName: ['nom', 'last'], postalCode: ['cp', 'postal', 'zip'] };
-                        const alternatives = flexibleMatches[field.id] || [];
-                        for(const alt of alternatives) {
-                            foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '').replace(/[^\w]/g, '').includes(alt));
-                            if(foundHeader) break;
+                        for (const field of availableFieldsForImport) {
+                            if (usedDestFields.has(field.id)) continue;
+                            const alternatives = flexibleMatches[field.id] || [];
+                            if (alternatives.some(alt => headerLower.includes(alt))) {
+                                foundField = field;
+                                break;
+                            }
                         }
                     }
-                    if (foundHeader) {
-                        initialMappings[field.id] = foundHeader;
-                        usedHeaders.add(foundHeader);
+                
+                    if (foundField) {
+                        initialMappings[header] = foundField.id;
+                        usedDestFields.add(foundField.id);
                     }
                 });
                 setMappings(initialMappings);
@@ -150,7 +156,17 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
         const valids: ValidatedContact[] = [];
         const invalids: { row: CsvRow; reason: string }[] = [];
         
-        const getVal = (row: CsvRow, fieldId: string) => (mappings[fieldId] ? row[mappings[fieldId]] : '') || '';
+        const reverseMappings: Record<string, string> = {};
+        Object.entries(mappings).forEach(([csvHeader, destFieldId]) => {
+            if (destFieldId) {
+                reverseMappings[destFieldId] = csvHeader;
+            }
+        });
+    
+        const getVal = (row: CsvRow, fieldId: string) => {
+            const header = reverseMappings[fieldId];
+            return header ? (row[header] || '') : '';
+        };
         
         const createCompositeKey = (data: Record<string, any>, fields: string[], customFields?: Record<string, any>) => {
             return fields.map(fieldId => {
@@ -173,7 +189,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
 
         csvData.forEach((row) => {
             const phoneNumber = getVal(row, 'phoneNumber').replace(/\s/g, '');
-            if (!phoneNumber) { invalids.push({ row, reason: "Le numéro de téléphone est manquant." }); return; }
+            if (!phoneNumber) { invalids.push({ row, reason: "Le numéro de téléphone est manquant (colonne non mappée ou vide)." }); return; }
 
             if(deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
                  const compositeKey = deduplicationConfig.fieldIds
@@ -217,7 +233,6 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
     const handleFinalImport = () => {
         if (!summary) return;
         const contactsToImport = summary.valids.map(({ originalRow, ...contact }) => contact);
-        // Fix: Pass deduplicationConfig along with contacts
         onImport(contactsToImport, deduplicationConfig);
         setStep(5);
     };
@@ -242,12 +257,10 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
 
     const isNextDisabled = useMemo(() => {
         if (step === 1 && !file) return true;
-        if (step === 3 && !mappings['phoneNumber']) return true;
+        if (step === 3 && !Object.values(mappings).includes('phoneNumber')) return true;
         return false;
     }, [step, file, mappings]);
     
-    const usedCsvHeaders = Object.values(mappings);
-
     const renderStepContent = () => {
         switch (step) {
             case 1: // Upload
@@ -304,26 +317,42 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                     </div>
                 );
             case 3: // Mapping
+                const usedDestinationFields = Object.values(mappings);
                 return (
-                     <div className="space-y-3">
-                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination (à gauche). Le numéro de téléphone est obligatoire.</p>
-                        <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
-                            {availableFieldsForImport.map(field => (
-                                <div key={field.id} className="grid grid-cols-2 gap-4 items-center p-1">
-                                    <span className="font-medium text-slate-700 truncate">{field.name} {field.required && <span className="text-red-500">*</span>}</span>
-                                    <select value={mappings[field.id] || ''} onChange={e => {
-                                            const newCsvHeader = e.target.value;
+                     <div className="flex flex-col h-full space-y-3">
+                        <p className="text-sm text-slate-600 flex-shrink-0">Faites correspondre les colonnes de votre fichier (à gauche) aux champs de destination (à droite). Le numéro de téléphone est obligatoire.</p>
+                        <div className="flex-1 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50 min-h-0">
+                            {csvHeaders.map(header => (
+                                <div key={header} className="grid grid-cols-2 gap-4 items-center p-1">
+                                    <span className="font-medium text-slate-700 truncate" title={header}>{header}</span>
+                                    <select
+                                        value={mappings[header] || ''}
+                                        onChange={e => {
+                                            const newDestFieldId = e.target.value;
                                             setMappings(prev => {
                                                 const newMappings = { ...prev };
-                                                Object.keys(newMappings).forEach(key => { if(newMappings[key] === newCsvHeader) delete newMappings[key]; });
-                                                if (newCsvHeader) newMappings[field.id] = newCsvHeader; else delete newMappings[field.id];
+                                                if (newDestFieldId) {
+                                                    Object.keys(newMappings).forEach(key => {
+                                                        if (newMappings[key] === newDestFieldId) {
+                                                            delete newMappings[key];
+                                                        }
+                                                    });
+                                                }
+                                                if (newDestFieldId) {
+                                                    newMappings[header] = newDestFieldId;
+                                                } else {
+                                                    delete newMappings[header];
+                                                }
                                                 return newMappings;
                                             });
-                                        }} className="w-full p-2 border bg-white rounded-md"
+                                        }}
+                                        className="w-full p-2 border bg-white rounded-md"
                                     >
                                         <option value="">Ignorer ce champ</option>
-                                        {csvHeaders.map(header => (
-                                            <option key={header} value={header} disabled={usedCsvHeaders.includes(header) && mappings[field.id] !== header}>{header}</option>
+                                        {availableFieldsForImport.map(field => (
+                                            <option key={field.id} value={field.id} disabled={usedDestinationFields.includes(field.id) && mappings[header] !== field.id}>
+                                                {field.name} {field.required && '*'}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -334,23 +363,25 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
             case 4: // Summary
                 if (!summary) return null;
                 return (
-                    <div className="space-y-4">
-                        <h3 className="text-xl font-semibold text-slate-800">Résumé de la validation</h3>
-                        <div className="grid grid-cols-3 gap-4 text-center">
-                            <div className="bg-slate-50 p-4 rounded-md border"><p className="text-2xl font-bold">{summary.total}</p><p className="text-sm text-slate-500">Lignes lues</p></div>
-                            <div className="bg-green-50 p-4 rounded-md border border-green-200"><p className="text-2xl font-bold text-green-700">{summary.valids.length}</p><p className="text-sm text-green-600">Contacts à importer</p></div>
-                            <div className="bg-red-50 p-4 rounded-md border border-red-200"><p className="text-2xl font-bold text-red-700">{summary.invalids.length}</p><p className="text-sm text-red-600">Lignes invalides</p></div>
+                    <div className="flex flex-col h-full space-y-4">
+                        <div className="flex-shrink-0">
+                            <h3 className="text-xl font-semibold text-slate-800">Résumé de la validation</h3>
+                            <div className="grid grid-cols-3 gap-4 text-center mt-4">
+                                <div className="bg-slate-50 p-4 rounded-md border"><p className="text-2xl font-bold">{summary.total}</p><p className="text-sm text-slate-500">Lignes lues</p></div>
+                                <div className="bg-green-50 p-4 rounded-md border border-green-200"><p className="text-2xl font-bold text-green-700">{summary.valids.length}</p><p className="text-sm text-green-600">Contacts à importer</p></div>
+                                <div className="bg-red-50 p-4 rounded-md border border-red-200"><p className="text-2xl font-bold text-red-700">{summary.invalids.length}</p><p className="text-sm text-red-600">Lignes invalides</p></div>
+                            </div>
                         </div>
                         {summary.invalids.length > 0 && (
-                            <div>
-                                <div className="flex justify-between items-center mb-2">
+                            <div className="flex flex-col flex-1 min-h-0">
+                                <div className="flex justify-between items-center mb-2 flex-shrink-0">
                                     <h4 className="font-semibold text-slate-700">Détail des erreurs</h4>
                                     <button onClick={handleExportInvalids} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1.5">
                                         <ArrowDownTrayIcon className="w-4 h-4" />
                                         Exporter les lignes invalides
                                     </button>
                                 </div>
-                                <div className="max-h-80 overflow-y-auto text-sm border rounded-md bg-slate-50">
+                                <div className="flex-1 overflow-y-auto text-sm border rounded-md bg-slate-50 min-h-0">
                                     <table className="min-w-full"><thead className="bg-slate-200 sticky top-0"><tr className="text-left"><th className="p-2">Ligne</th><th className="p-2">Erreur</th></tr></thead>
                                         <tbody>{summary.invalids.map((item, i) => ( <tr key={i} className="border-t"><td className="p-2 font-mono text-xs">{JSON.stringify(item.row)}</td><td className="p-2 text-red-600">{item.reason}</td></tr> ))}</tbody>
                                     </table>
