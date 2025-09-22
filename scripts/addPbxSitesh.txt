@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# ==============================================================================
+# Script d'Ajout de Site PBX Yeastar pour EVSCallPro
+# ==============================================================================
+# Ce script interactif guide l'administrateur pour ajouter une nouvelle
+# configuration de PBX Yeastar à la base de données du CRM.
+# Il demande les informations nécessaires et les insère de manière sécurisée.
+#
+# Usage : bash scripts/addPbxSite.sh
+# ==============================================================================
+
+# -- Couleur pour les messages --
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}--- Assistant d'Ajout de Site PBX Yeastar ---${NC}"
+echo "Ce script va vous aider à enregistrer un nouveau PBX dans le CRM."
+echo ""
+
+# --- Récupération des informations du site ---
+echo -e "${YELLOW}Étape 1/3 : Informations sur le site${NC}"
+read -p "ID du site (ex: site-paris, doit être unique): " SITE_ID
+read -p "Nom du site (ex: Agence de Paris): " SITE_NAME
+
+if [[ -z "$SITE_ID" ]] || [[ -z "$SITE_NAME" ]]; then
+    echo -e "${RED}Erreur : L'ID et le nom du site sont obligatoires.${NC}"
+    exit 1
+fi
+
+echo ""
+echo -e "${YELLOW}Étape 2/3 : Informations de connexion au PBX Yeastar${NC}"
+read -p "Adresse IP du PBX (ex: 10.1.0.254): " PBX_IP
+read -p "Nom d'utilisateur de l'API: " API_USER
+read -s -p "Mot de passe de l'API: " API_PASSWORD
+echo ""
+
+if [[ -z "$PBX_IP" ]] || [[ -z "$API_USER" ]] || [[ -z "$API_PASSWORD" ]]; then
+    echo -e "${RED}Erreur : L'IP, l'utilisateur et le mot de passe de l'API sont obligatoires.${NC}"
+    exit 1
+fi
+
+echo ""
+echo -e "${YELLOW}Étape 3/3 : Informations de la base de données${NC}"
+echo "Le script a besoin de se connecter à la base de données PostgreSQL."
+echo "Veuillez fournir les informations de connexion."
+
+read -p "Hôte de la BDD [localhost]: " DB_HOST
+DB_HOST=${DB_HOST:-localhost}
+read -p "Port de la BDD [5432]: " DB_PORT
+DB_PORT=${DB_PORT:-5432}
+read -p "Nom de la BDD [contact_center_db]: " DB_NAME
+DB_NAME=${DB_NAME:-contact_center_db}
+read -p "Utilisateur de la BDD [contact_center_user]: " DB_USER_DB
+DB_USER_DB=${DB_USER_DB:-contact_center_user}
+read -s -p "Mot de passe de la BDD: " DB_PASSWORD_DB
+echo ""
+
+# Exporter le mot de passe pour psql
+export PGPASSWORD=$DB_PASSWORD_DB
+
+# --- Validation et Insertion ---
+echo ""
+echo "Vérification de la connexion à la base de données..."
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_DB" -d "$DB_NAME" -c "SELECT 1;" > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Échec de la connexion à la base de données. Vérifiez les informations.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Connexion à la base de données réussie.${NC}"
+echo ""
+
+echo "Insertion des données..."
+
+# Création des requêtes SQL
+# NOTE: Dans une application réelle, le mot de passe devrait être chiffré ici avant insertion.
+# Pour ce prototype, nous le stockons en clair comme demandé, mais ce n'est PAS sécurisé.
+SQL_SITE="INSERT INTO sites (id, name, yeastar_ip, api_user, api_password, created_at, updated_at) VALUES ('$SITE_ID', '$SITE_NAME', '$PBX_IP', '$API_USER', '$API_PASSWORD', NOW(), NOW());"
+SQL_PBX_CONFIG="INSERT INTO pbx_configs (id, site_id, ip_address, api_user, api_password_encrypted, created_at, updated_at) VALUES ('pbx-$SITE_ID', '$SITE_ID', '$PBX_IP', '$API_USER', '$API_PASSWORD', NOW(), NOW());"
+
+# Exécution des requêtes
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_DB" -d "$DB_NAME" -c "$SQL_SITE"
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER_DB" -d "$DB_NAME" -c "$SQL_PBX_CONFIG"
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}Succès ! Le site '$SITE_NAME' et sa configuration PBX ont été ajoutés.${NC}"
+    echo "Le service de supervision le détectera automatiquement dans quelques secondes."
+else
+    echo -e "${RED}Une erreur est survenue lors de l'insertion des données.${NC}"
+    echo "Vérifiez que l'ID du site n'existe pas déjà."
+fi
+
+# Nettoyer la variable d'environnement
+unset PGPASSWORD

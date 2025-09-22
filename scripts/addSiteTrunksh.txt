@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# ==============================================================================
+# Script d'Ajout de Trunk Yeastar pour un Site
+# ==============================================================================
+# Ce script ajoute ou met à jour la configuration d'un peer PJSIP pour un
+# site distant dans le fichier `yeastar-trunks.conf`. Il est conçu pour être
+# appelé par un administrateur système.
+#
+# Usage : sudo bash scripts/addSiteTrunk.sh <siteId> <yeastarIp> [secret]
+#   - siteId: L'identifiant unique du site (ex: 1, 2, 3...).
+#   - yeastarIp: L'adresse IP du PBX Yeastar pour ce site.
+#   - secret: (Optionnel) Le mot de passe pour l'authentification.
+#
+# Le script est idempotent : relancer la même commande mettra à jour
+# la configuration existante si elle a changé.
+# ==============================================================================
+
+set -e # Arrête le script si une commande échoue
+
+# -- Variables --
+PJSIP_CONF_FILE="/etc/asterisk/pjsip.d/yeastar-trunks.conf"
+SITE_ID=$1
+YEASTAR_IP=$2
+SECRET=$3
+
+# -- Couleurs --
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo -e "${GREEN}--- Assistant d'Ajout de Trunk Yeastar ---${NC}"
+
+# --- Vérification des arguments ---
+if [ -z "$SITE_ID" ] || [ -z "$YEASTAR_IP" ]; then
+    echo -e "${RED}Erreur : L'ID du site et l'IP du Yeastar sont requis.${NC}"
+    echo "Usage: sudo bash $0 <siteId> <yeastarIp> [secret]"
+    exit 1
+fi
+
+# --- Vérification des droits ---
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}Erreur : Ce script doit être exécuté en tant que root.${NC}"
+  exit 1
+fi
+
+# --- Génération de la configuration du peer ---
+PEER_NAME="yeastar-site${SITE_ID}"
+CONFIG_BLOCK="
+; -- Configuration pour le site ${SITE_ID} --
+[${PEER_NAME}]
+type=endpoint
+context=from-yeastar
+disallow=all
+allow=ulaw
+allow=alaw
+direct_media=yes
+transport=transport-udp
+aors=${PEER_NAME}
+"
+
+# Ajoute l'authentification par IP (identify)
+CONFIG_BLOCK+="\n[${PEER_NAME}]\ntype=identify\nendpoint=${PEER_NAME}\nmatch=${YEASTAR_IP}\n"
+
+# Ajoute l'AOR (Address of Record)
+CONFIG_BLOCK+="\n[${PEER_NAME}]\ntype=aor\nmax_contacts=1\n"
+
+# Ajoute l'authentification par mot de passe si un secret est fourni
+if [ -n "$SECRET" ]; then
+    CONFIG_BLOCK+="\n[${PEER_NAME}]\ntype=auth\nauth_type=userpass\npassword=${SECRET}\nusername=${PEER_NAME}\n"
+    # Modifie le peer pour requérir l'authentification
+    CONFIG_BLOCK=$(echo -e "$CONFIG_BLOCK" | sed "/aors=${PEER_NAME}/a outbound_auth=${PEER_NAME}")
+    echo -e "${YELLOW}Configuration avec authentification par mot de passe.${NC}"
+else
+    echo -e "${YELLOW}Configuration avec authentification par adresse IP uniquement.${NC}"
+fi
+
+# --- Mise à jour du fichier de configuration ---
+echo "Mise à jour du fichier ${PJSIP_CONF_FILE}..."
+
+# Supprimer l'ancienne configuration pour ce peer si elle existe
+if grep -q "\[${PEER_NAME}\]" "$PJSIP_CONF_FILE"; then
+    echo "Configuration existante pour ${PEER_NAME} trouvée. Mise à jour..."
+    # Utilise sed pour supprimer toutes les sections liées à ce peer.
+    # C'est plus complexe mais plus robuste qu'un simple grep.
+    sed -i "/; -- Configuration pour le site ${SITE_ID} --/,/^\s*$/ s/.*//g" "$PJSIP_CONF_FILE"
+    # Nettoyer les lignes vides excessives
+    sed -i '/^$/N;/^\n$/D' "$PJSIP_CONF_FILE"
+fi
+
+# Ajouter la nouvelle configuration à la fin du fichier
+echo -e "$CONFIG_BLOCK" >> "$PJSIP_CONF_FILE"
+echo "" >> "$PJSIP_CONF_FILE" # Ajoute une ligne vide pour la lisibilité
+
+echo -e "${GREEN}Fichier de configuration mis à jour.${NC}"
+
+# --- Application des permissions et rechargement ---
+echo "Application des permissions..."
+chown asterisk:asterisk "$PJSIP_CONF_FILE"
+
+echo "Rechargement du module PJSIP d'Asterisk..."
+asterisk -rx "pjsip reload"
+
+echo ""
+echo -e "${GREEN}Le trunk pour le site ${SITE_ID} a été configuré avec succès !${NC}"

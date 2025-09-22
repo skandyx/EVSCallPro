@@ -1,0 +1,50 @@
+# ==========================================================
+# Fichier d'exemple pour les variables d'environnement
+# ==========================================================
+# Copiez ce fichier en .env et remplissez les valeurs
+# pour votre environnement de développement ou de production.
+# NE JAMAIS COMMITTER LE FICHIER .env LUI-MEME.
+
+# -- Configuration de la Base de Données (PostgreSQL) --
+# Ces informations doivent correspondre à la configuration
+# effectuée dans le guide INSTALL.md
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=contact_center_user
+DB_PASSWORD=votre_mot_de_passe_securise # Le mot de passe que vous avez défini
+DB_NAME=contact_center_db
+
+# -- Configuration du Serveur AGI (Asterisk Gateway Interface) --
+# Le port sur lequel le backend écoutera les connexions d'Asterisk.
+# Doit correspondre à la configuration dans /etc/asterisk/extensions.conf
+AGI_PORT=4573
+
+# -- Configuration du Serveur API --
+# Le port sur lequel le serveur API Express écoutera.
+# C'est ce port que Nginx utilisera pour le reverse proxy.
+API_PORT=3001
+
+# -- Configuration du Client Yeastar --
+# Le mot de passe de l'API PBX est stocké en base de données,
+# mais vous pourriez vouloir définir ici des timeouts ou d'autres
+# paramètres globaux pour le client HTTP.
+YEASTAR_API_TIMEOUT=5000 # Timeout en millisecondes
+
+# ==============================================================================
+# [NOUVEAU] Configuration du Mode de Connexion à la Téléphonie
+# ==============================================================================
+# Cette variable permet de basculer entre les deux architectures de téléphonie.
+#
+# Options possibles :
+#   - 'yeastar_api': (Ancien mode) Le CRM pilote chaque Yeastar de site via son API.
+#                    Les agents utilisent des postes locaux enregistrés sur le Yeastar.
+#   - 'asterisk_ami': (Nouveau mode) Le CRM pilote un Asterisk central via AMI.
+#                     Les Yeastar ne sont que des passerelles. Les agents s'enregistrent sur l'Asterisk central.
+#
+PBX_CONNECTION_MODE=asterisk_ami
+
+# -- Configuration de l'Interface AMI d'Asterisk (si PBX_CONNECTION_MODE=asterisk_ami) --
+ASTERISK_AMI_HOST=127.0.0.1
+ASTERISK_AMI_PORT=5038
+ASTERISK_AMI_USER=ami_user
+ASTERISK_AMI_PASSWORD=ami_password

@@ -1,0 +1,84 @@
+#!/bin/bash
+
+# ==============================================================================
+# Script d'Application de la Configuration Asterisk pour EVSCallPro
+# ==============================================================================
+# Ce script automatise le déploiement sécurisé des fichiers de configuration
+# d'Asterisk générés pour l'application. Il effectue les actions suivantes :
+# 1. Crée un backup horodaté des configurations actuelles.
+# 2. Copie les nouveaux fichiers de configuration.
+# 3. Applique les bonnes permissions.
+# 4. Recharge Asterisk pour appliquer les changements.
+#
+# Usage : sudo bash scripts/apply-asterisk-config.sh
+# Doit être exécuté avec les privilèges root.
+# ==============================================================================
+
+set -e # Arrête le script si une commande échoue
+
+# -- Variables de Configuration --
+ASTERISK_CONF_DIR="/etc/asterisk"
+SOURCE_CONF_DIR="$(pwd)/asterisk-configs" # S'attend à être lancé depuis la racine du projet
+BACKUP_DIR="/etc/asterisk/backups"
+
+# -- Couleurs pour les messages --
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}--- Déploiement de la configuration Asterisk pour EVSCallPro ---${NC}"
+
+# --- Vérification des droits ---
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}Erreur : Ce script doit être exécuté en tant que root.${NC}"
+  exit 1
+fi
+
+# --- Vérification de l'existence des fichiers source ---
+if [ ! -d "$SOURCE_CONF_DIR" ]; then
+    echo -e "${RED}Erreur : Le dossier source des configurations '${SOURCE_CONF_DIR}' n'a pas été trouvé.${NC}"
+    echo "Assurez-vous de lancer ce script depuis la racine du projet."
+    exit 1
+fi
+
+# --- 1. Création du Backup ---
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+BACKUP_PATH="${BACKUP_DIR}/evscallpro_backup_${TIMESTAMP}"
+echo -e "${YELLOW}1/4 : Création d'un backup dans ${BACKUP_PATH}...${NC}"
+mkdir -p "$BACKUP_DIR"
+mkdir -p "$BACKUP_PATH"
+# Copie seulement les fichiers et dossiers que nous allons écraser
+cp -r "${ASTERISK_CONF_DIR}/pjsip.d" "$BACKUP_PATH/" 2>/dev/null || true
+cp -r "${ASTERISK_CONF_DIR}/extensions.d" "$BACKUP_PATH/" 2>/dev/null || true
+cp -r "${ASTERISK_CONF_DIR}/manager.d" "$BACKUP_PATH/" 2>/dev/null || true
+cp "${ASTERISK_CONF_DIR}/rtp.conf" "$BACKUP_PATH/" 2>/dev/null || true
+echo -e "${GREEN}Backup terminé.${NC}"
+
+# --- 2. Copie des nouveaux fichiers ---
+echo -e "${YELLOW}2/4 : Copie des nouveaux fichiers de configuration...${NC}"
+mkdir -p "${ASTERISK_CONF_DIR}/pjsip.d"
+mkdir -p "${ASTERISK_CONF_DIR}/extensions.d"
+mkdir -p "${ASTERISK_CONF_DIR}/manager.d"
+
+cp "${SOURCE_CONF_DIR}/yeastar-trunks.conf" "${ASTERISK_CONF_DIR}/pjsip.d/"
+cp "${SOURCE_CONF_DIR}/evscallpro-inbound.conf" "${ASTERISK_CONF_DIR}/extensions.d/"
+cp "${SOURCE_CONF_DIR}/evscallpro-outbound.conf" "${ASTERISK_CONF_DIR}/extensions.d/"
+cp "${SOURCE_CONF_DIR}/evscallpro.conf" "${ASTERISK_CONF_DIR}/manager.d/"
+cp "${SOURCE_CONF_DIR}/rtp.conf" "${ASTERISK_CONF_DIR}/"
+echo -e "${GREEN}Copie terminée.${NC}"
+
+# --- 3. Application des Permissions ---
+echo -e "${YELLOW}3/4 : Application des permissions pour l'utilisateur 'asterisk'...${NC}"
+chown -R asterisk:asterisk "${ASTERISK_CONF_DIR}/pjsip.d"
+chown -R asterisk:asterisk "${ASTERISK_CONF_DIR}/extensions.d"
+chown -R asterisk:asterisk "${ASTERISK_CONF_DIR}/manager.d"
+chown asterisk:asterisk "${ASTERISK_CONF_DIR}/rtp.conf"
+echo -e "${GREEN}Permissions appliquées.${NC}"
+
+# --- 4. Rechargement d'Asterisk ---
+echo -e "${YELLOW}4/4 : Rechargement des modules Asterisk pour appliquer les changements...${NC}"
+asterisk -rx "core reload"
+echo -e "${GREEN}Asterisk a été rechargé.${NC}"
+echo ""
+echo -e "${GREEN}Le déploiement de la configuration Asterisk est terminé avec succès !${NC}"

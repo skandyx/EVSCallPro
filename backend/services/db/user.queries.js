@@ -2,11 +2,19 @@ const pool = require('./connection');
 const { keysToCamel } = require('./utils');
 
 // Define safe columns to be returned, excluding sensitive ones like password_hash
-const SAFE_USER_COLUMNS = 'id, login_id, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at';
+const SAFE_USER_COLUMNS = 'id, login_id, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at, extension';
 
 const getUsers = async () => {
     const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users ORDER BY first_name, last_name`);
     return res.rows.map(keysToCamel);
+};
+
+const getUserById = async (id) => {
+    const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users WHERE id = $1`, [id]);
+    if (res.rows.length > 0) {
+        return keysToCamel(res.rows[0]);
+    }
+    return null;
 };
 
 const createUser = async (user, groupIds) => {
@@ -15,8 +23,8 @@ const createUser = async (user, groupIds) => {
         await client.query('BEGIN');
         
         const userQuery = `
-            INSERT INTO users (id, login_id, first_name, last_name, email, "role", is_active, password_hash, site_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO users (id, login_id, first_name, last_name, email, "role", is_active, password_hash, site_id, extension)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $2) -- Note: extension uses the same value as login_id ($2)
             RETURNING ${SAFE_USER_COLUMNS};
         `;
         const userRes = await client.query(userQuery, [
@@ -75,7 +83,8 @@ const updateUser = async (userId, user, groupIds) => {
         const userQuery = `
             UPDATE users SET 
                 login_id = $1, first_name = $2, last_name = $3, email = $4, 
-                "role" = $5, is_active = $6, site_id = $7
+                "role" = $5, is_active = $6, site_id = $7,
+                extension = $1 -- Note: extension is synced with login_id
                 ${passwordUpdateClause}, updated_at = NOW()
             WHERE id = $${userIdIndex}
             RETURNING ${SAFE_USER_COLUMNS};
@@ -121,6 +130,7 @@ const deleteUser = async (id) => {
 
 module.exports = {
     getUsers,
+    getUserById,
     createUser,
     updateUser,
     deleteUser,
