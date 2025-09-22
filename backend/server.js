@@ -81,6 +81,15 @@ const authMiddleware = (req, res, next) => {
     }
 };
 
+// --- Security: SuperAdmin Role Middleware ---
+const superAdminOnly = (req, res, next) => {
+    if (req.user && req.user.role === 'SuperAdmin') {
+        next();
+    } else {
+        res.status(403).json({ error: 'Accès refusé. Cette action requiert les droits de SuperAdmin.' });
+    }
+};
+
 // Helper function for consistent error handling
 const handleRequest = (handler) => async (req, res) => {
     try {
@@ -124,6 +133,8 @@ const handleRequest = (handler) => async (req, res) => {
  *     description: Gestion de la bibliothèque audio
  *   - name: Planning
  *     description: Gestion des plannings agents
+ *   - name: Base de Données
+ *     description: Accès direct à la base de données (SuperAdmin)
  */
 
 // --- Public Routes (No Auth Required) ---
@@ -256,6 +267,57 @@ app.get('/api/system-stats', authMiddleware, handleRequest(async (req, res) => {
     } catch (error) {
         console.error("Error fetching system stats:", error);
         res.status(500).json({ error: "Impossible de récupérer les statistiques système." });
+    }
+}));
+
+// DB Query Endpoint (SuperAdmin Only)
+/**
+ * @openapi
+ * /db-query:
+ *   post:
+ *     summary: Exécute une requête SQL sur la base de données. (SuperAdmin)
+ *     tags: [Base de Données]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               query: { type: string, description: "La requête SQL à exécuter." }
+ *               readOnly: { type: boolean, description: "Si true, bloque les requêtes d'écriture." }
+ *     responses:
+ *       200:
+ *         description: "Résultat de la requête, incluant les colonnes et les lignes."
+ *       400:
+ *         description: "Requête invalide ou commande d'écriture bloquée en mode lecture seule."
+ *       403:
+ *         description: "Accès refusé."
+ */
+app.post('/api/db-query', authMiddleware, superAdminOnly, handleRequest(async (req, res) => {
+    const { query, readOnly } = req.body;
+    if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Requête invalide." });
+    }
+
+    if (readOnly) {
+        const forbiddenKeywords = ['UPDATE', 'DELETE', 'INSERT', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE'];
+        const upperQuery = query.toUpperCase();
+        if (forbiddenKeywords.some(keyword => upperQuery.includes(keyword))) {
+            return res.status(400).json({ error: "Les commandes de modification sont bloquées en mode lecture seule." });
+        }
+    }
+
+    try {
+        const result = await db.executeQuery(query);
+        res.json({
+            columns: result.fields.map(f => f.name),
+            rows: result.rows,
+            rowCount: result.rowCount
+        });
+    } catch (dbError) {
+        // Erreur de la base de données (syntaxe, etc.)
+        res.status(400).json({ error: dbError.message });
     }
 }));
 

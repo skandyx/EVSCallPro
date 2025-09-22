@@ -22,7 +22,8 @@ export type FeatureId =
   | 'module-settings'
   | 'sites-config'
   | 'system-connection'
-  | 'api-docs';
+  | 'api-docs'
+  | 'database-client';
 
 export type FeatureCategory = 'Agent' | 'Outbound' | 'Inbound' | 'Sound' | 'Configuration' | 'Supervision & Reporting' | 'Système' | 'Paramètres';
 

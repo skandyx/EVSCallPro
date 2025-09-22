@@ -22,6 +22,7 @@ import ModuleSettingsManager from '../components/ModuleSettingsManager.tsx';
 import SiteManager from '../components/SiteManager.tsx';
 import SystemConnectionManager from '../components/SystemConnectionManager.tsx';
 import ApiDocs from '../components/ApiDocs.tsx';
+import DatabaseManager from '../components/DatabaseManager.tsx';
 
 export const features: Feature[] = [
     {
@@ -503,6 +504,36 @@ export const features: Feature[] = [
         simplificationTip: {
             title: 'Conseil de Simplification',
             content: "Même si vous n'avez qu'un seul emplacement physique, créez un site 'Principal'. Cela prépare votre configuration pour une future expansion et garantit le bon fonctionnement du Click-to-Call."
+        }
+    },
+    {
+        id: 'database-client',
+        title: 'Base de Données',
+        category: 'Paramètres',
+        description: 'Exécutez des requêtes SQL directement sur la base de données pour le débogage et le reporting avancé.',
+        component: DatabaseManager,
+        userJourney: {
+            title: 'Parcours: Vérifier des contacts importés',
+            steps: [
+                "Le SuperAdmin suspecte un problème avec la dernière importation de contacts.",
+                "Il va dans 'Paramètres' > 'Base de Données'.",
+                "Il clique sur la requête prédéfinie 'Lister les 20 derniers contacts'.",
+                "La requête `SELECT * FROM contacts ORDER BY created_at DESC LIMIT 20;` s'affiche dans l'éditeur.",
+                "Il exécute la requête et examine les résultats dans le tableau pour confirmer les données."
+            ],
+        },
+        specs: {
+            title: 'Spécifications Techniques',
+            points: [
+                "Accès réservé aux utilisateurs avec le rôle 'SuperAdmin'.",
+                "Mode 'Lecture Seule' activé par défaut pour empêcher les modifications accidentelles.",
+                "Validation des requêtes côté backend pour bloquer les commandes dangereuses en mode lecture seule.",
+                "Affichage dynamique des résultats dans un tableau."
+            ],
+        },
+        simplificationTip: {
+            title: 'Conseil de Sécurité',
+            content: "Utilisez toujours les requêtes prédéfinies lorsque c'est possible. Ne désactivez le mode 'Lecture Seule' qu'en cas d'absolue nécessité et après avoir doublement vérifié votre requête `UPDATE` ou `DELETE`, en particulier la clause `WHERE`."
         }
     },
     {

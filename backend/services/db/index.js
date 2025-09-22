@@ -14,6 +14,14 @@ const mediaQueries = require('./media.queries');
 const planningQueries = require('./planning.queries');
 const noteQueries = require('./note.queries');
 
+// For the DatabaseManager feature
+const executeQuery = async (query) => {
+    // Note: In a real-world scenario, you might want to add more checks here,
+    // like preventing multiple statements or specific commands even in write mode.
+    // For this prototype, the read-only check is handled in the API layer.
+    return await pool.query(query);
+};
+
 const getAllApplicationData = async () => {
     const [
         sitesRes, usersRes, userGroupsRes, campaignsRes, scriptsRes, ivrFlowsRes,
@@ -102,6 +110,7 @@ const getAllApplicationData = async () => {
 
 module.exports = {
     getAllApplicationData,
+    executeQuery,
     ...authQueries,
     ...userQueries,
     ...groupQueries,
