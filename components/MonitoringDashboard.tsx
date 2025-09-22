@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { SystemLog, VersionInfo, ConnectivityService } from '../types.ts';
 import { CpuChipIcon, CircleStackIcon, HddIcon, TimeIcon, ShieldCheckIcon, WifiIcon, TrashIcon, BugAntIcon } from './Icons.tsx';
 
@@ -6,6 +6,7 @@ interface MonitoringDashboardProps {
     systemLogs: SystemLog[];
     versionInfo: VersionInfo;
     connectivityServices: ConnectivityService[];
+    apiCall: (url: string, method: string) => Promise<any>;
 }
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
@@ -98,35 +99,43 @@ const ConnectivityTester: React.FC<{ services: ConnectivityService[] }> = ({ ser
     );
 };
 
-const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, versionInfo, connectivityServices }) => {
+const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, versionInfo, connectivityServices, apiCall }) => {
     const [stats, setStats] = useState({ cpu: 0, ram: 0, disk: 0, latency: 0 });
     const [health, setHealth] = useState<HealthStatus>('UP');
     const [latencyHistory, setLatencyHistory] = useState<number[]>(Array(20).fill(0));
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const cpu = Math.random() * 50 + 10;
-            const ram = Math.random() * 30 + 50;
-            const disk = 75.8;
-            const baseLatency = health === 'DEGRADED' ? 150 : 30;
-            const latency = Math.random() * 50 + baseLatency;
+    const fetchStats = useCallback(async () => {
+        try {
+            const startTime = performance.now();
+            const data = await apiCall('/api/system-stats', 'GET');
+            const endTime = performance.now();
 
+            const apiLatency = Math.round(endTime - startTime);
             setStats({
-                cpu: parseFloat(cpu.toFixed(1)),
-                ram: parseFloat(ram.toFixed(1)),
-                disk: disk,
-                latency: Math.round(latency),
+                cpu: parseFloat(data.cpu),
+                ram: parseFloat(data.ram),
+                disk: parseFloat(data.disk),
+                latency: apiLatency,
             });
             
-            setLatencyHistory(prev => [...prev.slice(1), latency]);
+            setLatencyHistory(prev => [...prev.slice(1), apiLatency]);
 
-            if (cpu > 80 || ram > 90) setHealth('DEGRADED');
-            else if (Math.random() > 0.995) setHealth('DOWN');
-            else setHealth('UP');
+            if (parseFloat(data.cpu) > 90 || parseFloat(data.ram) > 95) {
+                setHealth('DEGRADED');
+            } else {
+                setHealth('UP');
+            }
+        } catch (error) {
+            console.error("Failed to fetch system stats:", error);
+            setHealth('DOWN');
+        }
+    }, [apiCall]);
 
-        }, 2000);
+    useEffect(() => {
+        fetchStats(); // Initial fetch
+        const interval = setInterval(fetchStats, 2000);
         return () => clearInterval(interval);
-    }, [health]);
+    }, [fetchStats]);
 
     const logConfig = {
         INFO: { color: 'bg-sky-100 text-sky-800', icon: ShieldCheckIcon },

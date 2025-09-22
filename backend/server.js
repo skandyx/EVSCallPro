@@ -6,6 +6,7 @@ const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const si = require('systeminformation');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 
@@ -98,6 +99,8 @@ const handleRequest = (handler) => async (req, res) => {
  *     description: Connexion et gestion de session
  *   - name: Application
  *     description: Actions globales sur l'application
+ *   - name: Monitoring
+ *     description: Surveillance de l'état du système
  *   - name: Utilisateurs
  *     description: Gestion des utilisateurs et de leurs droits
  *   - name: Groupes
@@ -189,6 +192,37 @@ app.get('/api/me', authMiddleware, handleRequest(async (req, res) => {
 app.get('/api/application-data', authMiddleware, handleRequest(async (req, res) => {
     const data = await db.getAllApplicationData();
     res.json(data);
+}));
+
+/**
+ * @openapi
+ * /system-stats:
+ *   get:
+ *     summary: Récupère les statistiques système en temps réel (CPU, RAM, Disque).
+ *     tags: [Monitoring]
+ *     responses:
+ *       200:
+ *         description: Un objet contenant les métriques de santé du serveur.
+ */
+app.get('/api/system-stats', authMiddleware, handleRequest(async (req, res) => {
+    try {
+        const [cpu, mem, fs] = await Promise.all([
+            si.currentLoad(),
+            si.mem(),
+            si.fsSize()
+        ]);
+
+        const rootFs = fs.find(d => d.mount === '/');
+
+        res.json({
+            cpu: cpu.currentLoad.toFixed(1),
+            ram: ((mem.used / mem.total) * 100).toFixed(1),
+            disk: rootFs ? rootFs.use.toFixed(1) : 0,
+        });
+    } catch (error) {
+        console.error("Error fetching system stats:", error);
+        res.status(500).json({ error: "Impossible de récupérer les statistiques système." });
+    }
 }));
 
 
