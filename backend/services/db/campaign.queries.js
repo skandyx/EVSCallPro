@@ -33,28 +33,72 @@ const deleteCampaign = async (id) => {
     await pool.query('DELETE FROM campaigns WHERE id=$1', [id]);
 };
 
-const importContacts = async (campaignId, contacts) => {
-     if (!contacts || contacts.length === 0) return [];
+const importContacts = async (campaignId, contacts, deduplicationConfig) => {
+    if (!contacts || contacts.length === 0) return { insertedCount: 0, duplicatesFound: 0 };
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
         const insertedContacts = [];
+        let duplicatesFound = 0;
+        
+        const existingKeys = new Set();
+        
+        // --- Server-side Deduplication Logic ---
+        if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
+            const fieldsToSelect = deduplicationConfig.fieldIds.map(fieldId => {
+                 // Convert camelCase to snake_case for DB query
+                const snakeCaseField = fieldId.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                if (['first_name', 'last_name', 'phone_number', 'postal_code'].includes(snakeCaseField)) {
+                    return snakeCaseField;
+                }
+                // For custom fields, we need to access the JSONB structure
+                return `custom_fields ->> '${fieldId}' AS ${fieldId}`;
+            }).join(', ');
+
+            const { rows: existingContactsData } = await client.query(`SELECT ${fieldsToSelect} FROM contacts WHERE campaign_id = $1`, [campaignId]);
+
+            const createCompositeKey = (data, fields) => fields.map(field => String(data[field] || '').trim().toLowerCase()).join('||');
+            
+            existingContactsData.forEach(row => {
+                const key = createCompositeKey(row, deduplicationConfig.fieldIds);
+                if (key) existingKeys.add(key);
+            });
+        }
+        
         for (const contact of contacts) {
+            if (deduplicationConfig.enabled && deduplicationConfig.fieldIds.length > 0) {
+                const allContactData = { ...contact, ...(contact.customFields || {}) };
+                const key = deduplicationConfig.fieldIds.map(fieldId => String(allContactData[fieldId] || '').trim().toLowerCase()).join('||');
+
+                if (key && existingKeys.has(key)) {
+                    duplicatesFound++;
+                    continue; // Skip this contact, it's a duplicate
+                }
+                if (key) {
+                    existingKeys.add(key);
+                }
+            }
+
             const res = await client.query(
                 'INSERT INTO contacts (id, campaign_id, first_name, last_name, phone_number, postal_code, status, custom_fields) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
                 [contact.id, campaignId, contact.firstName, contact.lastName, contact.phoneNumber, contact.postalCode, 'pending', JSON.stringify(contact.customFields || {})]
             );
             insertedContacts.push(keysToCamel(res.rows[0]));
         }
+        
         await client.query('COMMIT');
-        return insertedContacts;
+        return { insertedCount: insertedContacts.length, duplicatesFound };
     } catch(e) {
         await client.query('ROLLBACK');
+        console.error("Error during contact import transaction:", e);
         throw e;
     } finally {
         client.release();
     }
 };
+
 
 const createSingleContact = async (campaignId, contactData, phoneNumber) => {
     const contact = {

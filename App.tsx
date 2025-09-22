@@ -205,8 +205,8 @@ const App: React.FC = () => {
         await apiCall(`/api/campaigns/${campaignId}`, 'DELETE');
         await fetchApplicationData();
     };
-    const handleImportContacts = async (campaignId: string, contacts: Contact[]) => {
-        await apiCall(`/api/campaigns/${campaignId}/contacts`, 'POST', { contacts });
+    const handleImportContacts = async (campaignId: string, contacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => {
+        await apiCall(`/api/campaigns/${campaignId}/contacts`, 'POST', { contacts, deduplicationConfig });
         await fetchApplicationData();
     };
     const handleUpdateContact = async (contact: Contact) => {

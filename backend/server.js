@@ -425,7 +425,11 @@ app.delete('/api/groups/:id', authMiddleware, handleRequest(async (req, res) => 
 app.post('/api/campaigns', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.saveCampaign(req.body))));
 app.put('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.saveCampaign(req.body, req.params.id))));
 app.delete('/api/campaigns/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteCampaign(req.params.id); res.status(204).send(); }));
-app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.importContacts(req.params.id, req.body.contacts))));
+app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req, res) => {
+    const { contacts, deduplicationConfig } = req.body;
+    const result = await db.importContacts(req.params.id, contacts, deduplicationConfig);
+    res.status(201).json(result);
+}));
 
 // Contact Notes & Single Contact creation
 /**

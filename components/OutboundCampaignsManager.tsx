@@ -135,7 +135,7 @@ interface OutboundCampaignsManagerProps {
     qualificationGroups: QualificationGroup[];
     onSaveCampaign: (campaign: Campaign) => void;
     onDeleteCampaign: (campaignId: string) => void;
-    onImportContacts: (campaignId: string, contacts: Contact[]) => void;
+    onImportContacts: (campaignId: string, contacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => void;
     onUpdateContact: (contact: Contact) => void;
     onDeleteContacts: (contactIds: string[]) => void;
 }
@@ -185,9 +185,9 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
         setIsImportModalOpen(true);
     };
 
-    const handleImport = (newContacts: Contact[]) => {
+    const handleImport = (newContacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => {
         if (importTargetCampaign) {
-            onImportContacts(importTargetCampaign.id, newContacts);
+            onImportContacts(importTargetCampaign.id, newContacts, deduplicationConfig);
         }
         setIsImportModalOpen(false);
     };
