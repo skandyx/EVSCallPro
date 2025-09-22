@@ -35,10 +35,10 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
         return fields;
     }, [script]);
     
-    const phoneField = scriptFields.find(f => {
+    const phoneField = useMemo(() => scriptFields.find(f => {
         const block = script?.pages.flatMap(p => p.blocks).find(b => b.fieldName === f.id);
         return block?.type === 'phone';
-    });
+    }), [script, scriptFields]);
 
     const handleFileSelect = (selectedFile: File) => {
         setFile(selectedFile);
@@ -58,7 +58,6 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                     const workbook = XLSX.read(fileContent, { type: 'binary' });
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
-                    // Fix: Remove type argument from untyped function call and use type assertion.
                     data = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as CsvRow[];
                     if (data.length > 0) headers = Object.keys(data[0]);
                 } else { // Handle CSV and TXT with Papaparse
@@ -71,7 +70,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                     if (result.errors.length > 0) console.warn("Erreurs de parsing:", result.errors);
                     
                     headers = result.meta.fields || [];
-                    data = result.data;
+                    data = result.data as CsvRow[];
                 }
 
                 setCsvHeaders(headers);
@@ -118,9 +117,13 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
             
             for (const fieldId in mappings) {
                 const csvHeader = mappings[fieldId];
-                if (csvHeader) customFields[fieldId] = row[csvHeader];
+                if (csvHeader && row[csvHeader] !== undefined) {
+                    customFields[fieldId] = row[csvHeader];
+                }
             }
-            if(phoneFieldName) phoneNumber = customFields[phoneFieldName];
+            if(phoneFieldName && customFields[phoneFieldName]) {
+                 phoneNumber = String(customFields[phoneFieldName]);
+            }
 
             let reason = '';
             if (!phoneNumber || !/^\d{9,}$/.test(phoneNumber.replace(/[\s.-]+/g, ''))) {
@@ -133,7 +136,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                 valids.push({
                     id: `contact-import-${Date.now() + index}`,
                     status: 'pending',
-                    firstName: '', // These are now part of customFields
+                    firstName: '',
                     lastName: '',
                     phoneNumber: phoneNumber,
                     postalCode: '',
@@ -191,9 +194,14 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                                             const newCsvHeader = e.target.value;
                                             setMappings(prev => {
                                                 const newMappings = { ...prev };
-                                                Object.keys(newMappings).forEach(key => { if(newMappings[key] === newCsvHeader) delete newMappings[key]; });
-                                                if (newCsvHeader) newMappings[field.id] = newCsvHeader;
-                                                else delete newMappings[field.id];
+                                                if (newCsvHeader) { // if a new header is selected
+                                                    // unmap any other field that was using this header
+                                                    Object.keys(newMappings).forEach(key => { if(newMappings[key] === newCsvHeader) delete newMappings[key]; });
+                                                    // map the current field to the new header
+                                                    newMappings[field.id] = newCsvHeader;
+                                                } else { // if "ignore" is selected
+                                                    delete newMappings[field.id];
+                                                }
                                                 return newMappings;
                                             });
                                         }}
@@ -210,7 +218,6 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                     </div>
                 );
             case 3:
-                // ... same as before
                 if (!summary) return null;
                 return (
                     <div className="space-y-4">
@@ -238,7 +245,6 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                     </div>
                 );
             case 4:
-                // ... same as before
                  return (
                     <div className="text-center py-8">
                         <CheckIcon className="mx-auto h-16 w-16 text-green-500"/>
