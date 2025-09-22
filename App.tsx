@@ -224,24 +224,29 @@ const App: React.FC = () => {
     };
 
     const handleRequestNextContact = async (campaignId: string): Promise<Contact | null> => {
-        return new Promise(resolve => {
-            let nextContact: Contact | null = null;
+        return new Promise((resolve) => {
             setCampaigns(prevCampaigns => {
+                let nextContact: Contact | null = null;
+                // Deep copy to avoid direct state mutation
                 const newCampaigns = JSON.parse(JSON.stringify(prevCampaigns));
-                const campaignIndex = newCampaigns.findIndex((c: Campaign) => c.id === campaignId);
+                const campaign = newCampaigns.find((c: Campaign) => c.id === campaignId);
 
-                if (campaignIndex > -1) {
-                    const contactIndex = newCampaigns[campaignIndex].contacts.findIndex((c: Contact) => c.status === 'pending');
+                if (campaign) {
+                    const contactIndex = campaign.contacts.findIndex((c: Contact) => c.status === 'pending');
                     if (contactIndex > -1) {
-                        // "Lock" the contact by changing its status immediately
-                        newCampaigns[campaignIndex].contacts[contactIndex].status = 'called';
-                        nextContact = newCampaigns[campaignIndex].contacts[contactIndex];
+                        // "Lock" the contact by changing its status
+                        campaign.contacts[contactIndex].status = 'called';
+                        nextContact = campaign.contacts[contactIndex];
                     }
                 }
+                
+                // Resolve the promise from within the setState updater.
+                // This ensures that the logic to find the contact has run before resolving.
+                resolve(nextContact);
+                
+                // Return the updated array of campaigns to React.
                 return newCampaigns;
             });
-            // Resolve the promise with the found contact (or null)
-            resolve(nextContact);
         });
     };
     

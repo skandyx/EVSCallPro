@@ -134,6 +134,10 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
     const [isQualified, setIsQualified] = useState(false);
 
     const agentCampaigns = useMemo(() => {
+        // FIX: Add a guard to prevent crash if agent.campaignIds is undefined on initial login.
+        if (!agent || !agent.campaignIds) {
+            return [];
+        }
         return campaigns.filter(c => agent.campaignIds.includes(c.id));
     }, [agent, campaigns]);
 
