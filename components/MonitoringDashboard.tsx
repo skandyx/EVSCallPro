@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { SystemLog, VersionInfo, ConnectivityService } from '../types.ts';
-import { CpuChipIcon, CircleStackIcon, HddIcon, TimeIcon, ShieldCheckIcon, WifiIcon, TrashIcon, BugAntIcon } from './Icons.tsx';
+import { CpuChipIcon, CircleStackIcon, HddIcon, TimeIcon, ShieldCheckIcon, WifiIcon, TrashIcon, BugAntIcon, FolderIcon } from './Icons.tsx';
 
 interface MonitoringDashboardProps {
     systemLogs: SystemLog[];
@@ -11,6 +11,15 @@ interface MonitoringDashboardProps {
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
 type ConnectivityStatus = 'idle' | 'testing' | 'success' | 'failure';
+
+const formatBytes = (bytes: number, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
 
 const HealthStatusIndicator: React.FC<{ status: HealthStatus }> = ({ status }) => {
     const config = {
@@ -32,13 +41,13 @@ const HealthStatusIndicator: React.FC<{ status: HealthStatus }> = ({ status }) =
 };
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.FC<any>; children?: React.ReactNode }> = ({ title, value, icon: Icon, children }) => (
-    <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+    <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-col">
         <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-slate-600">{title}</h3>
             <Icon className="w-6 h-6 text-slate-400" />
         </div>
         <p className="text-3xl font-bold text-slate-800">{value}</p>
-        {children}
+        <div className="mt-auto">{children}</div>
     </div>
 );
 
@@ -100,7 +109,13 @@ const ConnectivityTester: React.FC<{ services: ConnectivityService[] }> = ({ ser
 };
 
 const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, versionInfo, connectivityServices, apiCall }) => {
-    const [stats, setStats] = useState({ cpu: 0, ram: 0, disk: 0, latency: 0 });
+    const [stats, setStats] = useState({
+        cpu: { brand: '', load: 0 },
+        ram: { total: 0, used: 0 },
+        disk: { total: 0, used: 0 },
+        recordings: { size: 0, files: 0 },
+        latency: 0,
+    });
     const [health, setHealth] = useState<HealthStatus>('UP');
     const [latencyHistory, setLatencyHistory] = useState<number[]>(Array(20).fill(0));
 
@@ -112,15 +127,16 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, v
 
             const apiLatency = Math.round(endTime - startTime);
             setStats({
-                cpu: parseFloat(data.cpu),
-                ram: parseFloat(data.ram),
-                disk: parseFloat(data.disk),
+                cpu: data.cpu || { brand: 'N/A', load: 0 },
+                ram: data.ram || { total: 0, used: 0 },
+                disk: data.disk || { total: 0, used: 0 },
+                recordings: data.recordings || { size: 0, files: 0 },
                 latency: apiLatency,
             });
             
             setLatencyHistory(prev => [...prev.slice(1), apiLatency]);
 
-            if (parseFloat(data.cpu) > 90 || parseFloat(data.ram) > 95) {
+            if (parseFloat(data.cpu.load) > 90 || (data.ram.used / data.ram.total) > 0.95) {
                 setHealth('DEGRADED');
             } else {
                 setHealth('UP');
@@ -150,18 +166,24 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, v
                 <HealthStatusIndicator status={health} />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Charge CPU" value={`${stats.cpu}%`} icon={CpuChipIcon}>
-                    <div className="w-full bg-slate-200 rounded-full h-2 mt-2"><div className="bg-green-500 h-2 rounded-full" style={{ width: `${stats.cpu}%` }}></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                <StatCard title="Charge CPU" value={`${stats.cpu.load}%`} icon={CpuChipIcon}>
+                     <div className="w-full bg-slate-200 rounded-full h-2 mt-2"><div className="bg-green-500 h-2 rounded-full" style={{ width: `${stats.cpu.load}%` }}></div></div>
+                     <p className="text-xs text-slate-500 mt-2 truncate">{stats.cpu.brand}</p>
                 </StatCard>
-                <StatCard title="Utilisation RAM" value={`${stats.ram}%`} icon={CircleStackIcon}>
-                    <div className="w-full bg-slate-200 rounded-full h-2 mt-2"><div className="bg-yellow-500 h-2 rounded-full" style={{ width: `${stats.ram}%` }}></div></div>
+                <StatCard title="Utilisation RAM" value={`${stats.ram.total > 0 ? ((stats.ram.used / stats.ram.total) * 100).toFixed(1) : 0}%`} icon={CircleStackIcon}>
+                    <div className="w-full bg-slate-200 rounded-full h-2 mt-2"><div className="bg-yellow-500 h-2 rounded-full" style={{ width: `${stats.ram.total > 0 ? (stats.ram.used / stats.ram.total) * 100 : 0}%` }}></div></div>
+                    <p className="text-xs text-slate-500 mt-2">{formatBytes(stats.ram.used)} / {formatBytes(stats.ram.total)}</p>
                 </StatCard>
-                <StatCard title="Espace Disque" value={`${stats.disk}%`} icon={HddIcon}>
-                     <div className="w-full bg-slate-200 rounded-full h-2 mt-2"><div className="bg-blue-500 h-2 rounded-full" style={{ width: `${stats.disk}%` }}></div></div>
+                <StatCard title="Espace Disque" value={`${stats.disk.total > 0 ? ((stats.disk.used / stats.disk.total) * 100).toFixed(1) : 0}%`} icon={HddIcon}>
+                     <div className="w-full bg-slate-200 rounded-full h-2 mt-2"><div className="bg-blue-500 h-2 rounded-full" style={{ width: `${stats.disk.total > 0 ? (stats.disk.used / stats.disk.total) * 100 : 0}%` }}></div></div>
+                     <p className="text-xs text-slate-500 mt-2">{formatBytes(stats.disk.used)} / {formatBytes(stats.disk.total)}</p>
+                </StatCard>
+                <StatCard title="Enregistrements" value={`${stats.recordings.files}`} icon={FolderIcon}>
+                    <p className="text-xs text-slate-500 mt-2">Taille totale : {formatBytes(stats.recordings.size)}</p>
                 </StatCard>
                 <StatCard title="Latence API" value={`${stats.latency}ms`} icon={TimeIcon}>
-                    <div className="h-8 mt-2 flex items-end gap-0.5">
+                    <div className="h-10 mt-2 flex items-end gap-0.5">
                         {latencyHistory.map((val, i) => (
                              <div key={i} className="w-full bg-indigo-300" style={{ height: `${Math.min(100, val / 2)}%` }}></div>
                         ))}

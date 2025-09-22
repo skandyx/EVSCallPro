@@ -42,7 +42,18 @@ const getAllApplicationData = async () => {
 
     const users = usersRes.rows.map(keysToCamel);
     const userGroups = userGroupsRes.rows.map(keysToCamel);
-    const campaigns = campaignsRes.rows.map(keysToCamel);
+    const campaignsRaw = campaignsRes.rows.map(c => {
+        const camelCased = keysToCamel(c);
+        // Ensure JSON fields are parsed as pg might return them as strings
+        if (typeof camelCased.quotaRules === 'string') {
+            try { camelCased.quotaRules = JSON.parse(camelCased.quotaRules); } catch(e) { camelCased.quotaRules = []; }
+        }
+        if (typeof camelCased.filterRules === 'string') {
+             try { camelCased.filterRules = JSON.parse(camelCased.filterRules); } catch(e) { camelCased.filterRules = []; }
+        }
+        return camelCased;
+    });
+
     const contacts = contactsRes.rows.map(keysToCamel);
 
     // Attach memberships and contacts
@@ -56,7 +67,7 @@ const getAllApplicationData = async () => {
         memberIds: userGroupMembersRes.rows.filter(ugm => ugm.group_id === group.id).map(ugm => ugm.user_id),
     }));
     
-    const campaignsWithContacts = campaigns.map(c => ({
+    const campaignsWithContacts = campaignsRaw.map(c => ({
         ...c,
         contacts: contacts.filter(co => co.campaign_id === c.id)
     }));

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs').promises;
 const FastAGI = require('fastagi');
 const express = require('express');
 const cors = require('cors');
@@ -198,7 +199,7 @@ app.get('/api/application-data', authMiddleware, handleRequest(async (req, res) 
  * @openapi
  * /system-stats:
  *   get:
- *     summary: Récupère les statistiques système en temps réel (CPU, RAM, Disque).
+ *     summary: Récupère les statistiques système en temps réel (CPU, RAM, Disque, Enregistrements).
  *     tags: [Monitoring]
  *     responses:
  *       200:
@@ -206,18 +207,51 @@ app.get('/api/application-data', authMiddleware, handleRequest(async (req, res) 
  */
 app.get('/api/system-stats', authMiddleware, handleRequest(async (req, res) => {
     try {
-        const [cpu, mem, fs] = await Promise.all([
-            si.currentLoad(),
+        const [cpuInfo, mem, fsData, currentLoad] = await Promise.all([
+            si.cpu(),
             si.mem(),
-            si.fsSize()
+            si.fsSize(),
+            si.currentLoad(),
         ]);
 
-        const rootFs = fs.find(d => d.mount === '/');
+        const rootFs = fsData.find(d => d.mount === '/');
 
+        let recordingsInfo = { size: 0, files: 0, path: '/var/spool/asterisk/monitor/' };
+        try {
+            const files = await fs.readdir(recordingsInfo.path);
+            let totalSize = 0;
+            const fileStatsPromises = files.map(file => fs.stat(path.join(recordingsInfo.path, file)));
+            const allStats = await Promise.all(fileStatsPromises);
+
+            allStats.forEach(stat => {
+                if (stat.isFile()) {
+                    totalSize += stat.size;
+                }
+            });
+
+            recordingsInfo.size = totalSize;
+            recordingsInfo.files = files.length;
+        } catch (err) {
+            if (err.code !== 'ENOENT') { // Log errors other than "directory not found"
+                console.warn(`Could not read recording directory '${recordingsInfo.path}':`, err.code);
+            }
+        }
+        
         res.json({
-            cpu: cpu.currentLoad.toFixed(1),
-            ram: ((mem.used / mem.total) * 100).toFixed(1),
-            disk: rootFs ? rootFs.use.toFixed(1) : 0,
+            cpu: {
+                brand: cpuInfo.brand,
+                manufacturer: cpuInfo.manufacturer,
+                load: currentLoad.currentLoad.toFixed(1),
+            },
+            ram: {
+                total: mem.total,
+                used: mem.used,
+            },
+            disk: rootFs ? {
+                total: rootFs.size,
+                used: rootFs.used,
+            } : null,
+            recordings: recordingsInfo,
         });
     } catch (error) {
         console.error("Error fetching system stats:", error);
