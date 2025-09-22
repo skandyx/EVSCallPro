@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import type { Campaign, SavedScript, Contact, ScriptBlock, FilterRule, QuotaRule } from '../types.ts';
+import type { Campaign, SavedScript, Contact, ScriptBlock } from '../types.ts';
 import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon } from './Icons.tsx';
 
 declare var Papa: any;
@@ -130,7 +130,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
             existingValues = new Set(campaign.contacts.map(c => {
                  if (c.customFields && deduplicationConfig.fieldId in c.customFields) return c.customFields[deduplicationConfig.fieldId];
                  return (c as any)[deduplicationConfig.fieldId] || '';
-            }).map(v => v.trim().toLowerCase()).filter(Boolean));
+            }).map(v => String(v).trim().toLowerCase()).filter(Boolean));
         }
         
         const importedValues = new Set<string>();

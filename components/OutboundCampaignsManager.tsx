@@ -1,19 +1,21 @@
-import React, { useState } from 'react';
-import type { Feature, Campaign, User, SavedScript, QualificationGroup, Contact, QuotaRule, FilterRule } from '../types.ts';
+import React, { useState, useMemo } from 'react';
+import type { Feature, Campaign, User, SavedScript, QualificationGroup, Contact } from '../types.ts';
 import { PlusIcon, EditIcon, TrashIcon, ArrowUpTrayIcon } from './Icons.tsx';
 import ImportContactsModal from './ImportContactsModal.tsx';
+import CampaignDetailView from './CampaignDetailView.tsx'; // Import the new detail view
 
 // --- CampaignModal ---
 interface CampaignModalProps {
     campaign: Campaign | null;
     users: User[];
     scripts: SavedScript[];
+    script: SavedScript | null; // Pass the selected script for dynamic fields
     qualificationGroups: QualificationGroup[];
     onSave: (campaign: Campaign) => void;
     onClose: () => void;
 }
 
-const CampaignModal: React.FC<CampaignModalProps> = ({ campaign, users, scripts, qualificationGroups, onSave, onClose }) => {
+const CampaignModal: React.FC<CampaignModalProps> = ({ campaign, users, scripts, script, qualificationGroups, onSave, onClose }) => {
     const [activeTab, setActiveTab] = useState('general');
     const [formData, setFormData] = useState<Campaign>(campaign || {
         id: `campaign-${Date.now()}`, name: '', description: '', scriptId: null, callerId: '', isActive: true,
@@ -24,6 +26,20 @@ const CampaignModal: React.FC<CampaignModalProps> = ({ campaign, users, scripts,
         voicemailAction: 'HANGUP', recordingEnabled: true, recordingBeep: true, maxRingDuration: 25, wrapUpTime: 10,
         maxCallDuration: 3600, quotaRules: [], filterRules: [],
     });
+    
+    const availableFields = useMemo(() => {
+        const standard = [
+            { id: 'postalCode', name: 'Code Postal' },
+            { id: 'phoneNumber', name: 'Numéro de Téléphone' },
+            { id: 'lastName', name: 'Nom de famille' },
+        ];
+        if (!script) return standard;
+        const scriptFields = script.pages
+            .flatMap(page => page.blocks)
+            .filter(b => ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(b.type))
+            .map(b => ({ id: b.fieldName, name: b.name }));
+        return [...standard, ...scriptFields];
+    }, [script]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
@@ -83,11 +99,19 @@ const CampaignModal: React.FC<CampaignModalProps> = ({ campaign, users, scripts,
                             <div className="flex items-start"><div className="flex h-5 items-center"><input id="isActive" name="isActive" type="checkbox" checked={formData.isActive} onChange={handleChange} className="h-4 w-4 rounded border-slate-300 text-indigo-600"/></div><div className="ml-3 text-sm"><label htmlFor="isActive" className="font-medium text-slate-700">Campagne Active</label></div></div>
                         </>}
                         {activeTab === 'quotas' && <div className="space-y-3">
-                            {formData.quotaRules.map((rule, index) => <div key={rule.id} className="grid grid-cols-12 gap-2 items-center"><select value={rule.contactField} onChange={e => handleRuleChange('quota', index, 'contactField', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm"><option value="postalCode">Code Postal</option></select><select value={rule.operator} onChange={e => handleRuleChange('quota', index, 'operator', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm"><option value="equals">est égal à</option><option value="starts_with">commence par</option></select><input type="text" value={rule.value} onChange={e => handleRuleChange('quota', index, 'value', e.target.value)} placeholder="Valeur" className="col-span-3 p-1.5 border rounded-md text-sm" /><input type="number" value={rule.limit} onChange={e => handleRuleChange('quota', index, 'limit', parseInt(e.target.value))} placeholder="Limite" className="col-span-2 p-1.5 border rounded-md text-sm" /><button type="button" onClick={() => removeRule('quota', index)} className="text-red-500 hover:text-red-700 p-1"><TrashIcon className="w-4 h-4" /></button></div>)}
+                            {formData.quotaRules.map((rule, index) => <div key={rule.id} className="grid grid-cols-12 gap-2 items-center">
+                                <select value={rule.contactField} onChange={e => handleRuleChange('quota', index, 'contactField', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm">
+                                    {availableFields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                </select>
+                                <select value={rule.operator} onChange={e => handleRuleChange('quota', index, 'operator', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm"><option value="equals">est égal à</option><option value="starts_with">commence par</option></select><input type="text" value={rule.value} onChange={e => handleRuleChange('quota', index, 'value', e.target.value)} placeholder="Valeur" className="col-span-3 p-1.5 border rounded-md text-sm" /><input type="number" value={rule.limit} onChange={e => handleRuleChange('quota', index, 'limit', parseInt(e.target.value))} placeholder="Limite" className="col-span-2 p-1.5 border rounded-md text-sm" /><button type="button" onClick={() => removeRule('quota', index)} className="text-red-500 hover:text-red-700 p-1"><TrashIcon className="w-4 h-4" /></button></div>)}
                             <button type="button" onClick={() => addRule('quota')} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"><PlusIcon className="w-4 h-4"/>Ajouter une règle de quota</button>
                         </div>}
                         {activeTab === 'filters' && <div className="space-y-3">
-                            {formData.filterRules.map((rule, index) => <div key={rule.id} className="grid grid-cols-12 gap-2 items-center"><select value={rule.type} onChange={e => handleRuleChange('filter', index, 'type', e.target.value)} className="col-span-2 p-1.5 border bg-white rounded-md text-sm"><option value="include">Inclure</option><option value="exclude">Exclure</option></select><select value={rule.contactField} onChange={e => handleRuleChange('filter', index, 'contactField', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm"><option value="postalCode">Code Postal</option><option value="phoneNumber">Téléphone</option><option value="lastName">Nom</option></select><select value={rule.operator} onChange={e => handleRuleChange('filter', index, 'operator', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm"><option value="equals">est égal à</option><option value="starts_with">commence par</option><option value="contains">contient</option><option value="is_not_empty">n'est pas vide</option></select><input type="text" value={rule.value} onChange={e => handleRuleChange('filter', index, 'value', e.target.value)} placeholder="Valeur" className="col-span-3 p-1.5 border rounded-md text-sm" /><button type="button" onClick={() => removeRule('filter', index)} className="text-red-500 hover:text-red-700 p-1"><TrashIcon className="w-4 h-4" /></button></div>)}
+                            {formData.filterRules.map((rule, index) => <div key={rule.id} className="grid grid-cols-12 gap-2 items-center"><select value={rule.type} onChange={e => handleRuleChange('filter', index, 'type', e.target.value)} className="col-span-2 p-1.5 border bg-white rounded-md text-sm"><option value="include">Inclure</option><option value="exclude">Exclure</option></select>
+                                <select value={rule.contactField} onChange={e => handleRuleChange('filter', index, 'contactField', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm">
+                                    {availableFields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                </select>
+                                <select value={rule.operator} onChange={e => handleRuleChange('filter', index, 'operator', e.target.value)} className="col-span-3 p-1.5 border bg-white rounded-md text-sm"><option value="equals">est égal à</option><option value="starts_with">commence par</option><option value="contains">contient</option><option value="is_not_empty">n'est pas vide</option></select><input type="text" value={rule.value} onChange={e => handleRuleChange('filter', index, 'value', e.target.value)} placeholder="Valeur" className="col-span-3 p-1.5 border rounded-md text-sm" /><button type="button" onClick={() => removeRule('filter', index)} className="text-red-500 hover:text-red-700 p-1"><TrashIcon className="w-4 h-4" /></button></div>)}
                             <button type="button" onClick={() => addRule('filter')} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"><PlusIcon className="w-4 h-4"/>Ajouter une règle de filtrage</button>
                         </div>}
                     </div>
@@ -124,6 +148,8 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
     onDeleteCampaign,
     onImportContacts,
 }) => {
+    const [view, setView] = useState<'list' | 'detail'>('list');
+    const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -144,6 +170,11 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
         setIsModalOpen(false);
         setEditingCampaign(null);
     };
+    
+    const handleShowDetail = (campaign: Campaign) => {
+        setSelectedCampaign(campaign);
+        setView('detail');
+    };
 
     const handleOpenImportModal = (campaign: Campaign) => {
         setImportTargetCampaign(campaign);
@@ -156,6 +187,25 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
         }
         setIsImportModalOpen(false);
     };
+    
+    const selectedScript = useMemo(() => {
+        if (!selectedCampaign?.scriptId) return null;
+        return savedScripts.find(s => s.id === selectedCampaign.scriptId) || null;
+    }, [selectedCampaign, savedScripts]);
+
+    if (view === 'detail' && selectedCampaign) {
+        return (
+            <CampaignDetailView 
+                campaign={selectedCampaign}
+                script={selectedScript}
+                onBack={() => { setView('list'); setSelectedCampaign(null); }}
+                onSaveCampaign={onSaveCampaign}
+                // Mock handlers for contact updates, to be replaced by props
+                onUpdateContact={(contact) => console.log('Update contact', contact)}
+                onDeleteContacts={(contactIds) => console.log('Delete contacts', contactIds)}
+            />
+        )
+    }
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
@@ -164,6 +214,7 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
                     campaign={editingCampaign}
                     users={users}
                     scripts={savedScripts}
+                    script={savedScripts.find(s => s.id === editingCampaign?.scriptId) || null}
                     qualificationGroups={qualificationGroups}
                     onSave={handleSave}
                     onClose={() => setIsModalOpen(false)}
@@ -199,27 +250,47 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Statut</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Mode</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Contacts</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Restants</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
-                            {campaigns.map(campaign => (
-                                <tr key={campaign.id}>
-                                    <td className="px-6 py-4 font-medium text-slate-800">{campaign.name}</td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${campaign.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
-                                            {campaign.isActive ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-slate-600">{campaign.dialingMode}</td>
-                                    <td className="px-6 py-4 text-sm text-slate-600">{campaign.contacts.length}</td>
-                                    <td className="px-6 py-4 text-right text-sm font-medium space-x-4">
-                                        <button onClick={() => handleOpenImportModal(campaign)} className="text-slate-500 hover:text-slate-800 inline-flex items-center"><ArrowUpTrayIcon className="w-4 h-4 mr-1"/> Importer</button>
-                                        <button onClick={() => handleEdit(campaign)} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center"><EditIcon className="w-4 h-4 mr-1"/> Modifier</button>
-                                        <button onClick={() => onDeleteCampaign(campaign.id)} className="text-red-600 hover:text-red-900 inline-flex items-center"><TrashIcon className="w-4 h-4 mr-1"/> Supprimer</button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {campaigns.map(campaign => {
+                                const remainingContacts = campaign.contacts.filter(c => c.status === 'pending').length;
+                                const deletionState = {
+                                    canDelete: !campaign.isActive,
+                                    tooltip: campaign.isActive ? "Désactivez la campagne pour la supprimer." : "Supprimer la campagne"
+                                };
+                                return (
+                                    <tr key={campaign.id}>
+                                        <td className="px-6 py-4 font-medium">
+                                            <button onClick={() => handleShowDetail(campaign)} className="text-indigo-600 hover:text-indigo-800 hover:underline">
+                                                {campaign.name}
+                                            </button>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${campaign.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
+                                                {campaign.isActive ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-slate-600">{campaign.dialingMode}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-600 font-semibold">{campaign.contacts.length}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-600">{remainingContacts}</td>
+                                        <td className="px-6 py-4 text-right text-sm font-medium space-x-4">
+                                            <button onClick={() => handleOpenImportModal(campaign)} className="text-slate-500 hover:text-slate-800 inline-flex items-center"><ArrowUpTrayIcon className="w-4 h-4 mr-1"/> Importer</button>
+                                            <button onClick={() => handleEdit(campaign)} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center"><EditIcon className="w-4 h-4 mr-1"/> Modifier</button>
+                                            <button 
+                                                onClick={() => onDeleteCampaign(campaign.id)} 
+                                                disabled={!deletionState.canDelete}
+                                                title={deletionState.tooltip}
+                                                className="inline-flex items-center disabled:text-slate-400 disabled:cursor-not-allowed text-red-600 hover:text-red-900"
+                                            >
+                                                <TrashIcon className="w-4 h-4 mr-1"/> Supprimer
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>

@@ -2,7 +2,7 @@
 -- Fichier d'Initialisation (Seed) de la Base de Données EVSCallPro
 -- =============================================================================
 -- Ce script insère les données de base nécessaires pour démarrer et tester
--- l'application, notamment les utilisateurs par défaut.
+-- l'application, notamment les utilisateurs par défaut et les qualifications standards.
 --
 -- IMPORTANT : Exécutez ce script APRÈS avoir créé le schéma de base de données
 -- avec le fichier `database.txt`.
@@ -10,8 +10,7 @@
 
 -- Pour rendre ce script ré-exécutable, nous supprimons d'abord les données
 -- existantes dans les tables concernées, en respectant l'ordre des dépendances.
--- NOTE : Les utilisateurs sont supprimés avant les sites pour éviter les conflits
--- de clé étrangère (user.site_id -> site.id).
+DELETE FROM qualifications;
 DELETE FROM users;
 DELETE FROM sites;
 
@@ -39,9 +38,21 @@ INSERT INTO users (id, login_id, first_name, last_name, email, "role", is_active
 ('user-agent-2', '1002', 'Bob', 'Acteur', 'bob.acteur@example.com', 'Agent', true, 'password123', 'site-lyon'),
 ('user-agent-3', '1003', 'Charlie', 'Conseiller', NULL, 'Agent', false, 'password123', 'site-lyon');
 
--- NOTE : Les assignations aux campagnes et aux groupes ne sont pas gérées ici car
--- elles se font via des tables de liaison qui seront peuplées lorsque ces entités
--- seront créées via l'API.
+-- =============================================================================
+-- SECTION 3 : QUALIFICATIONS STANDARDS
+-- Insertion des qualifications de base, non modifiables par l'utilisateur.
+-- Elles sont disponibles pour tous les groupes de qualifications.
+-- =============================================================================
+
+INSERT INTO qualifications (id, code, description, "type", is_standard) VALUES
+('std-90', '90', 'Occupé', 'neutral', true),
+('std-91', '91', 'Faux numéro', 'negative', true),
+('std-92', '92', 'Absent', 'neutral', true),
+('std-93', '93', 'Repondeur', 'neutral', true),
+('std-94', '94', 'Rappel personnel', 'neutral', true),
+('std-95', '95', 'Relance', 'neutral', true),
+('std-96', '96', 'Indisponible', 'neutral', true),
+('std-97', '97', 'Transfert', 'neutral', true);
 
 -- =============================================================================
 -- Fin du script d'initialisation.
