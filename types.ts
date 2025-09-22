@@ -116,6 +116,8 @@ export interface ScriptBlock {
     textAlign?: 'left' | 'center' | 'right';
     contentBackgroundColor?: string;
     contentTextColor?: string;
+    isStandard?: boolean;
+    isVisible?: boolean;
 }
 
 export interface DisplayCondition {

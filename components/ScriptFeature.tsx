@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Feature, SavedScript, Page } from '../types.ts';
+import type { Feature, SavedScript, Page, ScriptBlock } from '../types.ts';
 import ScriptBuilder from './ScriptBuilder.tsx';
 import AgentPreview from './AgentPreview.tsx';
 import { EditIcon, DuplicateIcon, TrashIcon, PlusIcon } from './Icons.tsx';
@@ -23,13 +23,21 @@ const ScriptFeature: React.FC<ScriptFeatureProps> = ({
     const [activeScript, setActiveScript] = useState<SavedScript | null>(null);
 
     const handleCreateNew = () => {
+        const now = Date.now();
+        const standardBlocks: ScriptBlock[] = [
+            { id: `block-${now}-1`, name: 'Prénom', fieldName: 'first_name', type: 'input', x: 20, y: 20, width: 300, height: 70, content: { placeholder: 'Prénom du contact' }, isStandard: true, isVisible: true, displayCondition: null, parentId: null },
+            { id: `block-${now}-2`, name: 'Nom', fieldName: 'last_name', type: 'input', x: 340, y: 20, width: 300, height: 70, content: { placeholder: 'Nom du contact' }, isStandard: true, isVisible: true, displayCondition: null, parentId: null },
+            { id: `block-${now}-3`, name: 'Numéro de Téléphone', fieldName: 'phone_number', type: 'phone', x: 20, y: 110, width: 300, height: 70, content: { placeholder: 'Numéro de téléphone' }, isStandard: true, isVisible: true, displayCondition: null, parentId: null },
+            { id: `block-${now}-4`, name: 'Code Postal', fieldName: 'postal_code', type: 'input', x: 340, y: 110, width: 300, height: 70, content: { placeholder: 'Code postal' }, isStandard: true, isVisible: true, displayCondition: null, parentId: null },
+        ];
+
         const firstPage: Page = {
-            id: `page-${Date.now()}`,
+            id: `page-${now}`,
             name: "Page 1",
-            blocks: []
+            blocks: standardBlocks
         };
         setActiveScript({
-            id: `script-${Date.now()}`,
+            id: `script-${now}`,
             name: "Nouveau Script",
             pages: [firstPage],
             startPageId: firstPage.id,

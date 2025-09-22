@@ -319,7 +319,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
       style={{ backgroundColor: script.backgroundColor }}
     >
       {currentPage?.blocks
-          .filter(block => block.type !== 'group' && checkCondition(block.displayCondition, formValues))
+          .filter(block => block.type !== 'group' && block.isVisible !== false && checkCondition(block.displayCondition, formValues))
           .map(block => (
               <div key={block.id} style={{ position: 'absolute', left: block.x, top: block.y, width: block.width, height: block.height }}>
                   {renderBlock(block)}

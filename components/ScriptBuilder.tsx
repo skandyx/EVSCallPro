@@ -125,7 +125,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
             if (!page) return;
 
             const blockToDelete = page.blocks.find(b => b.id === blockId);
-            if (!blockToDelete) return;
+            if (!blockToDelete || blockToDelete.isStandard) return; // Cannot delete standard blocks
 
             if (blockToDelete.type === 'group') {
                  page.blocks.forEach(block => {
@@ -349,6 +349,11 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                     setTempBlockName(selectedBlock.name);
                     return;
                 }
+                
+                if (selectedBlock.isStandard) {
+                    handleBlockUpdate(selectedBlock.id, { name: trimmedName });
+                    return;
+                }
 
                 const isNameTaken = activePage.blocks.some(b => b.id !== selectedBlock.id && b.name === trimmedName);
                 if (isNameTaken) {
@@ -391,6 +396,18 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                     <div className="py-4 space-y-4 flex-1 overflow-y-auto text-sm">
                         {propertiesTab === 'content' && (
                            <div className="space-y-4">
+                           { selectedBlock.isStandard && (
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-md border">
+                                    <div>
+                                        <label className="font-medium">Afficher ce champ dans le script</label>
+                                        <p className="text-xs text-slate-400">Masque le champ pour l'agent.</p>
+                                    </div>
+                                    <ToggleSwitch 
+                                        enabled={selectedBlock.isVisible !== false} 
+                                        onChange={isEnabled => handleBlockUpdate(selectedBlock.id, { isVisible: isEnabled })}
+                                    />
+                                </div>
+                           )}
                            { (selectedBlock.type === 'label' || selectedBlock.type === 'text') && <textarea value={selectedBlock.content.text} onChange={(e) => handleBlockContentUpdate(selectedBlockId!, { text: e.target.value })} className="w-full p-2 border rounded-md" rows={4}/> }
                            { (selectedBlock.type === 'input' || selectedBlock.type === 'email' || selectedBlock.type === 'phone' || selectedBlock.type === 'textarea') && <div className="space-y-4"><div><label className="font-medium">Placeholder</label><input type="text" value={selectedBlock.content.placeholder} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {placeholder: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div> {selectedBlock.type === 'input' && <div><label className="font-medium">Format</label><select value={selectedBlock.content.format} onChange={e => handleBlockContentUpdate(selectedBlockId!, { format: e.target.value })} className="w-full mt-1 p-2 border rounded-md bg-white"><option value="text">Texte</option><option value="number">Nombre</option><option value="password">Mot de passe</option></select></div>}</div>}
                            { (selectedBlock.type === 'button') && <><div><label className="font-medium">Texte du bouton</label><input type="text" value={selectedBlock.content.text} onChange={e=>handleBlockContentUpdate(selectedBlockId!, {text: e.target.value})} className="w-full mt-1 p-2 border rounded-md"/></div></> }
@@ -551,12 +568,14 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                              </div>
                         )}
                     </div>
-                    <div className="mt-auto pt-4 border-t border-slate-200">
-                        <button onClick={() => handleDeleteBlock(selectedBlock.id)} className="w-full flex items-center justify-center gap-2 text-sm text-red-600 font-semibold bg-red-50 hover:bg-red-100 p-2 rounded-md transition-colors">
-                            <TrashIcon className="w-4 h-4" />
-                            Supprimer "{selectedBlock.name}"
-                        </button>
-                    </div>
+                    {!selectedBlock.isStandard &&
+                        <div className="mt-auto pt-4 border-t border-slate-200">
+                            <button onClick={() => handleDeleteBlock(selectedBlock.id)} className="w-full flex items-center justify-center gap-2 text-sm text-red-600 font-semibold bg-red-50 hover:bg-red-100 p-2 rounded-md transition-colors">
+                                <TrashIcon className="w-4 h-4" />
+                                Supprimer "{selectedBlock.name}"
+                            </button>
+                        </div>
+                    }
                 </div>
             )
         }
@@ -617,13 +636,15 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                             onMouseDown={(e) => handleMouseDownOnResizeHandle(e, block.id)}
                             className="absolute -right-1 -bottom-1 w-4 h-4 bg-white border-2 border-indigo-500 rounded-full cursor-nwse-resize"
                         />
-                        <button
-                            onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
-                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow-sm"
-                            title="Supprimer le bloc"
-                        >
-                            <TrashIcon className="w-3 h-3" />
-                        </button>
+                        {!block.isStandard &&
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteBlock(block.id); }}
+                                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow-sm"
+                                title="Supprimer le bloc"
+                            >
+                                <TrashIcon className="w-3 h-3" />
+                            </button>
+                        }
                     </>
                 )}
             </div>
