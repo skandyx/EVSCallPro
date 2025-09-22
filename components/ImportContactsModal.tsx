@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Campaign, SavedScript, Contact, ScriptBlock } from '../types.ts';
-import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon, InformationCircleIcon } from './Icons.tsx';
+import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon, InformationCircleIcon, ArrowDownTrayIcon } from './Icons.tsx';
 
 declare var Papa: any;
 declare var XLSX: any;
@@ -34,7 +34,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
     const [deduplicationConfig, setDeduplicationConfig] = useState({ enabled: true, fieldId: 'phoneNumber' });
     const [summary, setSummary] = useState<{ total: number; valids: ValidatedContact[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
 
-    const mappingFields = useMemo(() => {
+    const availableFieldsForImport = useMemo(() => {
         const standardFields = [
             { id: 'phoneNumber', name: 'Numéro de Téléphone', required: true },
             { id: 'firstName', name: 'Prénom' },
@@ -91,7 +91,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                 const initialMappings: Record<string, string> = {};
                 const usedHeaders = new Set<string>();
 
-                mappingFields.forEach(field => {
+                availableFieldsForImport.forEach(field => {
                     const fieldNameLower = field.name.toLowerCase().replace(/[\s/]+/g, '').replace(/[^\w]/g, '');
                     let foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '').replace(/[^\w]/g, '') === fieldNameLower);
                     if (!foundHeader) {
@@ -144,14 +144,14 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                 const dedupeValue = getVal(row, deduplicationConfig.fieldId).trim().toLowerCase();
                 if(dedupeValue) {
                     if (existingValues.has(dedupeValue) || importedValues.has(dedupeValue)) {
-                        invalids.push({ row, reason: `Doublon sur le critère '${mappingFields.find(f => f.id === deduplicationConfig.fieldId)?.name}'.` }); return;
+                        invalids.push({ row, reason: `Doublon sur le critère '${availableFieldsForImport.find(f => f.id === deduplicationConfig.fieldId)?.name}'.` }); return;
                     }
                     importedValues.add(dedupeValue);
                 }
             }
             
             const customFields: Record<string, any> = {};
-            mappingFields.forEach(field => {
+            availableFieldsForImport.forEach(field => {
                 if (!['phoneNumber', 'firstName', 'lastName', 'postalCode'].includes(field.id)) {
                     const value = getVal(row, field.id);
                     if (value) customFields[field.id] = value;
@@ -179,6 +179,24 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
         const contactsToImport = summary.valids.map(({ originalRow, ...contact }) => contact);
         onImport(contactsToImport);
         setStep(5);
+    };
+    
+    const handleExportInvalids = () => {
+        if (!summary || summary.invalids.length === 0) return;
+
+        const dataToExport = summary.invalids.map(item => ({
+            ...item.row,
+            "Motif de l'erreur": item.reason
+        }));
+
+        const csv = Papa.unparse(dataToExport);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `contacts_invalides_${campaign.name}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const isNextDisabled = useMemo(() => {
@@ -227,7 +245,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                             <div>
                                 <label className="block text-sm font-medium text-slate-700">Critère de dédoublonnage</label>
                                 <select value={deduplicationConfig.fieldId} onChange={e => setDeduplicationConfig(c => ({...c, fieldId: e.target.value}))} className="mt-1 w-full p-2 border bg-white rounded-md">
-                                    {mappingFields.map(field => <option key={field.id} value={field.id}>{field.name}</option>)}
+                                    {availableFieldsForImport.map(field => <option key={field.id} value={field.id}>{field.name}</option>)}
                                 </select>
                             </div>
                         )}
@@ -238,7 +256,7 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                      <div className="space-y-3">
                         <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination (à gauche). Le numéro de téléphone est obligatoire.</p>
                         <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
-                            {mappingFields.map(field => (
+                            {availableFieldsForImport.map(field => (
                                 <div key={field.id} className="grid grid-cols-2 gap-4 items-center p-1">
                                     <span className="font-medium text-slate-700 truncate">{field.name} {field.required && <span className="text-red-500">*</span>}</span>
                                     <select value={mappings[field.id] || ''} onChange={e => {
@@ -273,8 +291,14 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onIm
                         </div>
                         {summary.invalids.length > 0 && (
                             <div>
-                                <h4 className="font-semibold text-slate-700 mb-2">Détail des erreurs</h4>
-                                <div className="max-h-40 overflow-y-auto text-sm border rounded-md bg-slate-50">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h4 className="font-semibold text-slate-700">Détail des erreurs</h4>
+                                    <button onClick={handleExportInvalids} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1.5">
+                                        <ArrowDownTrayIcon className="w-4 h-4" />
+                                        Exporter les lignes invalides
+                                    </button>
+                                </div>
+                                <div className="max-h-80 overflow-y-auto text-sm border rounded-md bg-slate-50">
                                     <table className="min-w-full"><thead className="bg-slate-200 sticky top-0"><tr className="text-left"><th className="p-2">Ligne</th><th className="p-2">Erreur</th></tr></thead>
                                         <tbody>{summary.invalids.map((item, i) => ( <tr key={i} className="border-t"><td className="p-2 font-mono text-xs">{JSON.stringify(item.row)}</td><td className="p-2 text-red-600">{item.reason}</td></tr> ))}</tbody>
                                     </table>

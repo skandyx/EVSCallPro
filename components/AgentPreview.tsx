@@ -147,9 +147,13 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                 </div>
             );
         case 'textarea':
+             const textareaContainerProps = {
+                 ...commonContainerProps,
+                 className: "p-3 rounded-md h-full flex flex-col" // No justify-center
+             };
              return (
-                <div {...commonContainerProps}>
-                    <label className="block font-semibold mb-1">{block.name}</label>
+                <div {...textareaContainerProps}>
+                    <label className="block font-semibold mb-1 flex-shrink-0">{block.name}</label>
                     <textarea
                         placeholder={block.content.placeholder}
                         style={commonInputStyles}
@@ -159,7 +163,7 @@ const AgentPreview: React.FC<AgentPreviewProps> = ({
                         disabled={block.readOnly}
                     />
                     {block.fieldName.toLowerCase().includes('historique') && (
-                        <button onClick={onSaveNote} className="mt-2 w-full text-sm bg-indigo-100 text-indigo-700 font-semibold py-1.5 px-3 rounded-md hover:bg-indigo-200 disabled:opacity-50" disabled={!newNote.trim()}>
+                        <button onClick={onSaveNote} className="mt-2 w-full text-sm bg-indigo-100 text-indigo-700 font-semibold py-1.5 px-3 rounded-md hover:bg-indigo-200 disabled:opacity-50 flex-shrink-0" disabled={!newNote.trim()}>
                             Enregistrer la note
                         </button>
                     )}

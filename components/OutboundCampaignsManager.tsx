@@ -250,6 +250,7 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
                         <thead className="bg-slate-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Nom</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Statut</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Mode</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Contacts</th>
@@ -271,6 +272,7 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
                                                 {campaign.name}
                                             </button>
                                         </td>
+                                        <td className="px-6 py-4 text-sm text-slate-500 font-mono">{campaign.id}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${campaign.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
                                                 {campaign.isActive ? 'Active' : 'Inactive'}

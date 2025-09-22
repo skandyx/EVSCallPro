@@ -604,7 +604,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
             : 'shadow-md border border-slate-300';
             
         const bgClass = isGroup ? '' : 'bg-white';
-        const baseClasses = `p-2 rounded-md cursor-move flex flex-col justify-center`;
+        const baseClasses = `p-2 rounded-md cursor-move flex flex-col`;
 
         const renderContent = () => {
              switch(block.type) {
@@ -612,7 +612,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
                 case 'label': return <p className="font-bold whitespace-pre-wrap break-words">{block.content.text}</p>;
                 case 'text': return <p className="whitespace-pre-wrap break-words">{block.content.text}</p>;
                 case 'input': case 'email': case 'phone': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><input type="text" placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
-                case 'textarea': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><textarea placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm h-full resize-none"/></div>
+                case 'textarea': return <div className="space-y-1 h-full flex flex-col"><label className="block font-semibold text-xs flex-shrink-0">{block.name}</label><textarea placeholder={block.content.placeholder} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm flex-1 resize-none"/></div>
                 case 'history': return <div className="space-y-1 h-full flex flex-col"><label className="block font-semibold text-xs border-b pb-1">Historique des appels</label><div className="text-xs text-slate-400 italic flex-1 flex items-center justify-center">Aperçu de l'historique</div></div>
                 case 'date': case 'time': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><input type={block.type} disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"/></div>
                 case 'dropdown': return <div className="space-y-1"><label className="block font-semibold text-xs">{block.name}</label><select disabled className="w-full p-1 border rounded-sm bg-slate-100 text-sm"><option>{block.content.options[0] || 'Option'}</option></select></div>
@@ -626,7 +626,7 @@ const ScriptBuilder: React.FC<ScriptBuilderProps> = ({ script, onSave, onClose, 
         return (
             <div
                 key={block.id} style={style}
-                className={`${baseClasses} ${bgClass} ${borderClasses}`}
+                className={`${baseClasses} ${block.type !== 'textarea' && 'justify-center'} ${bgClass} ${borderClasses}`}
                 onMouseDown={(e) => handleMouseDownOnBlock(e, block.id)}
             >
                 {renderContent()}

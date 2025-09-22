@@ -412,6 +412,7 @@ const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, us
             <thead className="bg-slate-50">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nom</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Identifiant / Ext.</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Rôle</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Statut</th>
@@ -434,6 +435,7 @@ const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, us
                         </div>
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">{user.id}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-500">{user.loginId}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{user.role}</td>
                     <td className="px-6 py-4 whitespace-nowrap">

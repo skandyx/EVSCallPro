@@ -85,6 +85,7 @@ const CampaignDetailView: React.FC<CampaignDetailViewProps> = ({ campaign, scrip
         const standard = [
             { id: 'firstName', name: 'Prénom' },
             { id: 'lastName', name: 'Nom' },
+            { id: 'id', name: 'ID Contact' },
             { id: 'phoneNumber', name: 'Téléphone' },
             { id: 'status', name: 'Statut' },
         ];
@@ -125,7 +126,7 @@ const CampaignDetailView: React.FC<CampaignDetailViewProps> = ({ campaign, scrip
         const dataToExport = campaign.contacts.map(contact => {
             const row: Record<string, any> = {};
             tableHeaders.forEach(header => {
-                if (['firstName', 'lastName', 'phoneNumber', 'status'].includes(header.id)) {
+                if (['id', 'firstName', 'lastName', 'phoneNumber', 'status'].includes(header.id)) {
                     row[header.name] = (contact as any)[header.id];
                 } else if (contact.customFields) {
                     row[header.name] = contact.customFields[header.id] || '';
@@ -216,7 +217,7 @@ const CampaignDetailView: React.FC<CampaignDetailViewProps> = ({ campaign, scrip
                                 <tr key={contact.id} className={selectedContactIds.has(contact.id) ? 'bg-indigo-50' : ''}>
                                     <td className="px-4 py-2"><input type="checkbox" checked={selectedContactIds.has(contact.id)} onChange={e => handleSelectOne(contact.id, e.target.checked)} className="rounded"/></td>
                                     {tableHeaders.map(header => (
-                                        <td key={header.id} className="px-4 py-2 text-slate-600">
+                                        <td key={header.id} className={`px-4 py-2 text-slate-600 ${header.id === 'id' ? 'font-mono text-xs' : ''}`}>
                                             {header.id === 'status'
                                                 ? <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${contact.status === 'pending' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>{contact.status}</span>
                                                 : (contact as any)[header.id] || contact.customFields?.[header.id] || ''

@@ -111,6 +111,7 @@ const ScriptFeature: React.FC<ScriptFeatureProps> = ({
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nom du Script</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                                 </tr>
@@ -118,6 +119,7 @@ const ScriptFeature: React.FC<ScriptFeatureProps> = ({
                             <tbody className="bg-white divide-y divide-slate-200">
                                 {savedScripts.map(script => (
                                     <tr key={script.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">{script.id}</td>
                                         <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-800">{script.name}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                                             <button onClick={() => handleEdit(script)} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center"><EditIcon className="w-4 h-4 mr-1"/> Modifier</button>
