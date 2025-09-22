@@ -17,7 +17,15 @@ const saveScript = async (script, id) => {
     return parseScriptOrFlow(res.rows[0]);
 };
 
-const deleteScript = async (id) => await pool.query('DELETE FROM scripts WHERE id = $1', [id]);
+const deleteScript = async (id) => {
+    // Check if the script is assigned to any campaign
+    const checkRes = await pool.query('SELECT id FROM campaigns WHERE script_id = $1 LIMIT 1', [id]);
+    if (checkRes.rows.length > 0) {
+        throw new Error('Impossible de supprimer un script qui est assigné à une ou plusieurs campagnes.');
+    }
+    await pool.query('DELETE FROM scripts WHERE id = $1', [id]);
+};
+
 
 const duplicateScript = async (id) => {
     const res = await pool.query('SELECT * FROM scripts WHERE id = $1', [id]);

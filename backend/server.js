@@ -384,6 +384,22 @@ app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req
  *       content: { application/json: { schema: { type: object, properties: { campaignId: { type: string }, note: { type: string } } } } }
  *     responses:
  *       201: { description: "Note créée." }
+ * /contacts/{id}:
+ *   put:
+ *     summary: Met à jour une fiche contact.
+ *     tags: [Contacts]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Contact mis à jour." }
+ * /contacts:
+ *   delete:
+ *     summary: Supprime un ou plusieurs contacts en masse.
+ *     tags: [Contacts]
+ *     requestBody:
+ *       required: true
+ *       content: { application/json: { schema: { type: object, properties: { contactIds: { type: array, items: { type: string } } } } } }
+ *     responses:
+ *       204: { description: "Contact(s) supprimé(s)." }
  */
 app.get('/api/contacts/:contactId/notes', authMiddleware, handleRequest(async (req, res) => {
     res.json(await db.getNotesForContact(req.params.contactId));
@@ -395,6 +411,9 @@ app.post('/api/contacts/:contactId/notes', authMiddleware, handleRequest(async (
     const newNote = await db.createNote({ contactId, agentId, campaignId, note });
     res.status(201).json(newNote);
 }));
+app.put('/api/contacts/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.updateContact(req.params.id, req.body))));
+app.delete('/api/contacts', authMiddleware, handleRequest(async (req, res) => { await db.deleteContacts(req.body.contactIds); res.status(204).send(); }));
+
 
 /**
  * @openapi
