@@ -6,39 +6,59 @@ declare var Papa: any;
 declare var XLSX: any;
 
 interface ImportContactsModalProps {
-    campaign: Campaign;
-    script: SavedScript | null;
     onClose: () => void;
     onImport: (newContacts: Contact[]) => void;
+    campaign: Campaign;
+    script: SavedScript | null;
 }
 
 type CsvRow = Record<string, string>;
 
-const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, script, onClose, onImport }) => {
+// A contact in the validation summary
+interface ValidatedContact extends Contact {
+    originalRow: CsvRow;
+}
+
+const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ onClose, onImport, campaign, script }) => {
     const [step, setStep] = useState(1);
     const [file, setFile] = useState<File | null>(null);
     const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
     const [csvData, setCsvData] = useState<CsvRow[]>([]);
-    const [mappings, setMappings] = useState<Record<string, string>>({}); // { [scriptFieldId]: csvHeader }
-    const [summary, setSummary] = useState<{ total: number; valids: Contact[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
+    const [mappings, setMappings] = useState<Record<string, string>>({}); // { [fieldId]: csvHeader }
+    const [summary, setSummary] = useState<{ total: number; valids: ValidatedContact[]; invalids: { row: CsvRow; reason: string }[] } | null>(null);
 
-    const scriptFields = useMemo(() => {
-        if (!script) return [];
-        const fields: { id: string, name: string, type: 'standard' | 'script' }[] = [];
-        script.pages.forEach(page => {
-            page.blocks.forEach(block => {
-                if (['input', 'textarea', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown'].includes(block.type) && block.fieldName) {
-                    fields.push({ id: block.fieldName, name: block.name, type: 'script' });
-                }
-            });
-        });
-        return fields;
+    const mappingFields = useMemo(() => {
+        const standardFields = [
+            { id: 'phoneNumber', name: 'Numéro de Téléphone', required: true },
+            { id: 'firstName', name: 'Prénom' },
+            { id: 'lastName', name: 'Nom' },
+            { id: 'postalCode', name: 'Code Postal' },
+        ];
+
+        if (!script) {
+            return standardFields;
+        }
+
+        const scriptFields = script.pages
+            .flatMap(page => page.blocks)
+            .filter((block: ScriptBlock) => 
+                ['input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'textarea'].includes(block.type) &&
+                block.fieldName // Ensure fieldName exists
+            )
+            .map((block: ScriptBlock) => ({
+                id: block.fieldName,
+                name: block.name,
+                required: false
+            }));
+
+        // Remove duplicates in case field names are repeated (unlikely but safe)
+        const uniqueScriptFields = scriptFields.filter((field, index, self) =>
+            index === self.findIndex((f) => f.id === field.id) &&
+            !standardFields.some(sf => sf.id === field.id) // Exclude if it's already a standard field
+        );
+
+        return [...standardFields, ...uniqueScriptFields];
     }, [script]);
-    
-    const phoneField = useMemo(() => scriptFields.find(f => {
-        const block = script?.pages.flatMap(p => p.blocks).find(b => b.fieldName === f.id);
-        return block?.type === 'phone';
-    }), [script, scriptFields]);
 
     const handleFileSelect = (selectedFile: File) => {
         setFile(selectedFile);
@@ -68,7 +88,6 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                     });
                     
                     if (result.errors.length > 0) console.warn("Erreurs de parsing:", result.errors);
-                    
                     headers = result.meta.fields || [];
                     data = result.data as CsvRow[];
                 }
@@ -76,13 +95,28 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                 setCsvHeaders(headers);
                 setCsvData(data);
                 
-                // Auto-map fields
+                // Auto-map obvious fields
                 const initialMappings: Record<string, string> = {};
                 const usedHeaders = new Set<string>();
 
-                scriptFields.forEach(field => {
-                    const fieldNameLower = field.name.toLowerCase().replace(/[\s\-_]+/g, '');
-                    const foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '') === fieldNameLower);
+                mappingFields.forEach(field => {
+                    const fieldNameLower = field.name.toLowerCase().replace(/[\s/]+/g, '').replace(/[^\w]/g, '');
+                    let foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '').replace(/[^\w]/g, '') === fieldNameLower);
+
+                    // Add more flexible matching
+                    if (!foundHeader) {
+                        const flexibleMatches: { [key: string]: string[] } = {
+                            phoneNumber: ['telephone', 'phone', 'numero'],
+                            firstName: ['prenom', 'first'],
+                            lastName: ['nom', 'last'],
+                            postalCode: ['cp', 'postal', 'zip']
+                        };
+                        const alternatives = flexibleMatches[field.id] || [];
+                        for(const alt of alternatives) {
+                            foundHeader = headers.find(h => !usedHeaders.has(h) && h.toLowerCase().replace(/[\s\-_]+/g, '').replace(/[^\w]/g, '').includes(alt));
+                            if(foundHeader) break;
+                        }
+                    }
 
                     if (foundHeader) {
                         initialMappings[field.id] = foundHeader;
@@ -107,42 +141,46 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
     };
     
     const processAndGoToSummary = () => {
-        const valids: Contact[] = [];
+        const valids: ValidatedContact[] = [];
         const invalids: { row: CsvRow; reason: string }[] = [];
-        const phoneFieldName = phoneField?.id;
+        const existingPhoneNumbers = new Set(campaign.contacts.map(c => c.phoneNumber));
+        const importedPhoneNumbers = new Set<string>();
 
-        csvData.forEach((row, index) => {
-            const customFields: Record<string, any> = {};
-            let phoneNumber = '';
+        csvData.forEach((row) => {
+            const getVal = (fieldId: string) => (mappings[fieldId] ? row[mappings[fieldId]] : '') || '';
             
-            for (const fieldId in mappings) {
-                const csvHeader = mappings[fieldId];
-                if (csvHeader && row[csvHeader] !== undefined) {
-                    customFields[fieldId] = row[csvHeader];
+            const phoneNumber = getVal('phoneNumber').trim().replace(/\s/g, '');
+
+            if (!phoneNumber) {
+                invalids.push({ row, reason: "Le numéro de téléphone est manquant." }); return;
+            }
+            if (existingPhoneNumbers.has(phoneNumber) || importedPhoneNumbers.has(phoneNumber)) {
+                invalids.push({ row, reason: `Le numéro ${phoneNumber} est un doublon.` }); return;
+            }
+
+            const customFields: Record<string, any> = {};
+            mappingFields.forEach(field => {
+                if (!['phoneNumber', 'firstName', 'lastName', 'postalCode'].includes(field.id)) {
+                    const value = getVal(field.id);
+                    if (value) {
+                        customFields[field.id] = value;
+                    }
                 }
-            }
-            if(phoneFieldName && customFields[phoneFieldName]) {
-                 phoneNumber = String(customFields[phoneFieldName]);
-            }
+            });
 
-            let reason = '';
-            if (!phoneNumber || !/^\d{9,}$/.test(phoneNumber.replace(/[\s.-]+/g, ''))) {
-                reason = "Numéro de téléphone invalide ou manquant.";
-            }
-
-            if (reason) {
-                invalids.push({ row, reason });
-            } else {
-                valids.push({
-                    id: `contact-import-${Date.now() + index}`,
-                    status: 'pending',
-                    firstName: '',
-                    lastName: '',
-                    phoneNumber: phoneNumber,
-                    postalCode: '',
-                    customFields,
-                });
-            }
+            const newContact: ValidatedContact = {
+                id: `contact-import-${Date.now()}-${Math.random()}`,
+                firstName: getVal('firstName').trim(),
+                lastName: getVal('lastName').trim(),
+                phoneNumber: phoneNumber,
+                postalCode: getVal('postalCode').trim(),
+                status: 'pending',
+                customFields: customFields,
+                originalRow: row
+            };
+            
+            valids.push(newContact);
+            importedPhoneNumbers.add(phoneNumber);
         });
 
         setSummary({ total: csvData.length, valids, invalids });
@@ -151,15 +189,17 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
 
     const handleFinalImport = () => {
         if (!summary) return;
-        onImport(summary.valids);
+        // Remove originalRow before passing up
+        const contactsToImport = summary.valids.map(({ originalRow, ...contact }) => contact);
+        onImport(contactsToImport);
         setStep(4);
     };
 
     const isNextDisabled = useMemo(() => {
         if (step === 1 && !file) return true;
-        if (step === 2 && phoneField && !mappings[phoneField.id]) return true; // Phone number mapping is mandatory
+        if (step === 2 && !mappings['phoneNumber']) return true;
         return false;
-    }, [step, file, mappings, phoneField]);
+    }, [step, file, mappings]);
     
     const usedCsvHeaders = Object.values(mappings);
 
@@ -167,41 +207,32 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
         switch (step) {
             case 1:
                 return (
-                    <div className="space-y-4">
+                     <div className="space-y-4">
                         <label className="block w-full cursor-pointer rounded-lg border-2 border-dashed border-slate-300 p-8 text-center hover:border-indigo-500">
                             <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-slate-400" />
                             <span className="mt-2 block text-sm font-medium text-slate-900">{file ? file.name : "Téléverser un fichier (CSV, TXT, XLSX)"}</span>
                             <input type='file' className="sr-only" accept=".csv,.txt,.xlsx" onChange={e => e.target.files && handleFileSelect(e.target.files[0])} />
                         </label>
+                        <a href="/contact_template.csv" download className="text-sm text-indigo-600 hover:underline">Télécharger un modèle de fichier CSV</a>
                     </div>
                 );
             case 2:
                 return (
-                    <div className="space-y-3">
-                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination du script (à gauche). Un champ de type "Téléphone" est obligatoire.</p>
+                     <div className="space-y-3">
+                        <p className="text-sm text-slate-600">Faites correspondre les colonnes de votre fichier (à droite) aux champs de destination (à gauche). Le numéro de téléphone est obligatoire.</p>
                         <div className="max-h-80 overflow-y-auto rounded-md border p-2 space-y-2 bg-slate-50">
-                             {scriptFields.map(field => {
-                                const isPhoneField = phoneField?.id === field.id;
-                                return (
+                            {mappingFields.map(field => (
                                 <div key={field.id} className="grid grid-cols-2 gap-4 items-center p-1">
-                                    <span className="font-medium text-slate-700 truncate">
-                                        {field.name}
-                                        {isPhoneField && <span className="text-red-500 ml-1">*</span>}
-                                    </span>
+                                    <span className="font-medium text-slate-700 truncate">{field.name} {field.required && <span className="text-red-500">*</span>}</span>
                                     <select
                                         value={mappings[field.id] || ''}
                                         onChange={e => {
                                             const newCsvHeader = e.target.value;
                                             setMappings(prev => {
                                                 const newMappings = { ...prev };
-                                                if (newCsvHeader) { // if a new header is selected
-                                                    // unmap any other field that was using this header
-                                                    Object.keys(newMappings).forEach(key => { if(newMappings[key] === newCsvHeader) delete newMappings[key]; });
-                                                    // map the current field to the new header
-                                                    newMappings[field.id] = newCsvHeader;
-                                                } else { // if "ignore" is selected
-                                                    delete newMappings[field.id];
-                                                }
+                                                Object.keys(newMappings).forEach(key => { if(newMappings[key] === newCsvHeader) delete newMappings[key]; });
+                                                if (newCsvHeader) newMappings[field.id] = newCsvHeader;
+                                                else delete newMappings[field.id];
                                                 return newMappings;
                                             });
                                         }}
@@ -213,11 +244,11 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                                         ))}
                                     </select>
                                 </div>
-                            )})}
+                            ))}
                         </div>
                     </div>
                 );
-            case 3:
+            case 3: 
                 if (!summary) return null;
                 return (
                     <div className="space-y-4">
@@ -245,30 +276,31 @@ const ImportContactsModal: React.FC<ImportContactsModalProps> = ({ campaign, scr
                     </div>
                 );
             case 4:
-                 return (
+                return (
                     <div className="text-center py-8">
                         <CheckIcon className="mx-auto h-16 w-16 text-green-500"/>
                         <h3 className="text-xl font-semibold text-slate-800 mt-4">Importation terminée !</h3>
-                        <p className="text-slate-600 mt-2"><span className="font-bold">{summary?.valids.length || 0}</span> contacts ont été ajoutés à la campagne "{campaign.name}".</p>
+                        <p className="text-slate-600 mt-2"><span className="font-bold">{summary?.valids.length || 0}</span> contacts ont été ajoutés à la campagne.</p>
                     </div>
                 );
             default: return null;
         }
     };
-    
+
     return (
         <div className="fixed inset-0 bg-slate-800 bg-opacity-75 flex items-center justify-center p-4 z-[60]">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl h-[90vh] flex flex-col">
                 <div className="p-4 border-b">
-                    <h3 className="text-lg font-semibold text-slate-900">Importer des contacts pour "{campaign.name}"</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">Importer des contacts pour : {campaign.name}</h3>
                 </div>
                 <div className="p-6 flex-1 overflow-y-auto">{renderStepContent()}</div>
                 <div className="bg-slate-50 px-6 py-4 flex justify-between rounded-b-lg">
                     <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700">Fermer</button>
                     <div className="flex gap-3">
                         {step > 1 && step < 4 && <button onClick={() => setStep(s => s - 1)} className="rounded-md border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 shadow-sm hover:bg-slate-50">Retour</button>}
-                        {step === 1 && <button onClick={() => setStep(2)} disabled={isNextDisabled} className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">Suivant <ArrowRightIcon className="w-4 h-4"/></button>}
-                        {step === 2 && <button onClick={processAndGoToSummary} disabled={isNextDisabled} className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">Valider les données <ArrowRightIcon className="w-4 h-4"/></button>}
+                        {step < 3 && <button onClick={() => step === 1 ? setStep(2) : processAndGoToSummary()} disabled={isNextDisabled} className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700 disabled:bg-indigo-300">
+                            {step === 1 ? 'Suivant' : 'Valider les données'} <ArrowRightIcon className="w-4 h-4"/>
+                        </button>}
                         {step === 3 && <button onClick={handleFinalImport} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-green-700">Confirmer et Importer</button>}
                         {step === 4 && <button onClick={onClose} className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700">Terminer</button>}
                     </div>
