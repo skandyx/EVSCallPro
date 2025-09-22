@@ -365,6 +365,19 @@ app.post('/api/users', authMiddleware, handleRequest(async (req, res) => res.sta
 app.put('/api/users/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.updateUser(req.params.id, req.body.user, req.body.groupIds))));
 app.delete('/api/users/:id', authMiddleware, handleRequest(async (req, res) => { await db.deleteUser(req.params.id); res.status(204).send(); }));
 
+// Agent-specific endpoints
+app.get('/api/agents/next-contact', authMiddleware, handleRequest(async (req, res) => {
+    const { campaignId } = req.query;
+    if (!campaignId) return res.status(400).json({ error: "campaignId is required" });
+    const contact = await db.getNextContactForAgent(req.user.id, campaignId);
+    if (contact) {
+        res.json(contact);
+    } else {
+        res.status(404).json({ message: "No more contacts available in this campaign." });
+    }
+}));
+
+
 // Groups
 /**
  * @openapi
@@ -457,6 +470,13 @@ app.post('/api/campaigns/:id/contacts', authMiddleware, handleRequest(async (req
  *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
  *     responses:
  *       200: { description: "Contact mis à jour." }
+ * /contacts/{id}/data:
+ *   put:
+ *     summary: Met à jour les données (standards et script) d'une fiche contact.
+ *     tags: [Contacts]
+ *     parameters: [ { in: path, name: id, required: true, schema: { type: string } } ]
+ *     responses:
+ *       200: { description: "Données du contact mises à jour." }
  * /contacts:
  *   delete:
  *     summary: Supprime un ou plusieurs contacts en masse.
@@ -478,6 +498,7 @@ app.post('/api/contacts/:contactId/notes', authMiddleware, handleRequest(async (
     res.status(201).json(newNote);
 }));
 app.put('/api/contacts/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.updateContact(req.params.id, req.body))));
+app.put('/api/contacts/:id/data', authMiddleware, handleRequest(async (req, res) => res.json(await db.updateContactData(req.params.id, req.body))));
 app.delete('/api/contacts', authMiddleware, handleRequest(async (req, res) => { await db.deleteContacts(req.body.contactIds); res.status(204).send(); }));
 
 
@@ -764,6 +785,13 @@ app.delete('/api/audio-files/:id', authMiddleware, handleRequest(async (req, res
 app.post('/api/planning-events', authMiddleware, handleRequest(async (req, res) => res.status(201).json(await db.savePlanningEvent(req.body))));
 app.put('/api/planning-events/:id', authMiddleware, handleRequest(async (req, res) => res.json(await db.savePlanningEvent(req.body, req.params.id))));
 app.delete('/api/planning-events/:id', authMiddleware, handleRequest(async (req, res) => { await db.deletePlanningEvent(req.params.id); res.status(204).send(); }));
+
+app.post('/api/callbacks', authMiddleware, handleRequest(async (req, res) => {
+    const callbackData = { ...req.body, agentId: req.user.id };
+    const newCallback = await db.createPersonalCallback(callbackData);
+    res.status(201).json(newCallback);
+}));
+
 
 // --- Start the API server ---
 app.listen(API_PORT, () => {

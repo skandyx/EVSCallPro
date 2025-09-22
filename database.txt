@@ -21,7 +21,7 @@
 CREATE TYPE user_role AS ENUM ('Agent', 'Superviseur', 'Administrateur', 'SuperAdmin');
 CREATE TYPE block_type AS ENUM ('group', 'label', 'text', 'input', 'email', 'phone', 'date', 'time', 'radio', 'checkbox', 'dropdown', 'button', 'web-view');
 CREATE TYPE dialing_mode AS ENUM ('PREDICTIVE', 'PROGRESSIVE', 'MANUAL');
-CREATE TYPE contact_status AS ENUM ('pending', 'called', 'qualified');
+CREATE TYPE contact_status AS ENUM ('pending', 'called', 'qualified', 'locked');
 CREATE TYPE qualification_type AS ENUM ('positive', 'neutral', 'negative');
 CREATE TYPE ivr_node_type AS ENUM ('start', 'menu', 'media', 'transfer', 'voicemail', 'hangup', 'calendar');
 CREATE TYPE trunk_auth_type AS ENUM ('register', 'ip');
@@ -154,9 +154,12 @@ CREATE TABLE contacts (
     first_name TEXT,
     last_name TEXT,
     phone_number TEXT NOT NULL,
+    tel2 TEXT,
+    tel3 TEXT,
     postal_code TEXT,
     status contact_status NOT NULL DEFAULT 'pending',
     custom_fields JSONB, -- Pour stocker les champs additionnels du script
+    locked_by_agent_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -294,6 +297,10 @@ CREATE TABLE activity_types (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 COMMENT ON TABLE activity_types IS 'Définit les types d''activités planifiables (Appel, Pause, etc.).';
+
+-- Ajout d'une activité standard pour les rappels personnels
+INSERT INTO activity_types (id, name, color) VALUES ('act-callback', 'Rappel Personnel', '#ef4444') ON CONFLICT (id) DO NOTHING;
+
 
 -- Événements du planning des agents
 CREATE TABLE planning_events (

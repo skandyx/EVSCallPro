@@ -21,6 +21,12 @@ const ScriptFeature: React.FC<ScriptFeatureProps> = ({
 }) => {
     const [view, setView] = useState<'list' | 'editor' | 'preview'>('list');
     const [activeScript, setActiveScript] = useState<SavedScript | null>(null);
+    // Fix: Add state to manage form values in the preview.
+    const [formValues, setFormValues] = useState<Record<string, any>>({});
+
+    const handleFormChange = (fieldName: string, value: any) => {
+        setFormValues(prev => ({ ...prev, [fieldName]: value }));
+    };
 
     const handleCreateNew = () => {
         const now = Date.now();
@@ -53,6 +59,8 @@ const ScriptFeature: React.FC<ScriptFeatureProps> = ({
     
     const handlePreview = (script: SavedScript) => {
         setActiveScript(script);
+        // Fix: Reset form values when opening a new preview.
+        setFormValues({});
         setView('preview');
     };
 
@@ -83,6 +91,9 @@ const ScriptFeature: React.FC<ScriptFeatureProps> = ({
             <AgentPreview 
                 script={activeScript}
                 onClose={() => setView('editor')} // Go back to editor from preview
+                // Fix: Pass form state and handler to AgentPreview.
+                formValues={formValues}
+                onFormChange={handleFormChange}
             />
         )
     }

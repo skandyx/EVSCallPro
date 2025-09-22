@@ -6,6 +6,47 @@ const getCampaigns = async () => {
     return res.rows.map(keysToCamel);
 };
 
+const getNextContactForAgent = async (agentId, campaignId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        const findQuery = `
+            SELECT id FROM contacts
+            WHERE campaign_id = $1 AND status = 'pending'
+            ORDER BY created_at ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED;
+        `;
+        const findRes = await client.query(findQuery, [campaignId]);
+
+        if (findRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return null; // No available contact
+        }
+
+        const contactId = findRes.rows[0].id;
+
+        const updateQuery = `
+            UPDATE contacts 
+            SET status = 'locked', locked_by_agent_id = $1, updated_at = NOW()
+            WHERE id = $2
+            RETURNING *;
+        `;
+        const updateRes = await client.query(updateQuery, [agentId, contactId]);
+        
+        await client.query('COMMIT');
+        return keysToCamel(updateRes.rows[0]);
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("Error in getNextContactForAgent transaction:", e);
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
 const saveCampaign = async (campaign, id) => {
     const { name, description, scriptId, qualificationGroupId, callerId, isActive, dialingMode, wrapUpTime, quotaRules, filterRules } = campaign;
     const quotaRulesJson = JSON.stringify(quotaRules || []);
@@ -170,6 +211,51 @@ const updateContact = async (contactId, contactData) => {
 };
 
 
+const updateContactData = async (contactId, data) => {
+    const { tel2, tel3, formValues } = data;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Update standard fields and custom fields from formValues
+        const standardFieldsToUpdate = {};
+        const customFieldsToUpdate = {};
+
+        for (const key in formValues) {
+            if (['firstName', 'lastName', 'phoneNumber', 'postalCode'].includes(key)) {
+                standardFieldsToUpdate[key] = formValues[key];
+            } else {
+                customFieldsToUpdate[key] = formValues[key];
+            }
+        }
+        
+        let query = 'UPDATE contacts SET custom_fields = custom_fields || $2';
+        const params = [contactId, JSON.stringify(customFieldsToUpdate)];
+
+        Object.entries(standardFieldsToUpdate).forEach(([key, value]) => {
+            const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            params.push(value);
+            query += `, ${dbKey} = $${params.length}`;
+        });
+        
+        if (tel2) { params.push(tel2); query += `, tel2 = $${params.length}`; }
+        if (tel3) { params.push(tel3); query += `, tel3 = $${params.length}`; }
+        
+        query += ' WHERE id = $1 RETURNING *';
+
+        const res = await client.query(query, params);
+
+        await client.query('COMMIT');
+        return keysToCamel(res.rows[0]);
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
+
 const deleteContacts = async (contactIds) => {
     if (!contactIds || contactIds.length === 0) return;
     await pool.query('DELETE FROM contacts WHERE id = ANY($1::text[])', [contactIds]);
@@ -178,10 +264,12 @@ const deleteContacts = async (contactIds) => {
 
 module.exports = {
     getCampaigns,
+    getNextContactForAgent,
     saveCampaign,
     deleteCampaign,
     importContacts,
     createSingleContact,
     updateContact,
+    updateContactData,
     deleteContacts,
 };

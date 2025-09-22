@@ -149,6 +149,12 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
     const countdownIntervalRef = useRef<number | null>(null);
     const [isQualified, setIsQualified] = useState(false);
 
+    // Fix: Add state to manage agent script form values.
+    const [formValues, setFormValues] = useState<Record<string, any>>({});
+    const handleFormChange = (fieldName: string, value: any) => {
+        setFormValues(prev => ({ ...prev, [fieldName]: value }));
+    };
+
     const agentCampaigns = useMemo(() => {
         // Fix: Added a fallback for agent.campaignIds to prevent crash if it's undefined.
         return campaigns.filter(c => (agent.campaignIds || []).includes(c.id));
@@ -162,6 +168,22 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
         if (!activeCampaign?.scriptId) return null;
         return savedScripts.find(s => s.id === activeCampaign.scriptId);
     }, [activeCampaign, savedScripts]);
+
+    // Fix: Effect to populate form with contact data when a contact is loaded.
+    useEffect(() => {
+        if (currentContact) {
+            const initialFormValues: Record<string, any> = {
+                ...(currentContact.customFields || {}),
+                'first_name': currentContact.firstName || '',
+                'last_name': currentContact.lastName || '',
+                'phone_number': currentContact.phoneNumber || '',
+                'postal_code': currentContact.postalCode || '',
+            };
+            setFormValues(initialFormValues);
+        } else {
+            setFormValues({});
+        }
+    }, [currentContact]);
 
     // Fetch notes when contact changes
     useEffect(() => {
@@ -277,6 +299,8 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
         setWrapUpCountdown(null);
         setCallbackDateTime('');
         setIsQualified(false);
+        // Fix: Clear form values when the wrap-up period ends.
+        setFormValues({});
     }, [previousActiveCampaignIdBeforeCallback]);
 
     useEffect(() => {
@@ -457,6 +481,14 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
         return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
 
+    // Fix: Wrapper function to clear form after successful contact insertion.
+    const handleInsertContactAndClearForm = async (campaignId: string, contactData: Record<string, any>, phoneNumber: string) => {
+        // The original onInsertContact prop from App.tsx handles the API call.
+        await onInsertContact(campaignId, contactData, phoneNumber);
+        // After the API call succeeds, clear the local form state.
+        setFormValues({});
+    };
+
     const renderMainPanel = () => {
         if (isSimulatingCall) {
             return <CallSimulationModal log={simulationLog} />;
@@ -474,7 +506,10 @@ const AgentView: React.FC<AgentViewProps> = ({ agent, users, campaigns, savedScr
                 setNewNote={setNewNote}
                 onSaveNote={handleSaveNote}
                 campaign={activeCampaign}
-                onInsertContact={onInsertContact}
+                // Fix: Pass form state, handler, and the new insert function.
+                formValues={formValues}
+                onFormChange={handleFormChange}
+                onInsertContact={handleInsertContactAndClearForm}
             />;
         }
     
