@@ -145,3 +145,91 @@ Voici le déroulement exact d'un appel lorsque cette option est activée :
 -   L'agent qualifie l'appel dans le CRM et clique sur "Finaliser". C'est le serveur qui reçoit l'ordre et qui se charge de raccrocher les deux communications. L'agent n'a pas besoin de raccrocher depuis son mobile.
 
 Cette méthode offre le meilleur des deux mondes : la stabilité du réseau téléphonique traditionnel pour la voix, et la flexibilité d'une interface web pour la gestion des données.
+
+---
+
+### Q7 : Est-ce que le système crée une nouvelle table "Clients" et "Appels" pour chaque campagne ?
+
+**Réponse : Non, absolument pas.** C'est une anti-pattern qui rendrait le système très lent et impossible à maintenir. Notre CRM utilise une conception de base de données relationnelle, bien plus robuste.
+
+#### Comment ça marche ?
+
+Pensez à une grande armoire de classement unique pour toute l'entreprise :
+
+1.  **Une table `campaigns` :** C'est l'armoire elle-même. Chaque campagne est un **tiroir** dans cette armoire (ex: "Tiroir Ventes T4", "Tiroir Satisfaction Client").
+2.  **Une table `contacts` :** C'est l'ensemble de tous les **dossiers** (fiches client) de l'armoire. C'est ici que sont stockés tous les contacts de toutes les campagnes.
+3.  **La liaison `campaign_id` :** Chaque dossier (chaque ligne dans la table `contacts`) possède une **étiquette** (`campaign_id`). Cette étiquette indique à quel tiroir (à quelle campagne) le contact appartient.
+
+Quand vous importez un nouveau fichier pour une campagne, le système ajoute simplement de nouveaux dossiers dans l'armoire en leur mettant la bonne étiquette. Il ne construit jamais une nouvelle armoire. Il en va de même pour la table `call_history` qui stocke tous les appels de toutes les campagnes.
+
+Cette méthode garantit que le système reste rapide, organisé et facile à interroger, même avec des millions de contacts.
+
+---
+
+### Q8 : Comment fonctionne la gestion des quotas et y a-t-il des limites ?
+
+**Réponse :** Les quotas sont un outil pour contrôler la répartition de vos réussites sur différents segments de votre fichier d'appel.
+
+#### Le Mécanisme
+
+1.  **Définition :** Dans les paramètres d'une campagne, vous créez une règle. Par exemple :
+    *   **Champ :** `Code Postal`
+    *   **Opérateur :** `commence par`
+    *   **Valeur :** `75`
+    *   **Limite :** `50`
+2.  **Suivi :** Chaque fois qu'un agent qualifie un appel avec un statut "positif" (ex: "Vente"), le système vérifie les données du contact. Si son code postal commence par "75", le compteur de cette règle est incrémenté.
+3.  **Blocage :** Avant de distribuer un nouveau contact à un agent, le système vérifie les quotas. Si le compteur pour le code postal "75" a atteint 50, le système **ignorera automatiquement tous les autres contacts de Paris** et cherchera une fiche d'un autre segment dont le quota n'est pas atteint.
+
+#### Limitations et Bonnes Pratiques
+
+-   **Limite Technique :** Il n'y a pas de limite technique stricte au nombre de règles de quota que vous pouvez créer.
+-   **Limite de Performance :** **Oui.** Avoir un très grand nombre de règles (par exemple, 500 règles pour un fichier de 5000 contacts) est **fortement déconseillé**. Pour chaque contact à distribuer, le système devrait vérifier des centaines de règles, ce qui ralentirait considérablement le rythme des appels.
+
+**Bonne Pratique :** Le but d'un quota n'est pas de gérer des contacts individuels, mais de piloter des **segments de marché**. Pour un fichier de 5000 contacts, un nombre raisonnable de quotas serait entre **5 et 20**.
+
+*   **Exemple :** Vous avez des quotas par grande région, par tranche d'âge, ou par type de prospect. Vous ne créez pas un quota pour chaque ville ou chaque contact.
+
+En résumé, utilisez les quotas pour la stratégie globale de votre campagne, pas pour de la micro-gestion. Cela garantit des performances optimales.
+
+---
+
+### Q9 : Comment fonctionne la colonne `custom_fields` ? Est-ce vraiment un système "sans limite" de champs ?
+
+**Réponse :** Oui, c'est exact. La colonne `custom_fields` est l'un des éléments les plus puissants de notre système. Elle offre une flexibilité totale pour adapter les informations de contact aux besoins spécifiques de chaque campagne, sans jamais avoir à modifier la structure de la base de données.
+
+#### L'Ancienne Méthode (Rigide)
+
+Traditionnellement, si vous aviez besoin de stocker une nouvelle information (ex: "Numéro de contrat" pour une campagne d'assurance), il fallait demander à un technicien de modifier la base de données en ajoutant une nouvelle colonne. C'était lent, rigide, et cela créait des tables énormes avec beaucoup de colonnes vides pour les campagnes qui n'utilisaient pas ce champ.
+
+#### Notre Nouvelle Méthode (Flexible) : La Colonne `custom_fields`
+
+Nous utilisons une approche moderne. Au lieu d'avoir des dizaines de colonnes, la table `contacts` possède une seule colonne spéciale nommée `custom_fields`. Cette colonne est de type `JSONB`, ce qui signifie qu'elle peut stocker des données structurées (comme un objet JavaScript) directement à l'intérieur.
+
+**Le processus est simple et entièrement géré depuis l'interface :**
+
+1.  **Définition dans le Script :** Un superviseur, en créant un script d'agent, ajoute un "Champ de Saisie" et le nomme "Numéro de Contrat". Le système génère un nom technique comme `numero_de_contrat`.
+
+2.  **Saisie par l'Agent :** Pendant l'appel, l'agent remplit ce champ avec la valeur `ABC-12345`.
+
+3.  **Stockage Intelligent :** Au lieu de chercher une colonne `numero_de_contrat` qui n'existe pas, le système enregistre cette information **à l'intérieur de la colonne `custom_fields`** du contact. La donnée stockée ressemble à ceci :
+    ```json
+    { "numero_de_contrat": "ABC-12345" }
+    ```
+    Si pour le même contact, l'agent saisit aussi une "Date de Fin d'Engagement", la colonne `custom_fields` contiendra :
+    ```json
+    {
+      "numero_de_contrat": "ABC-12345",
+      "date_fin_engagement": "2025-10-31"
+    }
+    ```
+
+#### Avantages de cette approche
+
+| Caractéristique | Notre Méthode (`custom_fields` JSONB) | Ancienne Méthode (Colonnes Rigides) |
+| :--- | :--- | :--- |
+| **Flexibilité** | ✅ **Totale.** "Sans limite" signifie que vous pouvez créer autant de champs personnalisés que nécessaire pour chaque campagne. | ❌ **Rigide.** Chaque nouveau champ est une modification structurelle de la base de données. |
+| **Autonomie** | ✅ **Les superviseurs sont autonomes.** Ils définissent les données dont ils ont besoin dans l'éditeur de script, sans aucune intervention technique. | ❌ **Dépendance.** Nécessite un développeur pour modifier la base de données. |
+| **Performance** | ✅ **Optimale.** Pas de gaspillage d'espace avec des colonnes vides. Le type `JSONB` de PostgreSQL est hautement optimisé et peut être indexé pour des recherches rapides. | ❌ **Dégradée.** Des tables avec de nombreuses colonnes vides sont moins performantes. |
+| **Simplicité** | ✅ **Le code est plus simple.** Il gère un seul objet `custom_fields` au lieu d'une multitude de colonnes potentielles. | ❌ **Complexe.** Le code backend et frontend doit être mis à jour à chaque ajout de colonne. |
+
+En résumé, quand on dit "sans limite", on parle de la **structure**. Vous n'êtes plus limité par un nombre de colonnes prédéfinies. Cela vous donne le pouvoir d'adapter dynamiquement la fiche contact à la nature de chaque campagne.

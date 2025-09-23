@@ -1,4 +1,4 @@
-// FIX: The triple-slash directive for Cypress types must be at the top of the file to be effective.
+// FIX: Ensure the Cypress types are referenced correctly at the top of the file to make TypeScript aware of global test commands like `describe`, `it`, and `cy`.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
@@ -41,7 +41,7 @@ describe('Critical Application Flow', () => {
     // After login, the agent view should be visible
     cy.get('header').contains("Interface Agent");
     cy.get('main').contains("État de l'Agent");
-    // FIX: Updated test assertion to be more specific to the content displayed
+    // Updated test assertion to be more specific to the content displayed
     // when an agent logs in and is waiting for a call.
     cy.get('main').contains("Le script s'affichera ici.");
   });
