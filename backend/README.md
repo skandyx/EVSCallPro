@@ -36,9 +36,9 @@ The server will now listen for incoming AGI connections from Asterisk on the por
 
 ## How it Works
 
-1.  The `server.js` file initializes and starts the AGI server using the `agi` library.
+1.  The `server.js` file initializes and starts the AGI server using the `asterisk-agi` library.
 2.  When Asterisk receives a call, its `extensions.conf` is configured to hand control over to this AGI server.
-3.  For each call, the AGI server creates a `context` and passes it to our main script, `agi-handler.js`.
+3.  For each call, the AGI server emits a `connection` event with a `context` object and passes it to our main script, `agi-handler.js`.
 4.  The `agi-handler.js` uses the dialed number (DNID) from the context to query the PostgreSQL database (via `services/db.js`) for the corresponding IVR flow.
 5.  If a flow is found, it is passed to the `services/ivr-executor.js`, which interprets the flow's nodes and connections, sending commands back to Asterisk (e.g., play a message, wait for input, transfer the call).
 6.  The executor continues until the flow ends or the call is hung up.
