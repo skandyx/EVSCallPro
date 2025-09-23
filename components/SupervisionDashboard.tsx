@@ -1,12 +1,10 @@
-
-
-import React, { useState, useEffect, useMemo } from 'react';
-// FIX: Changed type from (typeof mockData.campaigns) to Campaign[] to remove dependency on non-existent mockData file.
+import React, { useState, useEffect, useReducer, useMemo } from 'react';
 import type { Feature, AgentState, ActiveCall, CampaignState, User, Campaign } from '../types.ts';
 import AgentBoard from './AgentBoard.tsx';
 import CallBoard from './CallBoard.tsx';
 import CampaignBoard from './CampaignBoard.tsx';
 import { UsersIcon, PhoneIcon, ChartBarIcon } from './Icons.tsx';
+import wsClient from '../src/services/wsClient.ts';
 
 interface SupervisionDashboardProps {
     feature: Feature;
@@ -16,78 +14,6 @@ interface SupervisionDashboardProps {
 }
 
 type Tab = 'live' | 'agents' | 'calls' | 'campaigns';
-
-// Simulate live data updates
-const useLiveData = (initialAgents: User[], initialCampaigns: Campaign[]) => {
-    const agentStates = useMemo<AgentState[]>(() => {
-        return initialAgents
-            .filter(u => u.role === 'Agent')
-            .map(agent => ({
-                ...agent,
-                status: 'En Attente',
-                statusDuration: 0,
-                callsHandledToday: 0,
-                averageHandlingTime: 0,
-            }));
-    }, [initialAgents]);
-
-    const [liveAgentStates, setLiveAgentStates] = useState<AgentState[]>(agentStates);
-    const [liveCalls, setLiveCalls] = useState<ActiveCall[]>([]);
-    const [liveCampaigns, setLiveCampaigns] = useState<CampaignState[]>(
-        initialCampaigns.map(c => ({
-            id: c.id,
-            name: c.name,
-            status: c.isActive ? 'running' : 'stopped',
-            offered: 0,
-            answered: 0,
-            hitRate: 0,
-            agentsOnCampaign: 0,
-        }))
-    );
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setLiveAgentStates(prevStates =>
-                prevStates.map(agent => {
-                    const newState = { ...agent, statusDuration: agent.statusDuration + 2 };
-                    if (Math.random() < 0.05) {
-                        const statuses: AgentState['status'][] = ['En Attente', 'En Appel', 'En Post-Appel', 'En Pause'];
-                        newState.status = statuses[Math.floor(Math.random() * statuses.length)];
-                        newState.statusDuration = 0;
-                    }
-                    return newState;
-                })
-            );
-
-            // Simulate call changes
-            if (Math.random() < 0.2 && liveCalls.length > 0) {
-                 setLiveCalls(prev => prev.slice(1));
-            }
-             if (Math.random() < 0.1 && liveAgentStates.some(a => a.status === 'En Attente')) {
-                const availableAgent = liveAgentStates.find(a => a.status === 'En Attente');
-                const campaign = initialCampaigns[Math.floor(Math.random() * initialCampaigns.length)];
-                if(availableAgent && campaign) {
-                    const newCall: ActiveCall = {
-                        id: `call-${Date.now()}`,
-                        from: `06${Math.floor(10000000 + Math.random() * 90000000)}`,
-                        to: campaign.callerId,
-                        agentId: availableAgent.id,
-                        campaignId: campaign.id,
-                        duration: 0,
-                        status: 'active',
-                    };
-                    setLiveCalls(prev => [...prev, newCall]);
-                }
-            }
-            setLiveCalls(prev => prev.map(c => ({...c, duration: c.duration + 2})));
-
-        }, 2000);
-
-        return () => clearInterval(interval);
-    }, [liveAgentStates, liveCalls.length, initialCampaigns]);
-
-    return { liveAgentStates, liveCalls, liveCampaigns };
-};
 
 const KpiCard: React.FC<{ title: string; value: string | number; icon: React.FC<any> }> = ({ title, value, icon: Icon }) => (
     <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
@@ -103,38 +29,129 @@ const KpiCard: React.FC<{ title: string; value: string | number; icon: React.FC<
     </div>
 );
 
+// State and Reducer for live data
+interface LiveState {
+    agentStates: AgentState[];
+    activeCalls: ActiveCall[];
+    campaignStates: CampaignState[];
+}
+
+type LiveAction =
+    | { type: 'INIT_STATE'; payload: { agents: User[], campaigns: Campaign[] } }
+    | { type: 'AGENT_STATUS_UPDATE'; payload: Partial<AgentState> & { agentId: string } }
+    | { type: 'NEW_CALL'; payload: ActiveCall }
+    | { type: 'CALL_HANGUP'; payload: { callId: string } }
+    | { type: 'TICK' };
+
+const initialState: LiveState = {
+    agentStates: [],
+    activeCalls: [],
+    campaignStates: [],
+};
+
+function liveDataReducer(state: LiveState, action: LiveAction): LiveState {
+    switch (action.type) {
+        case 'INIT_STATE': {
+            // FIX: Explicitly type `initialAgentStates` as `AgentState[]` to ensure the object created inside `map` conforms to the `AgentState` interface, particularly ensuring the `status` literal type is correctly inferred.
+            const initialAgentStates: AgentState[] = action.payload.agents
+                .filter(u => u.role === 'Agent')
+                .map(agent => ({
+                    ...agent,
+                    status: 'En Attente',
+                    statusDuration: 0,
+                    callsHandledToday: 0,
+                    averageHandlingTime: 0,
+                }));
+            // FIX: Explicitly type `initialCampaignStates` as `CampaignState[]` to ensure the object created inside `map` conforms to the `CampaignState` interface, particularly ensuring the `status` literal type is correctly inferred.
+            const initialCampaignStates: CampaignState[] = action.payload.campaigns.map(c => ({
+                id: c.id, name: c.name, status: c.isActive ? 'running' : 'stopped',
+                offered: 0, answered: 0, hitRate: 0, agentsOnCampaign: 0,
+            }));
+            return { agentStates: initialAgentStates, activeCalls: [], campaignStates: initialCampaignStates };
+        }
+        case 'AGENT_STATUS_UPDATE':
+            return {
+                ...state,
+                agentStates: state.agentStates.map(agent =>
+                    agent.id === action.payload.agentId
+                        ? { ...agent, ...action.payload, statusDuration: 0 } // Reset timer on status change
+                        : agent
+                ),
+            };
+        case 'NEW_CALL':
+            if (state.activeCalls.some(call => call.id === action.payload.id)) return state;
+            return { ...state, activeCalls: [...state.activeCalls, { ...action.payload, duration: 0 }] };
+        case 'CALL_HANGUP':
+            return { ...state, activeCalls: state.activeCalls.filter(call => call.id !== action.payload.callId) };
+        case 'TICK':
+             return {
+                ...state,
+                agentStates: state.agentStates.map(a => ({ ...a, statusDuration: a.statusDuration + 1 })),
+                activeCalls: state.activeCalls.map(c => ({ ...c, duration: c.duration + 1 })),
+            };
+        default:
+            return state;
+    }
+}
+
 const SupervisionDashboard: React.FC<SupervisionDashboardProps> = ({ feature, users, campaigns, currentUser }) => {
     const [activeTab, setActiveTab] = useState<Tab>('live');
-    const { liveAgentStates, liveCalls, liveCampaigns } = useLiveData(users, campaigns);
-    
-    if (!currentUser) return null;
+    const [state, dispatch] = useReducer(liveDataReducer, initialState);
 
-    const liveKpis = {
-        agentsReady: liveAgentStates.filter(a => a.status === 'En Attente').length,
-        agentsOnCall: liveAgentStates.filter(a => a.status === 'En Appel').length,
-        agentsOnWrapup: liveAgentStates.filter(a => a.status === 'En Post-Appel').length,
-        agentsOnPause: liveAgentStates.filter(a => a.status === 'En Pause').length,
-        activeCalls: liveCalls.length,
-    };
+    useEffect(() => {
+        dispatch({ type: 'INIT_STATE', payload: { agents: users, campaigns } });
+    }, [users, campaigns]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            wsClient.connect();
+        }
+
+        const handleWebSocketMessage = (event: any) => {
+            if (event.type && event.payload) {
+                const actionType = event.type.replace(/([A-Z])/g, '_$1').toUpperCase();
+                dispatch({ type: actionType as any, payload: event.payload });
+            }
+        };
+
+        const unsubscribe = wsClient.onMessage(handleWebSocketMessage);
+        const timer = setInterval(() => dispatch({ type: 'TICK' }), 1000);
+
+        return () => {
+            unsubscribe();
+            clearInterval(timer);
+            wsClient.disconnect();
+        };
+    }, []);
+
+    const kpis = useMemo(() => ({
+        agentsReady: state.agentStates.filter(a => a.status === 'En Attente').length,
+        agentsOnCall: state.agentStates.filter(a => a.status === 'En Appel').length,
+        agentsOnWrapup: state.agentStates.filter(a => a.status === 'En Post-Appel').length,
+        agentsOnPause: state.agentStates.filter(a => a.status === 'En Pause').length,
+        activeCalls: state.activeCalls.length,
+    }), [state.agentStates, state.activeCalls]);
 
     const renderContent = () => {
+        if (!currentUser) return null;
         switch (activeTab) {
             case 'live':
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <KpiCard title="Agents en Attente" value={liveKpis.agentsReady} icon={UsersIcon} />
-                        <KpiCard title="Agents en Appel" value={liveKpis.agentsOnCall} icon={PhoneIcon} />
-                        <KpiCard title="Agents en Post-Appel" value={liveKpis.agentsOnWrapup} icon={UsersIcon} />
-                        <KpiCard title="Agents en Pause" value={liveKpis.agentsOnPause} icon={UsersIcon} />
-                        <KpiCard title="Appels Actifs" value={liveKpis.activeCalls} icon={ChartBarIcon} />
+                        <KpiCard title="Agents en Attente" value={kpis.agentsReady} icon={UsersIcon} />
+                        <KpiCard title="Agents en Appel" value={kpis.agentsOnCall} icon={PhoneIcon} />
+                        <KpiCard title="Agents en Post-Appel" value={kpis.agentsOnWrapup} icon={UsersIcon} />
+                        <KpiCard title="Agents en Pause" value={kpis.agentsOnPause} icon={UsersIcon} />
+                        <KpiCard title="Appels Actifs" value={kpis.activeCalls} icon={ChartBarIcon} />
                     </div>
                 );
             case 'agents':
-                return <AgentBoard agents={liveAgentStates} currentUser={currentUser} />;
+                return <AgentBoard agents={state.agentStates} currentUser={currentUser} />;
             case 'calls':
-                return <CallBoard calls={liveCalls} agents={users} campaigns={campaigns} />;
+                return <CallBoard calls={state.activeCalls} agents={users} campaigns={campaigns} />;
             case 'campaigns':
-                return <CampaignBoard campaignStates={liveCampaigns} />;
+                return <CampaignBoard campaignStates={state.campaignStates} />;
             default:
                 return null;
         }
