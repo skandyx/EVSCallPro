@@ -1,50 +1,41 @@
-# Guide d'Installation Complet (Backend) - EVSCallPro
+# Guide d'Installation Complet - EVSCallPro
 
-Ce document décrit les étapes nécessaires pour installer et configurer l'ensemble des services backend de l'application sur un serveur **Debian 11/12** ou **Ubuntu 20.04/22.04** vierge.
-
-## Prérequis
-
-- Un serveur VPS ou dédié avec un accès `root` ou `sudo`.
-- Les services `curl`, `gnupg` et `sudo` doivent être installés (`apt install curl gnupg sudo`).
+Ce document décrit les étapes nécessaires pour installer et configurer l'ensemble de l'application (backend et frontend) sur un serveur **Debian 11/12** ou **Ubuntu 20.04/22.04** vierge.
 
 ---
 
 ## Philosophie de la Configuration
 
-Il est crucial de comprendre la différence entre la **configuration d'amorçage** et la **gestion continue**.
+Ce guide couvre l'**installation d'amorçage** (bootstrap), effectuée une seule fois par un administrateur système. Une fois l'installation terminée, toute la **gestion continue** (création d'utilisateurs, de campagnes, de SVI, etc.) se fait **exclusivement via l'interface web de l'application**.
 
--   **Configuration d'Amorçage (ce guide)** : Ce sont les étapes effectuées **une seule fois** par un administrateur système lors de l'installation. Elles permettent aux différents services (Backend, Base de données, Téléphonie) de savoir comment communiquer entre eux. Pensez-y comme donner la clé de contact au moteur. Ces étapes sont manuelles et touchent aux fichiers de configuration système.
+L'application peut fonctionner selon deux modes de connexion à la téléphonie, définis par la variable `PBX_CONNECTION_MODE` dans le fichier de configuration du backend :
+1.  **`YEASTAR_API` (Ancien mode)** : Le backend pilote directement chaque PBX Yeastar de site via son API.
+2.  **`ASTERISK_AMI` (Nouveau mode centralisé)** : Le backend pilote un unique serveur Asterisk central, qui route les appels vers les Yeastar agissant comme de simples passerelles.
 
--   **Gestion Continue (via l'application)** : Une fois l'installation terminée et les services démarrés, **toute la configuration métier** (création des Trunks, des SVI, des utilisateurs, etc.) se fait **exclusivement via l'interface web de l'application**. Le backend se charge alors de modifier dynamiquement les fichiers de configuration nécessaires (comme ceux d'Asterisk) de manière sécurisée.
+Ce guide se concentre sur le déploiement du mode **`ASTERISK_AMI`**, qui est l'architecture cible.
 
 ---
 
-## Étape 1 : Installation des Dépendances Système
+## Étape 1 : Prérequis Système et Pare-feu (UFW)
 
-Mettez à jour votre système et installez les paquets de base.
 ```bash
+# Mise à jour du système et installation des paquets de base
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y build-essential git
-```
+sudo apt install -y build-essential git curl gnupg sudo nginx
 
-## Étape 2 : Configuration du Pare-feu (UFW)
+# Configuration du pare-feu
+sudo ufw allow ssh     # Accès SSH
+sudo ufw allow 'Nginx Full' # Port 80 (HTTP) et 443 (HTTPS)
+# Note : Les ports de l'API (3001) et d'Asterisk (5038) ne sont pas exposés publiquement.
+# L'accès se fait localement ou via Nginx.
 
-Nous allons configurer le pare-feu pour n'autoriser que les ports nécessaires. C'est une étape de sécurité essentielle.
-
-```bash
-sudo ufw allow ssh     # Garder l'accès SSH
-sudo ufw allow 80/tcp    # HTTP (pour le frontend Nginx)
-sudo ufw allow 443/tcp   # HTTPS (pour le frontend Nginx)
-sudo ufw allow 5038/tcp  # Asterisk AMI (pour la supervision par le backend)
-sudo ufw allow 4573/tcp  # AGI Server (pour le contrôle des appels par le backend)
-# Le port 3001 pour l'API n'est plus exposé directement. L'accès se fait via Nginx.
-
-# Activer le pare-feu
+# Activer le pare-feu (confirmez avec 'y')
 sudo ufw enable
 ```
-Lors de l'activation, confirmez avec `y`.
 
-## Étape 3 : Installation de la Base de Données (PostgreSQL)
+---
+
+## Étape 2 : Installation de la Base de Données (PostgreSQL)
 
 ```bash
 # Installer PostgreSQL
@@ -58,165 +49,220 @@ CREATE USER contact_center_user WITH PASSWORD 'votre_mot_de_passe_securise';
 CREATE DATABASE contact_center_db OWNER contact_center_user;
 \q
 ```
-**Note** : Remplacez `votre_mot_de_passe_securise` par un mot de passe fort et conservez-le précieusement.
+**Note** : Remplacez `votre_mot_de_passe_securise` par un mot de passe fort et conservez-le.
 
-## Étape 4 : Installation du Moteur de Téléphonie (Asterisk)
+---
 
-La version d'Asterisk fournie par les dépôts officiels de Debian/Ubuntu est une version LTS (Long-Term Support), ce qui est idéal pour la stabilité en production.
+## Étape 3 : Installation du Moteur de Téléphonie (Asterisk)
 
 ```bash
-# Installer Asterisk
+# Installer Asterisk (version LTS des dépôts officiels)
 sudo apt install -y asterisk
 
-# Démarrer et activer le service au démarrage du serveur
+# Démarrer et activer le service
 sudo systemctl start asterisk
 sudo systemctl enable asterisk
 
 # Vérifier qu'Asterisk est bien en cours d'exécution
 sudo systemctl status asterisk
 # Vous devriez voir "active (running)". Appuyez sur Q pour quitter.
-
-# Vérification supplémentaire : se connecter à la console Asterisk
-sudo asterisk -rvvv
-# Vous devriez voir la console CLI d'Asterisk. Tapez "exit" pour quitter.
 ```
 
-### 4.1 Sécurisation des Permissions (Optionnel mais recommandé)
-Pour des raisons de sécurité, il est bon de s'assurer que les fichiers de configuration d'Asterisk n'appartiennent qu'à l'utilisateur `asterisk`.
-```bash
-sudo chown -R asterisk:asterisk /etc/asterisk
-sudo chown -R asterisk:asterisk /var/lib/asterisk
-sudo chown -R asterisk:asterisk /var/log/asterisk
-sudo chown -R asterisk:asterisk /var/spool/asterisk
-sudo chown -R asterisk:asterisk /usr/lib/asterisk
-```
+---
 
-## Étape 5 : Installation de l'Environnement Backend (Node.js)
-
-Nous installons Node.js v20, qui est une version LTS, et PM2, un gestionnaire de processus pour garder notre application en ligne.
+## Étape 4 : Installation du Backend (Node.js & PM2)
 
 ```bash
-# Installer Node.js v20.x
+# Installer Node.js v20.x (LTS)
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
-# Installer PM2 globalement
+# Installer PM2, le gestionnaire de processus pour Node.js
 sudo npm install -g pm2
 ```
 
-## Étape 6 : Déploiement du Code Backend
+---
 
-1.  **Récupérez le code de l'application** (par exemple, avec git) :
+## Étape 5 : Déploiement et Configuration du Code
+
+1.  **Récupérez le code de l'application** :
     ```bash
     git clone https://votre-repository/EVSCallPro.git
-    cd EVSCallPro/backend
+    cd EVSCallPro
     ```
 
-2.  **Installez les dépendances du projet** :
+2.  **Configurer les variables d'environnement du Backend :**
     ```bash
-    npm install
-    ```
-
-3.  **Configurer les variables d'environnement :**
-    ```bash
+    cd backend
     cp .env.example .env
-    sudo nano .env
+    nano .env
     ```
-    Modifiez le fichier `.env` avec les informations de votre base de données (le mot de passe que vous avez défini à l'étape 3).
+    Modifiez le fichier `.env` avec les informations correctes. **Voici un exemple complet pour le mode `ASTERISK_AMI`**:
     ```env
+    # --- Base de Données ---
     DB_HOST=localhost
     DB_PORT=5432
     DB_USER=contact_center_user
     DB_PASSWORD=votre_mot_de_passe_securise
     DB_NAME=contact_center_db
+
+    # --- Serveur AGI ---
     AGI_PORT=4573
+    
+    # --- Mode de Connexion Téléphonie ---
+    # Mettre 'ASTERISK_AMI' pour la nouvelle architecture centralisée.
+    # Mettre 'YEASTAR_API' pour l'ancien mode de connexion directe.
+    PBX_CONNECTION_MODE=ASTERISK_AMI
+
+    # --- Connexion Asterisk Manager Interface (AMI) ---
+    # Doit correspondre à la configuration dans asterisk-configs/manager.d/evscallpro.conf
+    AMI_HOST=127.0.0.1
+    AMI_PORT=5038
+    AMI_USER=ami_user
+    AMI_SECRET=ami_password
     ```
 
-## Étape 7 : Configuration Finale et Liaison des Services
-
-### 7.1 Configuration d'Asterisk
-
-Modifiez les fichiers de configuration d'Asterisk avec `sudo nano`.
-
-1.  **`/etc/asterisk/manager.conf` - Accès pour l'API (Supervision)**
-    Modifiez ce fichier pour permettre au CRM de communiquer avec Asterisk.
-    ```ini
-    [general]
-    enabled = yes
-    port = 5038
-    bindaddr = 127.0.0.1 ; Plus sécurisé, n'écoute que localement
-
-    [ami_user] ; Doit correspondre à ce qui est configuré dans le CRM
-    secret = ami_password ; Doit correspondre
-    deny=0.0.0.0/0.0.0.0
-    permit=127.0.0.1/255.255.255.0 ; Autorise uniquement le serveur local à se connecter
-    read = all
-    write = all
-    ```
-
-2.  **`/etc/asterisk/extensions.conf` - Redirection des appels vers le Backend**
-    Ajoutez ce contexte. Il sera utilisé par vos Trunks SIP.
-    ```ini
-    [from-trunk-context]
-    exten => _X.,1,Answer()
-    exten => _X.,n,Verbose(1, "--- Appel transféré au script AGI Node.js ---")
-    exten => _X.,n,AGI(agi://127.0.0.1:4573)
-    exten => _X.,n,Hangup()
-    ```
-
-3.  **Appliquer les changements :**
+3.  **Appliquer la configuration Asterisk via le script** :
+    *Ce script va sauvegarder votre configuration actuelle, copier les nouveaux fichiers, et recharger Asterisk.*
     ```bash
-    sudo asterisk -rx "core reload"
-    ```
-    **Note** : La configuration des Trunks SIP (`sip.conf` ou `pjsip.conf`) se fera désormais **via l'interface du CRM**.
-
-## Étape 8 : Démarrage du Backend avec PM2
-
-Nous allons lancer le serveur backend en tant que service pour qu'il tourne en permanence.
-
-1.  **Depuis le dossier `EVSCallPro/backend`** :
-    ```bash
-    pm2 start server.js --name evscallpro-backend
+    # Assurez-vous d'être dans le dossier EVSCallPro/
+    cd .. 
+    sudo chmod +x scripts/apply-asterisk-config.sh
+    sudo ./scripts/apply-asterisk-config.sh
     ```
 
-2.  **Sauvegarder la configuration de PM2** pour qu'il redémarre l'application après un reboot du serveur :
+4.  **Installer les dépendances du projet Backend** :
     ```bash
+    cd backend
+    npm install
+    ```
+
+5.  **Compiler le Frontend pour la production** :
+    ```bash
+    cd .. # Retourner à la racine EVSCallPro
+    npm install
+    npm run build
+    ```
+    Cette commande crée un dossier `dist/` contenant les fichiers statiques (HTML, CSS, JS) de votre application.
+
+---
+
+## Étape 6 : Configuration du Serveur Web (Nginx)
+
+1.  **Créez un répertoire pour héberger vos fichiers web** :
+    ```bash
+    sudo mkdir -p /var/www/evscallpro
+    ```
+
+2.  **Copiez les fichiers compilés du frontend** :
+    ```bash
+    sudo cp -r dist/* /var/www/evscallpro/
+    ```
+
+3.  **Créez un fichier de configuration Nginx pour votre site** :
+    ```bash
+    sudo nano /etc/nginx/sites-available/evscallpro
+    ```
+
+4.  **Collez la configuration suivante**. Remplacez `votre_ip_ou_domaine` par l'IP ou le nom de domaine de votre serveur.
+    ```nginx
+    server {
+        listen 80;
+        server_name votre_ip_ou_domaine;
+
+        # --- Partie API Backend ---
+        # Toutes les requêtes commençant par /api/ sont redirigées
+        # vers le serveur backend Node.js qui écoute sur le port 3001.
+        location /api/ {
+            proxy_pass http://127.0.0.1:3001;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade"; # Important pour les WebSockets
+        }
+
+        # --- Partie Frontend React ---
+        # Toutes les autres requêtes sont servies par les fichiers statiques.
+        location / {
+            root /var/www/evscallpro;
+            index index.html;
+            try_files $uri /index.html;
+        }
+
+        access_log /var/log/nginx/evscallpro.access.log;
+        error_log /var/log/nginx/evscallpro.error.log;
+    }
+    ```
+
+5.  **Activez la configuration et redémarrez Nginx** :
+    ```bash
+    sudo ln -s /etc/nginx/sites-available/evscallpro /etc/nginx/sites-enabled/
+    sudo nginx -t # Vérifie la syntaxe
+    sudo systemctl restart nginx
+    ```
+
+---
+
+## Étape 7 : Démarrage et Initialisation Finale
+
+1.  **Démarrer le Backend avec PM2** :
+    *Depuis le dossier `EVSCallPro/backend`*
+    ```bash
+    # Utilise le fichier de configuration d'écosystème
+    pm2 start ecosystem.config.js
+    
+    # Sauvegarde la configuration pour redémarrage automatique
     pm2 save
     pm2 startup
     # Suivez les instructions affichées par la dernière commande pour la finaliser.
     ```
 
-3.  **Vérifier que l'application est en ligne** :
+2.  **Créer le Schéma de la Base de Données** :
     ```bash
-    pm2 status
-    # Vous devriez voir 'evscallpro-backend' avec le statut 'online'.
-    ```
-
----
-
-## Étape 9 : Création du Schéma de la Base de Données
-
-Maintenant que tout est en place, nous devons créer les tables dans notre base de données.
-
-1.  **Connectez-vous à votre base de données** :
-    ```bash
+    # Connectez-vous à votre base de données
     psql -U contact_center_user -d contact_center_db -h localhost
     ```
-    Entrez le mot de passe que vous avez défini.
+    Entrez votre mot de passe, puis **copiez-collez l'intégralité du contenu du fichier `database.txt`** et appuyez sur Entrée.
 
-2.  **Copiez et collez l'intégralité du contenu du fichier `database.txt`** dans le terminal `psql` et appuyez sur Entrée. Cela créera toutes les tables, relations et triggers nécessaires.
+3.  **Insérer les Données Initiales (Seed)** :
+    *Toujours dans `psql`*, **copiez-collez l'intégralité du contenu du fichier `seed.txt`** et appuyez sur Entrée.
+    Quittez psql avec `\q`.
 
-3.  **Quittez psql** :
+---
+
+## Étape 8 : Configuration Post-Installation (Ajout d'un Site)
+
+Pour chaque site physique disposant d'un Yeastar, vous devez l'ajouter en tant que Trunk dans Asterisk via le script fourni.
+
+1.  **Rendez le script exécutable** :
     ```bash
-    \q
+    sudo chmod +x scripts/addSiteTrunk.sh
+    ```
+
+2.  **Exécutez le script pour chaque site** :
+    ```bash
+    # Syntaxe: sudo ./scripts/addSiteTrunk.sh <ID_du_Site> <IP_VPN_du_Yeastar>
+    # L'ID du site doit correspondre à celui dans la table 'sites' de la BDD.
+    
+    # Exemple pour le site de Paris (ID 1, IP 10.1.0.254)
+    sudo ./scripts/addSiteTrunk.sh 1 10.1.0.254
+    
+    # Exemple pour le site de Lyon (ID 2, IP 10.2.0.254)
+    sudo ./scripts/addSiteTrunk.sh 2 10.2.0.254
     ```
 
 ---
 
-## Dépannage (Logs)
+## Accès à l'Application
 
--   **Pour voir les logs du backend** : `pm2 logs evscallpro-backend`
--   **Pour voir les logs d'Asterisk** : `sudo asterisk -rvvv` (console en direct) ou consultez `/var/log/asterisk/messages`.
--   **Pour voir les logs de PostgreSQL** : Consultez le répertoire `/var/log/postgresql/`.
+Ouvrez votre navigateur web et rendez-vous à l'adresse de votre serveur : `http://votre_ip_ou_domaine`
 
-Votre infrastructure backend est maintenant entièrement installée et fonctionnelle ! L'étape suivante consiste à déployer le frontend en suivant le guide `DEPLOY_FRONTEND.md`.
+Vous devriez voir l'écran de connexion. Utilisez les identifiants par défaut créés par le script `seed.txt` (ex: SuperAdmin `9999`/`9999`).
+
+### Dépannage
+- **Logs du Backend** : `pm2 logs evscallpro-backend`
+- **Logs d'Asterisk** : `sudo asterisk -rvvv`
+- **Logs de Nginx** : `sudo tail -f /var/log/nginx/evscallpro.error.log`
+- **Logs de PostgreSQL** : Consulter `/var/log/postgresql/`.

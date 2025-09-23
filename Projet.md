@@ -2,77 +2,78 @@
 
 Ce document fournit une vue d'ensemble détaillée des fonctionnalités de l'application, de son état actuel et de la feuille de route pour les développements futurs.
 
-## 1. État Actuel : Fonctionnalités Implémentées
+## 1. État Actuel (Post-Refactorisation Backend)
 
-L'application est actuellement une maquette fonctionnelle très avancée, opérant avec des données de test (`mock data`). Elle intègre une gestion des rôles (Administrateur, Superviseur, Agent) et propose les modules suivants :
+L'application a dépassé le stade de simple maquette pour devenir un prototype doté de fondations backend robustes et prêtes pour la production. L'interface frontend reste fonctionnelle avec des données de test, tandis que le backend et la base de données ont été finalisés sur le plan architectural.
 
-### A. Monitoring
-Un tableau de bord technique pour surveiller la santé de l'infrastructure en temps réel (simulé).
-- **Indicateur de santé global** (UP, DEGRADED, DOWN).
-- **Métriques serveur** : Jauges pour le CPU, la RAM, le disque et graphique de latence API.
-- **Journal des événements** : Affichage des logs système (INFO, WARNING, ERROR).
-- **Informations de version** des différents composants (frontend, backend, etc.).
-- **Testeur de connectivité** pour les services critiques (BDD, API, Téléphonie).
+### A. Fondations Backend & Données (COMPLET)
+- **Base de Données (PostgreSQL)** : Le schéma est complet, normalisé et optimisé. Il couvre toutes les entités de l'application (CDR, utilisateurs, campagnes, etc.) et est prêt à stocker des données réelles.
+- **Serveur Backend (Node.js)** : La structure du serveur est en place, avec une gestion modulaire des requêtes à la base de données, un serveur web Express et un serveur WebSocket.
+- **Scripts d'Initialisation** : Les scripts `database.txt` (schéma) et `seed.txt` (données initiales) permettent une initialisation rapide et reproductible de l'environnement.
 
-### B. Supervision
-Un centre de commandement pour le pilotage en temps réel de l'activité. Les données sont actualisées dynamiquement pour simuler un flux WebSocket.
-- **Navigation par onglets** : Live, Agents, Appels, Campagnes.
-- **Live Dashboard** : KPIs principaux (agents par état, alertes intelligentes).
-- **Agent Board** : Tableau détaillé de l'état des agents avec leurs KPIs et des boutons d'actions de supervision (Écouter, Intervenir, Coacher, Forcer la pause/déconnexion).
-- **Call Board** : Liste des appels actifs avec actions possibles (Monitorer, Transférer, Raccrocher).
-- **Campaign Board** : Vue des campagnes actives avec actions rapides (Pause, Stop, Boost).
+### B. Architecture de Téléphonie Centralisée (COMPLET)
+L'application supporte désormais une architecture de téléphonie centralisée, évolutive et standard de l'industrie.
+- **Double Mode de Connexion** : Le backend peut opérer de deux manières, sélectionnables via la variable d'environnement `PBX_CONNECTION_MODE` :
+    1.  **`YEASTAR_API`** : Mode hérité pour piloter directement les PBX Yeastar via leur API.
+    2.  **`ASTERISK_AMI`** : Mode recommandé où le backend pilote un unique Asterisk central, offrant un contrôle et une flexibilité maximum.
+- **Configuration Asterisk Complète** : Tous les fichiers de configuration pour Asterisk sont générés, gérant les trunks vers les sites, les contextes d'appels entrants/sortants et l'interface de management (AMI).
+- **Scripts de Déploiement** : Les scripts `apply-asterisk-config.sh` et `addSiteTrunk.sh` automatisent et sécurisent le déploiement et la maintenance de la configuration de téléphonie.
 
-### C. Reporting
-Un module d'analyse de la performance avec des filtres puissants et des exports professionnels.
-- **Filtres dynamiques** par période, campagne et agent.
-- **KPIs interactifs** et calculés en fonction des filtres.
-- **Navigation par onglets** : Graphiques, Feuille de Temps, Par Campagne, Par Agent, Historique.
-- **Graphiques** : Visualisations du volume d'appels, répartition par campagne, taux de succès et adhérence.
-- **Feuille de Temps** : Analyse détaillée des sessions des agents, calcul de l'adhérence au planning.
-- **Export PDF** : Génération d'un rapport multi-pages professionnel incluant KPIs, analyses et journaux.
+---
 
-### D. Gestion des Agents
-- **Utilisateurs** : Création, modification, suppression des utilisateurs. Gestion des rôles, assignation aux campagnes, génération de mots de passe.
-- **Groupes** : Création de groupes d'agents pour faciliter l'assignation et l'analyse.
+## 2. Analyse : Le Pont Manquant entre Frontend et Backend
 
-### E. Configuration Outbound (Sortant)
-- **Scripts d'agent** : Un éditeur visuel complet en glisser-déposer pour créer des scripts multi-pages avec logique conditionnelle.
-- **Campagnes Sortantes** : Module de configuration avancé avec une interface à onglets :
-    - **Général** : Nom, priorité, mode de numérotation, script, groupe de qualifications.
-    - **Planification** : Fuseau horaire, jours et heures d'appel.
-    - **Stratégie** : Paramètres prédictifs, gestion des tentatives de rappel par statut, détection de répondeur.
-    - **Qualité & Conformité** : Enregistrement, bip légal, durées maximales.
+À ce stade, nous avons une interface utilisateur riche et un moteur backend puissant, mais ils ne communiquent pas encore entre eux. **Le frontend fonctionne toujours de manière isolée sur des données de démonstration (`mockData.ts`).**
 
-### F. Configuration Inbound (Entrant)
-- **Flux SVI** : Un éditeur visuel en glisser-déposer pour construire des parcours vocaux interactifs (SVI), avec des nœuds logiques (Menu, Média, Calendrier, Transfert, etc.).
+La pièce manquante est le **"pont" applicatif** : une **API REST complète** côté backend.
 
-### G. Paramètres Généraux
-- **Qualifications** : Gestion des qualifications d'appel et de leurs groupes.
-- **Trunks SIP** : Configuration des connexions aux fournisseurs de téléphonie.
-- **Numéros SDA** : Assignation des numéros entrants aux flux SVI.
-- **Maintenance & Sauvegardes** : Lancement de sauvegardes manuelles et planification de sauvegardes automatiques.
+- **Backend** : Possède la logique pour lire/écrire dans la base de données (ex: `user.queries.js`).
+- **Frontend** : Possède les interfaces pour afficher/modifier les utilisateurs.
+- **API (à construire)** : Doit exposer la logique du backend via des "routes" (ex: `GET /api/users`, `POST /api/users`) que le frontend pourra appeler pour remplacer les données fictives par des données réelles.
 
-## 2. Feuille de Route : Points Restants
+---
 
-Pour transformer cette maquette en une solution de production, les prochaines étapes sont principalement axées sur le développement du backend et la connexion des deux parties.
+## 3. Feuille de Route Finale : Du Prototype à la Production
 
-1.  **Développement de l'API Backend**
-    - Créer les endpoints REST (ou GraphQL) pour toutes les opérations CRUD (Create, Read, Update, Delete) sur l'ensemble des entités : utilisateurs, groupes, campagnes, scripts, SVI, etc.
-    - Implémenter la logique de sauvegarde et de récupération des données dans la base de données PostgreSQL.
+Voici les étapes concrètes et priorisées pour finaliser l'application.
 
-2.  **Connexion du Frontend à l'API**
-    - Remplacer toutes les interactions avec les données de test (`mockData.ts`) par des appels à l'API du backend.
-    - Gérer les états de chargement, les succès et les erreurs des appels API.
+### Phase 1 : Connexion (Priorité 1 - Chemin Critique)
+*Objectif : Rendre l'application entièrement pilotée par les données de la base de données.*
 
-3.  **Implémentation du WebSocket pour le Temps Réel**
-    - **Côté Backend** : Mettre en place un serveur WebSocket qui diffuse en continu les événements du centre de contact (changements d'état d'agent, nouveaux appels, KPIs de campagne).
-    - **Côté Frontend** : Connecter les modules de Supervision et de Monitoring au WebSocket pour afficher des données véritablement en temps réel.
+1.  **Développement de l'API Backend (CRUD)**
+    - ✅ **Utilisateurs & Groupes** : Créer les endpoints `GET`, `POST`, `PUT`, `DELETE` pour `/api/users` et `/api/groups`.
+    - ✅ **Campagnes & Contacts** : Endpoints pour gérer les campagnes et l'import/gestion des contacts.
+    - ✅ **Scripts & SVI** : Endpoints pour sauvegarder et charger les configurations JSON des éditeurs visuels.
+    - ✅ **Qualifications** : Endpoints pour la gestion des qualifications et de leurs groupes.
+    - ✅ **Paramètres** : Endpoints pour toutes les configurations (Trunks, SDA, Sites, etc.).
 
-4.  **Finalisation de l'Intégration Téléphonique (Asterisk)**
-    - Valider et enrichir les scripts AGI du backend pour couvrir tous les cas d'usage des nœuds SVI.
-    - Mettre en place la logique de composition d'appels pour les campagnes sortantes, en respectant les modes de numérotation (prédictif, progressif).
+2.  **Intégration Frontend**
+    - **Remplacer `mockData.ts`** : Modifier chaque composant (`UserManager`, `CampaignManager`, etc.) pour qu'il appelle l'API via la fonction `apiCall` au lieu de lire les données locales.
+    - **Gestion d'État** : Utiliser `useEffect` pour charger les données au montage des composants et rafraîchir la vue après chaque opération de sauvegarde ou de suppression.
 
-5.  **Fonctionnalités Avancées**
-    - **Module Qualité (QA)** : Développer l'interface de notation des enregistrements mentionnée dans les spécifications.
-    - **Alertes** : Implémenter le système d'alertes (notifications Slack, SMS, PagerDuty) via le backend.
-    - **Authentification Sécurisée** : Remplacer la gestion actuelle des mots de passe par un système robuste (ex: JWT, OAuth) avec hashage des mots de passe.
+### Phase 2 : Temps Réel & Sécurité (Priorité 2 - Préparation Production)
+*Objectif : Activer la supervision temps réel et sécuriser l'application.*
+
+1.  **Implémentation du WebSocket pour la Supervision**
+    - **Backend** : Finaliser le `AmiListener` pour qu'il parse les événements AMI d'Asterisk (AgentConnect, Hangup, etc.) et les diffuse via le serveur WebSocket (`wss`) au format JSON attendu par le frontend.
+    - **Frontend** : Connecter le `SupervisionDashboard` au WebSocket pour recevoir les événements et mettre à jour l'interface en temps réel, en supprimant la simulation `setInterval`.
+
+2.  **Sécurisation de l'Application**
+    - **Authentification Robuste** : Remplacer la gestion de session en mémoire par un système basé sur **JWT (JSON Web Tokens)**. Le backend générera un token à la connexion, et le frontend le stockera de manière sécurisée pour l'inclure dans chaque requête API.
+    - **Autorisation par Rôle** : Implémenter des middlewares sur l'API backend pour vérifier le rôle de l'utilisateur (contenu dans le JWT) avant d'autoriser l'accès à un endpoint (ex: seul un 'Administrateur' peut appeler `POST /api/users`).
+
+### Phase 3 : Robustesse & Qualité (Priorité 3 - Viabilité à long terme)
+*Objectif : Garantir la fiabilité, la maintenabilité et la finition de l'application.*
+
+1.  **Mise en Place des Tests Automatisés**
+    - **Tests Unitaires (Backend)** : Utiliser Jest pour tester la logique métier critique (ex: calculs de rapports, validation de données).
+    - **Tests d'Intégration (Backend)** : Utiliser Jest & Supertest pour tester les endpoints de l'API, en simulant des requêtes et en vérifiant les réponses et les modifications en base de données.
+    - **Tests End-to-End (Frontend)** : Mettre en place Cypress ou Playwright pour simuler des parcours utilisateurs complets dans le navigateur (ex: "se connecter, créer une campagne, y ajouter un contact, puis la supprimer").
+
+2.  **Pipeline CI/CD (Intégration et Déploiement Continus)**
+    - Configurer un service (ex: GitHub Actions) pour lancer automatiquement la suite de tests à chaque `push`.
+    - Automatiser le déploiement sur le serveur de production si les tests réussissent.
+
+3.  **Finalisation des Fonctionnalités Avancées**
+    - Implémenter la logique métier pour les alertes, les sauvegardes et le module de QA (notation des enregistrements).
+    - Réaliser un audit de performance sur les requêtes de reporting avec de grands volumes de données et optimiser si nécessaire.
