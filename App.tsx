@@ -1,238 +1,205 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import type { Feature, User, FeatureId, ModuleVisibility, SavedScript, Page, ScriptBlock, Campaign, Contact, UserGroup, Site, Qualification, QualificationGroup, IvrFlow, AudioFile, Trunk, Did, BackupLog, BackupSchedule, AgentSession, CallHistoryRecord, SystemLog, VersionInfo, ConnectivityService, ActivityType, PlanningEvent, SystemConnectionSettings } from './types';
+import type { Feature, User, FeatureId, ModuleVisibility, SavedScript, Campaign, Contact, UserGroup, Site, Qualification, QualificationGroup, IvrFlow, AudioFile, Trunk, Did, BackupLog, BackupSchedule, AgentSession, CallHistoryRecord, SystemLog, VersionInfo, ConnectivityService, ActivityType, PlanningEvent, SystemConnectionSettings, ContactNote, PersonalCallback } from './types.ts';
 import { features } from './data/features.ts';
 import Sidebar from './components/Sidebar.tsx';
-import FeatureDetail from './components/FeatureDetail.tsx';
 import LoginScreen from './components/LoginScreen.tsx';
 import AgentView from './components/AgentView.tsx';
 import Header from './components/Header.tsx';
 import MonitoringDashboard from './components/MonitoringDashboard.tsx';
-import { mockData as initialMockData } from './data/mockData';
+import apiClient from './src/lib/axios.ts'; // Utilisation de l'instance Axios configurée
 
+// Création d'un contexte pour les alertes (toast)
+export const AlertContext = React.createContext<{
+    showAlert: (message: string, type: 'success' | 'error' | 'info') => void;
+}>({ showAlert: () => {} });
 
 const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [activeFeatureId, setActiveFeatureId] = useState<FeatureId>('users');
-    const [allData, setAllData] = useState(initialMockData);
+    const [allData, setAllData] = useState<Record<string, any>>({});
+    const [isLoading, setIsLoading] = useState(true);
     const [activeView, setActiveView] = useState<'app' | 'monitoring'>('app');
-    
-    // Simulate loading data on mount
-    useEffect(() => {
-        // In a real app, this would be an API call
-        setAllData(initialMockData);
+    const [alert, setAlert] = useState<{ message: string; type: 'success' | 'error' | 'info'; key: number } | null>(null);
+
+    const showAlert = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setAlert({ message, type, key: Date.now() });
     }, []);
+
+    const fetchApplicationData = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            const response = await apiClient.get('/application-data');
+            setAllData(response.data);
+        } catch (error) {
+            console.error("Failed to fetch application data:", error);
+            showAlert("Impossible de charger les données de l'application.", 'error');
+            // Gérer le cas où le token est invalide (l'intercepteur Axios devrait gérer le logout)
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+    
+    // Check for existing token on mount
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            // Pourrait être amélioré en vérifiant la validité du token avec un endpoint /me
+            fetchApplicationData();
+        } else {
+            setIsLoading(false);
+        }
+    }, [fetchApplicationData]);
 
     const handleLoginSuccess = ({ user, token }: { user: User, token: string }) => {
         localStorage.setItem('authToken', token);
         setCurrentUser(user);
+        fetchApplicationData();
     };
 
     const handleLogout = () => {
         localStorage.removeItem('authToken');
         setCurrentUser(null);
+        setAllData({});
+    };
+
+    const handleSaveOrUpdate = async (dataType: string, data: any, endpoint?: string) => {
+        try {
+            const url = endpoint || `/${dataType.toLowerCase()}`;
+            const response = data.id.startsWith('new-') || data.id.startsWith('group-') || data.id.startsWith('qg-') || data.id.startsWith('site-') || data.id.startsWith('trunk-') || data.id.startsWith('did-')
+                ? await apiClient.post(url, data)
+                : await apiClient.put(`${url}/${data.id}`, data);
+            
+            await fetchApplicationData(); // Re-fetch all data to ensure consistency
+            showAlert('Enregistrement réussi !', 'success');
+            return response.data;
+        } catch (error) {
+            console.error(`Failed to save ${dataType}:`, error);
+            showAlert(`Échec de l'enregistrement.`, 'error');
+            throw error;
+        }
     };
     
-    const handleSaveOrUpdate = (dataType: keyof typeof allData, data: any) => {
-        setAllData(prevData => {
-            const items = prevData[dataType] as any[];
-            const index = items.findIndex((item: any) => item.id === data.id);
-            if (index > -1) {
-                const newItems = [...items];
-                newItems[index] = data;
-                return { ...prevData, [dataType]: newItems };
-            } else {
-                return { ...prevData, [dataType]: [...items, data] };
+    const handleDelete = async (dataType: string, id: string) => {
+        if (window.confirm("Êtes-vous sûr de vouloir supprimer cet élément ?")) {
+            try {
+                await apiClient.delete(`/${dataType.toLowerCase()}/${id}`);
+                await fetchApplicationData();
+                showAlert('Suppression réussie !', 'success');
+            } catch (error) {
+                console.error(`Failed to delete ${dataType}:`, error);
+                showAlert(`Échec de la suppression.`, 'error');
             }
-        });
+        }
     };
 
-    const handleDelete = (dataType: keyof typeof allData, id: string) => {
-        setAllData(prevData => {
-            const items = prevData[dataType] as any[];
-            return { ...prevData, [dataType]: items.filter((item: any) => item.id !== id) };
-        });
+    const handleSaveUser = async (user: User, groupIds: string[]) => {
+       await handleSaveOrUpdate('users', { ...user, groupIds });
     };
 
-    const handleSaveUser = (user: User, groupIds: string[]) => {
-        handleSaveOrUpdate('users', user);
-        // Also update group memberships
-        setAllData(prevData => {
-            const newGroups = prevData.userGroups.map(group => {
-                const hasUser = group.memberIds.includes(user.id);
-                const shouldHaveUser = groupIds.includes(group.id);
-                if (hasUser && !shouldHaveUser) {
-                    return { ...group, memberIds: group.memberIds.filter(id => id !== user.id) };
-                }
-                if (!hasUser && shouldHaveUser) {
-                    return { ...group, memberIds: [...group.memberIds, user.id] };
-                }
-                return group;
-            });
-            return { ...prevData, userGroups: newGroups };
-        });
-    };
-    
-     const handleSaveUserGroup = (group: UserGroup) => {
-        handleSaveOrUpdate('userGroups', group);
-    };
-    
-    const handleSaveQualificationGroup = (group: QualificationGroup, assignedQualIds: string[]) => {
-        handleSaveOrUpdate('qualificationGroups', group);
-        setAllData(prevData => {
-            const newQualifications = prevData.qualifications.map(q => {
-                if(q.groupId === group.id && !assignedQualIds.includes(q.id)) { // Unassigned
-                    return {...q, groupId: null};
-                }
-                if(assignedQualIds.includes(q.id) && q.groupId !== group.id) { // Assigned
-                    return {...q, groupId: group.id};
-                }
-                return q;
-            });
-            return {...prevData, qualifications: newQualifications};
-        });
-    };
-    
-    const handleSaveCampaign = (campaign: Campaign) => {
-        handleSaveOrUpdate('campaigns', campaign);
+    const handleImportContacts = async (campaignId: string, contacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => {
+        try {
+            await apiClient.post(`/campaigns/${campaignId}/contacts`, { contacts, deduplicationConfig });
+            await fetchApplicationData();
+            showAlert(`${contacts.length} contacts importés avec succès.`, 'success');
+        } catch (error) {
+            showAlert("Erreur lors de l'importation des contacts.", 'error');
+        }
     };
 
-    const handleImportContacts = (campaignId: string, contacts: Contact[]) => {
-        setAllData(prev => {
-            const campaignIndex = prev.campaigns.findIndex(c => c.id === campaignId);
-            if (campaignIndex === -1) return prev;
-
-            const updatedCampaigns = [...prev.campaigns];
-            const existingContacts = updatedCampaigns[campaignIndex].contacts;
-            updatedCampaigns[campaignIndex] = {
-                ...updatedCampaigns[campaignIndex],
-                contacts: [...existingContacts, ...contacts]
-            };
-            return { ...prev, campaigns: updatedCampaigns };
-        });
-    };
+    if (isLoading) {
+        return <div className="h-screen w-screen flex items-center justify-center">Chargement...</div>;
+    }
 
     if (!currentUser) {
         return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
     }
 
     if (currentUser.role === 'Agent') {
-        return <AgentView currentUser={currentUser} onLogout={handleLogout} data={allData} />;
+        // FIX: Cast `allData` to `any` to satisfy the `AgentData` type required by `AgentView`.
+        // The `allData` object is fetched from the API and contains all necessary fields,
+        // but its state is typed as `Record<string, any>` for flexibility elsewhere in the app.
+        return <AgentView currentUser={currentUser} onLogout={handleLogout} data={allData as any} refreshData={fetchApplicationData} />;
     }
 
     const activeFeature = features.find(f => f.id === activeFeatureId) || null;
     const FeatureComponent = activeFeature?.component;
 
     const renderFeatureComponent = () => {
-        if (!FeatureComponent) return <FeatureDetail feature={activeFeature} />;
-        
-        const componentProps: any = {
+        if (!FeatureComponent) return null;
+
+        const componentProps = {
+            ...allData,
             feature: activeFeature,
             currentUser,
-            users: allData.users,
-            campaigns: allData.campaigns,
-            savedScripts: allData.savedScripts,
-            userGroups: allData.userGroups,
-            sites: allData.sites,
-            qualifications: allData.qualifications,
-            qualificationGroups: allData.qualificationGroups,
-            ivrFlows: allData.ivrFlows,
-            audioFiles: allData.audioFiles,
-            trunks: allData.trunks,
-            dids: allData.dids,
-            backupLogs: allData.backupLogs,
-            backupSchedule: allData.backupSchedule,
-            callHistory: allData.callHistory,
-            agentSessions: allData.agentSessions,
-            systemLogs: allData.systemLogs,
-            versionInfo: allData.versionInfo,
-            connectivityServices: allData.connectivityServices,
-            planningEvents: allData.planningEvents,
-            activityTypes: allData.activityTypes,
-            systemConnectionSettings: allData.systemConnectionSettings,
-            moduleVisibility: allData.moduleVisibility,
             onSaveUser: handleSaveUser,
             onDeleteUser: (id: string) => handleDelete('users', id),
-            onSaveUserGroup: handleSaveUserGroup,
-            onDeleteUserGroup: (id: string) => handleDelete('userGroups', id),
-            onSaveOrUpdateScript: (script: SavedScript) => handleSaveOrUpdate('savedScripts', script),
-            onDeleteScript: (id: string) => handleDelete('savedScripts', id),
-            onDuplicateScript: (id: string) => {
-                const scriptToCopy = allData.savedScripts.find(s => s.id === id);
-                if (scriptToCopy) {
-                    const newScript = { ...scriptToCopy, id: `script-${Date.now()}`, name: `${scriptToCopy.name} (Copie)` };
-                    handleSaveOrUpdate('savedScripts', newScript);
-                }
-            },
-            onSaveCampaign: handleSaveCampaign,
+            onSaveUserGroup: (group: UserGroup) => handleSaveOrUpdate('user-groups', group),
+            onDeleteUserGroup: (id: string) => handleDelete('user-groups', id),
+            onSaveOrUpdateScript: (script: SavedScript) => handleSaveOrUpdate('scripts', script),
+            onDeleteScript: (id: string) => handleDelete('scripts', id),
+            onDuplicateScript: async (id: string) => { await apiClient.post(`/scripts/${id}/duplicate`); await fetchApplicationData(); },
+            onSaveCampaign: (campaign: Campaign) => handleSaveOrUpdate('campaigns', campaign),
             onDeleteCampaign: (id: string) => handleDelete('campaigns', id),
             onImportContacts: handleImportContacts,
             onSaveQualification: (q: Qualification) => handleSaveOrUpdate('qualifications', q),
             onDeleteQualification: (id: string) => handleDelete('qualifications', id),
-            onSaveQualificationGroup: handleSaveQualificationGroup,
-            onDeleteQualificationGroup: (id: string) => handleDelete('qualificationGroups', id),
-             onSaveOrUpdateIvrFlow: (flow: IvrFlow) => handleSaveOrUpdate('ivrFlows', flow),
-            onDeleteIvrFlow: (id: string) => handleDelete('ivrFlows', id),
-            onDuplicateIvrFlow: (id: string) => {
-                 const flowToCopy = allData.ivrFlows.find(f => f.id === id);
-                if (flowToCopy) {
-                    const newFlow = { ...flowToCopy, id: `ivr-flow-${Date.now()}`, name: `${flowToCopy.name} (Copie)` };
-                    handleSaveOrUpdate('ivrFlows', newFlow);
-                }
-            },
-            onSaveAudioFile: (file: AudioFile) => handleSaveOrUpdate('audioFiles', file),
-            onDeleteAudioFile: (id: string) => handleDelete('audioFiles', id),
+            onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => handleSaveOrUpdate('qualification-groups', { ...group, assignedQualIds }),
+            onDeleteQualificationGroup: (id: string) => handleDelete('qualification-groups', id),
+            onSaveOrUpdateIvrFlow: (flow: IvrFlow) => handleSaveOrUpdate('ivr-flows', flow),
+            onDeleteIvrFlow: (id: string) => handleDelete('ivr-flows', id),
+            onDuplicateIvrFlow: async (id: string) => { await apiClient.post(`/ivr-flows/${id}/duplicate`); await fetchApplicationData(); },
+            onSaveAudioFile: (file: AudioFile) => handleSaveOrUpdate('audio-files', file),
+            onDeleteAudioFile: (id: string) => handleDelete('audio-files', id),
             onSaveTrunk: (trunk: Trunk) => handleSaveOrUpdate('trunks', trunk),
             onDeleteTrunk: (id: string) => handleDelete('trunks', id),
             onSaveDid: (did: Did) => handleSaveOrUpdate('dids', did),
             onDeleteDid: (id: string) => handleDelete('dids', id),
             onSaveSite: (site: Site) => handleSaveOrUpdate('sites', site),
             onDeleteSite: (id: string) => handleDelete('sites', id),
-            onSavePlanningEvent: (event: PlanningEvent) => handleSaveOrUpdate('planningEvents', event),
-            onDeletePlanningEvent: (id: string) => handleDelete('planningEvents', id),
-            apiCall: async (url: string, method: string, body?: any) => {
-                // Mock API call for DatabaseManager/MonitoringDashboard
-                console.log(`Mock API Call: ${method} ${url}`, body);
-                if (url.includes('system-stats')) {
-                    return {
-                        cpu: { brand: 'Intel Core i7-9750H', load: (Math.random() * 30 + 5).toFixed(1) },
-                        ram: { total: 16 * 1024 * 1024 * 1024, used: (Math.random() * 8 + 4) * 1024 * 1024 * 1024 },
-                        disk: { total: 512 * 1024 * 1024 * 1024, used: 250 * 1024 * 1024 * 1024 },
-                        recordings: { size: 12.5 * 1024 * 1024 * 1024, files: 12345 },
-                    };
-                }
-                return { success: true };
-            },
+            onSavePlanningEvent: (event: PlanningEvent) => handleSaveOrUpdate('planning-events', event),
+            onDeletePlanningEvent: (id: string) => handleDelete('planning-events', id),
+            apiCall: apiClient, // Passe l'instance axios configurée
         };
         
         return <FeatureComponent {...componentProps} />;
     };
+    
+     const AlertComponent = () => {
+        if (!alert) return null;
+        const colors = {
+            success: 'bg-green-100 border-green-500 text-green-700',
+            error: 'bg-red-100 border-red-500 text-red-700',
+            info: 'bg-blue-100 border-blue-500 text-blue-700',
+        };
+        return (
+            <div key={alert.key} className={`fixed bottom-5 right-5 p-4 border-l-4 rounded-md shadow-lg animate-fade-in-up ${colors[alert.type]}`}>
+                {alert.message}
+            </div>
+        );
+    };
 
     return (
-        <div className="h-screen w-screen flex flex-col font-sans bg-slate-50">
-            <div className="flex flex-1 min-h-0">
-                <Sidebar
-                    features={features}
-                    activeFeatureId={activeFeatureId}
-                    onSelectFeature={(id) => { setActiveFeatureId(id); setActiveView('app'); }}
-                    currentUser={currentUser}
-                    onLogout={handleLogout}
-                    moduleVisibility={allData.moduleVisibility}
-                />
-                <div className="flex-1 flex flex-col min-w-0">
-                    <Header activeView={activeView} onViewChange={setActiveView} />
-                    <main className="flex-1 overflow-y-auto p-8">
-                         {activeView === 'app' ? renderFeatureComponent() : <MonitoringDashboard {...({
-                            feature: features.find(f => f.id === 'monitoring'),
-                            systemLogs: allData.systemLogs,
-                            versionInfo: allData.versionInfo,
-                            connectivityServices: allData.connectivityServices,
-                            apiCall: async () => ({})
-                         } as any)} />}
-                    </main>
+        <AlertContext.Provider value={{ showAlert }}>
+            <div className="h-screen w-screen flex flex-col font-sans bg-slate-50">
+                <div className="flex flex-1 min-h-0">
+                    <Sidebar
+                        features={features}
+                        activeFeatureId={activeFeatureId}
+                        onSelectFeature={(id) => { setActiveFeatureId(id); setActiveView('app'); }}
+                        currentUser={currentUser}
+                        onLogout={handleLogout}
+                        moduleVisibility={allData.moduleVisibility || { categories: {}, features: {} }}
+                    />
+                    <div className="flex-1 flex flex-col min-w-0">
+                        <Header activeView={activeView} onViewChange={setActiveView} />
+                        <main className="flex-1 overflow-y-auto p-8">
+                             {activeView === 'app' ? renderFeatureComponent() : <MonitoringDashboard {...({ ...allData, apiCall: apiClient } as any)} />}
+                        </main>
+                    </div>
                 </div>
+                 {alert && <AlertComponent />}
             </div>
-        </div>
+        </AlertContext.Provider>
     );
 };
 
