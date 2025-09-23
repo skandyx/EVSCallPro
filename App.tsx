@@ -1,433 +1,353 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-// Fix: Add missing 'CallHistoryRecord' type import.
-import type { User, Feature, FeatureId, ModuleVisibility, Campaign, UserGroup, SavedScript, IvrFlow, Qualification, QualificationGroup, Did, Trunk, Site, AudioFile, PlanningEvent, SystemConnectionSettings, PersonalCallback, Contact, BackupSchedule, BackupLog, SystemLog, VersionInfo, ConnectivityService, ActivityType, AgentSession, ContactNote, CallHistoryRecord } from './types.ts';
-import { features } from './data/features.ts';
-import { mockData } from './data/mockData.ts'; // Kept for simulated data not yet in DB
-import Sidebar from './components/Sidebar.tsx';
-import FeatureDetail from './components/FeatureDetail.tsx';
-import LoginScreen from './components/LoginScreen.tsx';
-import Header from './components/Header.tsx';
-import MonitoringDashboard from './components/MonitoringDashboard.tsx';
-import AgentView from './components/AgentView.tsx';
 
+
+import React, { useState, useMemo, useEffect } from 'react';
+// Fix: Corrected type imports to be more specific and complete.
+import type {
+    User,
+    Feature,
+    FeatureId,
+    Campaign,
+    Contact,
+    SavedScript,
+    QualificationGroup,
+    UserGroup,
+    Site,
+    ModuleVisibility,
+    IvrFlow,
+    Qualification,
+    Trunk,
+    Did,
+    AudioFile,
+    BackupLog,
+    BackupSchedule,
+    SystemLog,
+    VersionInfo,
+    ConnectivityService,
+    CallHistoryRecord,
+    AgentSession,
+    ActivityType,
+    PlanningEvent,
+    PersonalCallback,
+    // FIX: Add ContactNote to support AgentView's note-saving feature.
+    ContactNote,
+    SystemConnectionSettings
+} from './types';
+import { mockData } from './data/mockData';
+import { features } from './data/features';
+import Sidebar from './components/Sidebar';
+import LoginScreen from './components/LoginScreen';
+import AgentView from './components/AgentView';
+import Header from './components/Header';
+import MonitoringDashboard from './components/MonitoringDashboard';
 
 const App: React.FC = () => {
     // --- STATE MANAGEMENT ---
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(true); // Start as true to check for token
-
-    // All application data, initialized empty, to be filled from API
-    const [users, setUsers] = useState<User[]>([]);
-    const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
-    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-    const [savedScripts, setSavedScripts] = useState<SavedScript[]>([]);
-    const [ivrFlows, setIvrFlows] = useState<IvrFlow[]>([]);
-    const [qualifications, setQualifications] = useState<Qualification[]>([]);
-    const [qualificationGroups, setQualificationGroups] = useState<QualificationGroup[]>([]);
-    const [dids, setDids] = useState<Did[]>([]);
-    const [trunks, setTrunks] = useState<Trunk[]>([]);
-    const [sites, setSites] = useState<Site[]>([]);
-    const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
-    const [planningEvents, setPlanningEvents] = useState<PlanningEvent[]>([]);
-    const [personalCallbacks, setPersonalCallbacks] = useState<PersonalCallback[]>([]);
-    const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
-    
-    // Non-persistent or simulated data
-    const [systemConnectionSettings, setSystemConnectionSettings] = useState<SystemConnectionSettings>(mockData.systemConnectionSettings);
-    const [backupSchedule, setBackupSchedule] = useState<BackupSchedule>(mockData.backupSchedule);
-    const [backupLogs, setBackupLogs] = useState<BackupLog[]>(mockData.backupLogs);
-    const [moduleVisibility, setModuleVisibility] = useState<ModuleVisibility>({ categories: {}, features: {} });
-
+    const [authToken, setAuthToken] = useState<string | null>(null);
     const [activeView, setActiveView] = useState<'app' | 'monitoring'>('app');
-    const [activeFeatureId, setActiveFeatureId] = useState<FeatureId | null>('users');
-    
-     // --- EVENT HANDLERS ---
-    const handleLogout = useCallback(() => {
-        localStorage.removeItem('token');
-        sessionStorage.clear();
-        console.log("Token and session storage cleared for security.");
-        setCurrentUser(null);
-    }, []);
+    const [activeFeatureId, setActiveFeatureId] = useState<FeatureId | null>(null);
 
-    // Helper for API calls, now including auth token
-    const apiCall = useCallback(async (url: string, method: string, body?: any) => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            handleLogout();
-            throw new Error("No auth token found");
-        }
+    // --- DATA STATE (simulating a database) ---
+    const [data, setData] = useState(mockData);
 
-        const options: RequestInit = {
-            method,
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-        };
-        if (body) {
-            options.body = JSON.stringify(body);
-        }
-        const response = await fetch(url, options);
-        
-        if (response.status === 401) { // Unauthorized
-            handleLogout();
-            throw new Error('Session expired. Please log in again.');
-        }
+    // --- UI LOGIC ---
+    const activeFeature = useMemo(() => {
+        if (!activeFeatureId) return null;
+        return features.find(f => f.id === activeFeatureId) || null;
+    }, [activeFeatureId]);
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'API request failed');
-        }
-        if (response.status !== 204) {
-            return response.json();
-        }
-        return null;
-    }, [handleLogout]);
+    const [moduleVisibility, setModuleVisibility] = useState<ModuleVisibility>({
+        categories: {},
+        features: {}
+    });
 
-    // --- DATA FETCHING ---
-    const fetchApplicationData = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const data = await apiCall('/api/application-data', 'GET');
-            setUsers(data.users || []);
-            setUserGroups(data.userGroups || []);
-            setCampaigns(data.campaigns || []);
-            setSavedScripts(data.savedScripts || []);
-            setIvrFlows(data.savedIvrFlows || []);
-            setQualifications(data.qualifications || []);
-            setQualificationGroups(data.qualificationGroups || []);
-            setDids(data.dids || []);
-            setTrunks(data.trunks || []);
-            setSites(data.sites || []);
-            setAudioFiles(data.audioFiles || []);
-            setPlanningEvents(data.planningEvents || []);
-            setPersonalCallbacks(data.personalCallbacks || []);
-            setActivityTypes(data.activityTypes || []);
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [apiCall]);
-
-    // Effect for initial token validation on app load
-    useEffect(() => {
-        const validateToken = async () => {
-            const storedToken = localStorage.getItem('token');
-            if (storedToken) {
-                try {
-                    const response = await fetch('/api/me', {
-                        headers: { 'Authorization': `Bearer ${storedToken}` }
-                    });
-                    if (response.ok) {
-                        const user = await response.json();
-                        setCurrentUser(user);
-                    } else {
-                        handleLogout(); // Token is invalid or expired
-                    }
-                } catch (error) {
-                    console.error("Token validation failed", error);
-                    handleLogout();
-                }
-            } else {
-                setIsLoading(false); // No token, stop loading
-            }
-        };
-        validateToken();
-    }, [handleLogout]);
-    
-    useEffect(() => {
-        if (currentUser) {
-            fetchApplicationData();
-        } else {
-            // Clear data on logout
-            setUsers([]); setUserGroups([]); setCampaigns([]); setSavedScripts([]); setIvrFlows([]);
-            setQualifications([]); setQualificationGroups([]); setDids([]); setTrunks([]); setSites([]);
-            setAudioFiles([]); setPlanningEvents([]); setPersonalCallbacks([]); setActivityTypes([]);
-            setIsLoading(false);
-        }
-    }, [currentUser, fetchApplicationData]);
-
-    // --- COMPUTED VALUES ---
-    const activeFeature = useMemo(() => features.find(f => f.id === activeFeatureId), [activeFeatureId]);
-
-    const handleLoginSuccess = (data: { user: User, token: string }) => {
-        const { user, token } = data;
-        localStorage.setItem('token', token);
+    // --- EVENT HANDLERS / API SIMULATION ---
+    const handleLoginSuccess = ({ user, token }: { user: User, token:string }) => {
         setCurrentUser(user);
-    };
-
-    const handleSelectFeature = (id: FeatureId) => setActiveFeatureId(id);
-
-    // --- DATA MUTATION HANDLERS (API CALLS) ---
-    // Users
-    const handleSaveUser = async (user: User, groupIds: string[]) => {
-        const isNew = !users.some(u => u.id === user.id);
-        const url = isNew ? '/api/users' : `/api/users/${user.id}`;
-        await apiCall(url, isNew ? 'POST' : 'PUT', { user, groupIds });
-        await fetchApplicationData();
-    };
-    const handleDeleteUser = async (userId: string) => {
-        if (window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ?")) {
-            await apiCall(`/api/users/${userId}`, 'DELETE');
-            await fetchApplicationData();
-        }
-    };
-    const handleGenerateUsers = async (newUsers: User[]) => {
-        await Promise.all(newUsers.map(user => apiCall('/api/users', 'POST', { user, groupIds: [] })));
-        await fetchApplicationData();
-    };
-
-    // User Groups
-    const handleSaveUserGroup = async (group: UserGroup) => {
-        const isNew = !userGroups.some(g => g.id === group.id);
-        const url = isNew ? '/api/groups' : `/api/groups/${group.id}`;
-        await apiCall(url, isNew ? 'POST' : 'PUT', group);
-        await fetchApplicationData();
-    };
-    const handleDeleteUserGroup = async (groupId: string) => {
-        await apiCall(`/api/groups/${groupId}`, 'DELETE');
-        await fetchApplicationData();
-    };
-
-    // Campaigns & Contacts
-    const handleSaveCampaign = async (campaign: Campaign) => {
-        const isNew = !campaigns.some(c => c.id === campaign.id);
-        const url = isNew ? '/api/campaigns' : `/api/campaigns/${campaign.id}`;
-        await apiCall(url, isNew ? 'POST' : 'PUT', campaign);
-        await fetchApplicationData();
-    };
-    const handleDeleteCampaign = async (campaignId: string) => {
-        await apiCall(`/api/campaigns/${campaignId}`, 'DELETE');
-        await fetchApplicationData();
-    };
-    const handleImportContacts = async (campaignId: string, contacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => {
-        await apiCall(`/api/campaigns/${campaignId}/contacts`, 'POST', { contacts, deduplicationConfig });
-        await fetchApplicationData();
-    };
-    const handleUpdateContact = async (contact: Contact) => {
-        await apiCall(`/api/contacts/${contact.id}`, 'PUT', contact);
-        await fetchApplicationData();
-    };
-    const handleDeleteContacts = async (contactIds: string[]) => {
-        await apiCall('/api/contacts', 'DELETE', { contactIds });
-        await fetchApplicationData();
-    };
-    const handleInsertContact = async (campaignId: string, contactData: Record<string, any>, phoneNumber: string) => {
-        try {
-            await apiCall(`/api/campaigns/${campaignId}/contacts/single`, 'POST', { contactData, phoneNumber });
-            await fetchApplicationData(); 
-        } catch (error) {
-            console.error("Failed to insert contact:", error);
-            throw error;
+        setAuthToken(token);
+        if (user.role !== 'Agent') {
+            setActiveFeatureId('supervision'); // Default view for non-agents
         }
     };
 
-    const handleRequestNextContact = async (campaignId: string): Promise<Contact | null> => {
-        return new Promise((resolve) => {
-            setCampaigns(prevCampaigns => {
-                let nextContact: Contact | null = null;
-                // Deep copy to avoid direct state mutation
-                const newCampaigns = JSON.parse(JSON.stringify(prevCampaigns));
-                const campaign = newCampaigns.find((c: Campaign) => c.id === campaignId);
+    const handleLogout = () => {
+        setCurrentUser(null);
+        setAuthToken(null);
+        setActiveFeatureId(null);
+    };
 
-                if (campaign) {
-                    const contactIndex = campaign.contacts.findIndex((c: Contact) => c.status === 'pending');
-                    if (contactIndex > -1) {
-                        // "Lock" the contact by changing its status
-                        campaign.contacts[contactIndex].status = 'called';
-                        nextContact = campaign.contacts[contactIndex];
-                    }
+    const handleSaveUser = (userToSave: User, groupIds: string[]) => {
+        setData(prev => {
+            const userIndex = prev.users.findIndex(u => u.id === userToSave.id);
+            let newUsers;
+            if (userIndex > -1) {
+                newUsers = [...prev.users];
+                newUsers[userIndex] = userToSave;
+            } else {
+                newUsers = [...prev.users, userToSave];
+            }
+
+            const newGroups = prev.userGroups.map(g => {
+                const newMemberIds = g.memberIds.filter(id => id !== userToSave.id);
+                if (groupIds.includes(g.id)) {
+                    newMemberIds.push(userToSave.id);
                 }
-                
-                // Resolve the promise from within the setState updater.
-                // This ensures that the logic to find the contact has run before resolving.
-                resolve(nextContact);
-                
-                // Return the updated array of campaigns to React.
-                return newCampaigns;
+                return { ...g, memberIds: [...new Set(newMemberIds)] };
             });
+
+            return { ...prev, users: newUsers, userGroups: newGroups };
         });
     };
     
-    // Scripts
-    const handleSaveOrUpdateScript = async (script: SavedScript) => {
-        const isNew = !savedScripts.some(s => s.id === script.id);
-        const url = isNew ? '/api/scripts' : `/api/scripts/${script.id}`;
-        await apiCall(url, isNew ? 'POST' : 'PUT', script);
-        await fetchApplicationData();
-    };
-    const handleDeleteScript = async (scriptId: string) => {
-        await apiCall(`/api/scripts/${scriptId}`, 'DELETE');
-        await fetchApplicationData();
-    };
-    const handleDuplicateScript = async (scriptId: string) => {
-        await apiCall(`/api/scripts/${scriptId}/duplicate`, 'POST');
-        await fetchApplicationData();
+    // Generic save handler
+    const handleSave = <T extends { id: string }>(dataType: keyof typeof data, itemToSave: T) => {
+        setData(prev => {
+            // FIX: Cast to 'unknown' first to satisfy TypeScript's strict generic type checking.
+            const collection = prev[dataType] as unknown as T[];
+            const itemIndex = collection.findIndex(item => item.id === itemToSave.id);
+            const newCollection = [...collection];
+            if (itemIndex > -1) {
+                newCollection[itemIndex] = itemToSave;
+            } else {
+                newCollection.push(itemToSave);
+            }
+            return { ...prev, [dataType]: newCollection };
+        });
     };
     
-    // IVR Flows
-    const handleSaveOrUpdateIvrFlow = async (flow: IvrFlow) => {
-        const isNew = !ivrFlows.some(f => f.id === flow.id);
-        const url = isNew ? '/api/ivr-flows' : `/api/ivr-flows/${flow.id}`;
-        await apiCall(url, isNew ? 'POST' : 'PUT', flow);
-        await fetchApplicationData();
-    };
-    const handleDeleteIvrFlow = async (flowId: string) => {
-        await apiCall(`/api/ivr-flows/${flowId}`, 'DELETE');
-        await fetchApplicationData();
-    };
-    const handleDuplicateIvrFlow = async (flowId: string) => {
-        await apiCall(`/api/ivr-flows/${flowId}/duplicate`, 'POST');
-        await fetchApplicationData();
+    // Generic delete handler
+    const handleDelete = <T extends { id: string }>(dataType: keyof typeof data, itemId: string) => {
+         setData(prev => {
+            // FIX: Cast to 'unknown' first to satisfy TypeScript's strict generic type checking.
+            const collection = prev[dataType] as unknown as T[];
+            return { ...prev, [dataType]: collection.filter(item => item.id !== itemId) };
+        });
     };
 
-    // Qualifications
-    const handleSaveQualification = async (qual: Qualification) => {
-        const isNew = !qualifications.some(q => q.id === qual.id);
-        const url = isNew ? '/api/qualifications' : `/api/qualifications/${qual.id}`;
-        await apiCall(url, isNew ? 'POST' : 'PUT', qual);
-        await fetchApplicationData();
-    };
-    const handleDeleteQualification = async (qualId: string) => {
-         if (window.confirm("Êtes-vous sûr de vouloir supprimer cette qualification ? Elle sera retirée de tous les groupes.")) {
-            await apiCall(`/api/qualifications/${qualId}`, 'DELETE');
-            await fetchApplicationData();
-        }
+    const handleImportContacts = (campaignId: string, newContacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => {
+        setData(prev => {
+            const newCampaigns = prev.campaigns.map(c => {
+                if (c.id === campaignId) {
+                    // Simple import for now, deduplication logic would be here
+                    const updatedContacts = [...c.contacts, ...newContacts];
+                    return { ...c, contacts: updatedContacts };
+                }
+                return c;
+            });
+            return { ...prev, campaigns: newCampaigns };
+        });
     };
 
-    // Qualification Groups
-    const handleSaveQualificationGroup = async (group: QualificationGroup, assignedQualIds: string[]) => {
-        const isNew = !qualificationGroups.some(qg => qg.id === group.id);
-        const url = isNew ? '/api/qualification-groups' : `/api/qualification-groups/${group.id}`;
-        await apiCall(url, isNew ? 'POST' : 'PUT', { group, assignedQualIds });
-        await fetchApplicationData();
-    };
-    const handleDeleteQualificationGroup = async (groupId: string) => {
-        if (window.confirm("Êtes-vous sûr de vouloir supprimer ce groupe ? Les qualifications ne seront pas supprimées mais désassignées.")) {
-            await apiCall(`/api/qualification-groups/${groupId}`, 'DELETE');
-            await fetchApplicationData();
-        }
+    const handleUpdateContact = (updatedContact: Contact) => {
+        setData(prev => ({
+            ...prev,
+            campaigns: prev.campaigns.map(c => ({
+                ...c,
+                contacts: c.contacts.map(ct => ct.id === updatedContact.id ? updatedContact : ct)
+            }))
+        }));
     };
     
-    const createCrudHandlers = <T extends { id: string }>(pluralName: string, dataState: T[]) => ({
-        save: async (item: T) => {
-            const isNew = !dataState.some(d => d.id === item.id);
-            const url = isNew ? `/api/${pluralName}` : `/api/${pluralName}/${item.id}`;
-            await apiCall(url, isNew ? 'POST' : 'PUT', item);
-            await fetchApplicationData();
-        },
-        delete: async (id: string) => {
-            await apiCall(`/api/${pluralName}/${id}`, 'DELETE');
-            await fetchApplicationData();
-        }
-    });
-    
-    const didHandlers = createCrudHandlers('dids', dids);
-    const trunkHandlers = createCrudHandlers('trunks', trunks);
-    const siteHandlers = createCrudHandlers('sites', sites);
-    const audioHandlers = createCrudHandlers('audio-files', audioFiles);
-    const planningEventHandlers = createCrudHandlers('planning-events', planningEvents);
+    const handleDeleteContacts = (contactIds: string[]) => {
+        const idsToDelete = new Set(contactIds);
+        setData(prev => ({
+            ...prev,
+            campaigns: prev.campaigns.map(c => ({
+                ...c,
+                contacts: c.contacts.filter(ct => !idsToDelete.has(ct.id))
+            }))
+        }));
+    };
 
-    const handleRunBackup = () => {
-         setBackupLogs(prev => [
-            { id: `log-${Date.now()}`, timestamp: new Date().toISOString(), status: 'success', fileName: `backup-manual-${new Date().toISOString().split('T')[0]}.zip` },
-            ...prev
-        ]);
-    };
-    
-    const handleSaveContactNote = async (contactId: string, campaignId: string, note: string) => {
-        if (!contactId || !campaignId || !note.trim()) return;
-        try {
-            await apiCall(`/api/contacts/${contactId}/notes`, 'POST', { campaignId, note });
-        } catch (error) {
-            console.error("Failed to save contact note:", error);
-            // Optionally show an error to the user
+    // FIX: Implement handler for AgentView to request the next contact.
+    const handleRequestNextContact = async (): Promise<{ contact: Contact; campaign: Campaign } | null> => {
+        if (!currentUser) return null;
+        const agentCampaigns = data.campaigns.filter(c => c.isActive && currentUser.campaignIds.includes(c.id));
+
+        for (const campaign of agentCampaigns) {
+            const contactIndex = campaign.contacts.findIndex(c => c.status === 'pending');
+            if (contactIndex > -1) {
+                const contactToCall = campaign.contacts[contactIndex];
+                const updatedContact = { ...contactToCall, status: 'called' as const };
+                
+                handleUpdateContact(updatedContact);
+                return { contact: updatedContact, campaign: campaign };
+            }
         }
+        return null;
+    };
+
+    // FIX: Implement handler for AgentView to save a contact note.
+    const handleSaveContactNote = async (noteData: Omit<ContactNote, 'id' | 'createdAt'>): Promise<ContactNote> => {
+        const newNote: ContactNote = {
+            id: `note-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            ...noteData,
+        };
+        setData(prev => ({
+            ...prev,
+            contactNotes: [...(prev.contactNotes || []), newNote],
+        }));
+        return newNote;
+    };
+
+    const apiCall = async (url: string, method: string, body?: any) => {
+        console.log(`API Call: ${method} ${url}`, body);
+        if (url === '/api/system-stats') {
+             return {
+                cpu: { brand: 'Intel Core i7-9750H', load: (Math.random() * 40 + 10).toFixed(1) },
+                ram: { total: 16 * 1024 * 1024 * 1024, used: (Math.random() * 8 + 4) * 1024 * 1024 * 1024 },
+                disk: { total: 512 * 1024 * 1024 * 1024, used: 250 * 1024 * 1024 * 1024 },
+                recordings: { size: 12.5 * 1024 * 1024 * 1024, files: 12345 },
+            };
+        }
+        if (url === '/api/db-query' && method === 'POST') {
+             return {
+                columns: ['id', 'name', 'status'],
+                rows: [{id: 1, name: 'Test Query', status: 'Success'}],
+                rowCount: 1,
+            }
+        }
+        if(url === '/api/db-schema' && method === 'GET') {
+            return {
+                users: ['id', 'login_id', 'first_name', 'last_name', 'role'],
+                campaigns: ['id', 'name', 'is_active', 'script_id'],
+                contacts: ['id', 'campaign_id', 'phone_number', 'status'],
+            }
+        }
+        return { success: true };
     };
 
     // --- RENDER LOGIC ---
-    if (isLoading) {
-        return <div className="h-screen w-screen flex items-center justify-center bg-slate-100">Vérification de la session...</div>;
-    }
-
     if (!currentUser) {
         return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
     }
 
     if (currentUser.role === 'Agent') {
+        // FIX: Pass the required onRequestNextContact and onSaveContactNote props to AgentView.
         return <AgentView 
-            agent={currentUser}
-            users={users}
-            campaigns={campaigns}
-            savedScripts={savedScripts}
-            sites={sites}
-            personalCallbacks={personalCallbacks}
-            qualifications={qualifications}
-            qualificationGroups={qualificationGroups}
-            onLogout={handleLogout}
-            apiCall={apiCall}
-            onSaveContactNote={handleSaveContactNote}
-            onInsertContact={handleInsertContact}
+            currentUser={currentUser} 
+            onLogout={handleLogout} 
+            data={data} 
             onRequestNextContact={handleRequestNextContact}
+            onSaveContactNote={handleSaveContactNote}
         />;
     }
-    
-    const featureComponentProps: any = {
-        feature: activeFeature,
-        currentUser,
-        apiCall, // <-- FIX: Pass the apiCall function to all feature components
-        users, onSaveUser: handleSaveUser, onDeleteUser: handleDeleteUser, onGenerateUsers: handleGenerateUsers, onImportUsers: handleGenerateUsers,
-        userGroups, onSaveUserGroup: handleSaveUserGroup, onDeleteUserGroup: handleDeleteUserGroup,
-        campaigns, onSaveCampaign: handleSaveCampaign, onDeleteCampaign: handleDeleteCampaign, onImportContacts: handleImportContacts, onUpdateContact: handleUpdateContact, onDeleteContacts: handleDeleteContacts,
-        savedScripts, onSaveOrUpdateScript: handleSaveOrUpdateScript, onDeleteScript: handleDeleteScript, onDuplicateScript: handleDuplicateScript,
-        ivrFlows, onSaveOrUpdateIvrFlow: handleSaveOrUpdateIvrFlow, onDeleteIvrFlow: handleDeleteIvrFlow, onDuplicateIvrFlow: handleDuplicateIvrFlow,
-        qualifications, onSaveQualification: handleSaveQualification, onDeleteQualification: handleDeleteQualification,
-        qualificationGroups, onSaveQualificationGroup: handleSaveQualificationGroup, onDeleteQualificationGroup: handleDeleteQualificationGroup,
-        dids, onSaveDid: didHandlers.save, onDeleteDid: didHandlers.delete,
-        trunks, onSaveTrunk: trunkHandlers.save, onDeleteTrunk: trunkHandlers.delete,
-        sites, onSaveSite: siteHandlers.save, onDeleteSite: siteHandlers.delete,
-        audioFiles, onSaveAudioFile: audioHandlers.save, onDeleteAudioFile: audioHandlers.delete,
-        planningEvents, onSavePlanningEvent: planningEventHandlers.save, onDeletePlanningEvent: planningEventHandlers.delete,
-        personalCallbacks,
-        systemConnectionSettings, onSaveSystemConnectionSettings: setSystemConnectionSettings,
-        features, moduleVisibility, onSaveVisibilitySettings: setModuleVisibility,
-        callHistory: mockData.callHistory as CallHistoryRecord[],
-        agentSessions: mockData.agentSessions as AgentSession[],
-        systemLogs: mockData.systemLogs as SystemLog[],
-        versionInfo: mockData.versionInfo as VersionInfo,
-        connectivityServices: mockData.connectivityServices as ConnectivityService[],
-        backupLogs, backupSchedule, onSaveBackupSchedule: setBackupSchedule, onRunBackup: handleRunBackup,
-        activityTypes,
-    };
 
     const ActiveComponent = activeFeature?.component;
     
+    const componentProps = {
+        feature: activeFeature,
+        currentUser: currentUser,
+        // Data props
+        users: data.users,
+        userGroups: data.userGroups,
+        campaigns: data.campaigns,
+        savedScripts: data.savedScripts,
+        qualificationGroups: data.qualificationGroups,
+        qualifications: data.qualifications,
+        sites: data.sites,
+        trunks: data.trunks,
+        dids: data.dids,
+        ivrFlows: data.savedIvrFlows,
+        audioFiles: data.audioFiles,
+        backupLogs: data.backupLogs,
+        backupSchedule: data.backupSchedule,
+        callHistory: data.callHistory,
+        agentSessions: data.agentSessions,
+        planningEvents: data.planningEvents,
+        activityTypes: data.activityTypes,
+        systemConnectionSettings: data.systemConnectionSettings,
+        features: features,
+        moduleVisibility: moduleVisibility,
+        // Handler props
+        onSaveUser: handleSaveUser,
+        onDeleteUser: (id: string) => handleDelete('users', id),
+        onGenerateUsers: (newUsers: User[]) => setData(prev => ({...prev, users: [...prev.users, ...newUsers]})),
+        onImportUsers: (newUsers: User[]) => setData(prev => ({...prev, users: [...prev.users, ...newUsers]})),
+        onSaveUserGroup: (group: UserGroup) => handleSave('userGroups', group),
+        onDeleteUserGroup: (id: string) => handleDelete('userGroups', id),
+        onSaveCampaign: (campaign: Campaign) => handleSave('campaigns', campaign),
+        onDeleteCampaign: (id: string) => handleDelete('campaigns', id),
+        onImportContacts: handleImportContacts,
+        onUpdateContact: handleUpdateContact,
+        onDeleteContacts: handleDeleteContacts,
+        onSaveOrUpdateScript: (script: SavedScript) => handleSave('savedScripts', script),
+        onDeleteScript: (id: string) => handleDelete('savedScripts', id),
+        onDuplicateScript: (id: string) => {
+            const scriptToCopy = data.savedScripts.find(s => s.id === id);
+            if(scriptToCopy) {
+                const newScript = {...scriptToCopy, id: `script-${Date.now()}`, name: `${scriptToCopy.name} (Copie)`};
+                handleSave('savedScripts', newScript);
+            }
+        },
+        onSaveOrUpdateIvrFlow: (flow: IvrFlow) => handleSave('savedIvrFlows', flow),
+        onDeleteIvrFlow: (id: string) => handleDelete('savedIvrFlows', id),
+        onDuplicateIvrFlow: (id: string) => {
+            const flowToCopy = data.savedIvrFlows.find(f => f.id === id);
+            if (flowToCopy) {
+                const newFlow = {...flowToCopy, id: `ivr-flow-${Date.now()}`, name: `${flowToCopy.name} (Copie)`};
+                handleSave('savedIvrFlows', newFlow);
+            }
+        },
+        onSaveQualification: (qual: Qualification) => handleSave('qualifications', qual),
+        onDeleteQualification: (id: string) => handleDelete('qualifications', id),
+        onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => {
+            setData(prev => {
+                const groupIndex = prev.qualificationGroups.findIndex(g => g.id === group.id);
+                const newGroups = [...prev.qualificationGroups];
+                if(groupIndex > -1) newGroups[groupIndex] = group; else newGroups.push(group);
+
+                const newQuals = prev.qualifications.map(q => {
+                    if (q.groupId === group.id) return {...q, groupId: null}; // unassign first
+                    return q;
+                }).map(q => {
+                    if (assignedQualIds.includes(q.id)) return {...q, groupId: group.id};
+                    return q;
+                });
+                return {...prev, qualificationGroups: newGroups, qualifications: newQuals};
+            });
+        },
+        onDeleteQualificationGroup: (id: string) => handleDelete('qualificationGroups', id),
+        onSaveSite: (site: Site) => handleSave('sites', site),
+        onDeleteSite: (id: string) => handleDelete('sites', id),
+        onSaveTrunk: (trunk: Trunk) => handleSave('trunks', trunk),
+        onDeleteTrunk: (id: string) => handleDelete('trunks', id),
+        onSaveDid: (did: Did) => handleSave('dids', did),
+        onDeleteDid: (id: string) => handleDelete('dids', id),
+        onSaveAudioFile: (file: AudioFile) => handleSave('audioFiles', file),
+        onDeleteAudioFile: (id: string) => handleDelete('audioFiles', id),
+        onSaveBackupSchedule: (schedule: BackupSchedule) => setData(prev => ({...prev, backupSchedule: schedule})),
+        onRunBackup: () => alert("Sauvegarde manuelle lancée (simulation)"),
+        onSavePlanningEvent: (event: PlanningEvent) => handleSave('planningEvents', event),
+        onDeletePlanningEvent: (id: string) => handleDelete('planningEvents', id),
+        onSaveVisibilitySettings: (visibility: ModuleVisibility) => setModuleVisibility(visibility),
+        onSaveSystemConnectionSettings: (settings: SystemConnectionSettings) => setData(prev => ({...prev, systemConnectionSettings: settings})),
+        apiCall,
+    };
+
     return (
         <div className="h-screen w-screen flex bg-slate-100 font-sans">
             <Sidebar
                 features={features}
                 activeFeatureId={activeFeatureId}
-                onSelectFeature={handleSelectFeature}
+                onSelectFeature={setActiveFeatureId}
                 currentUser={currentUser}
                 onLogout={handleLogout}
                 moduleVisibility={moduleVisibility}
             />
-            <div className="flex-1 flex flex-col overflow-hidden">
-                {currentUser.role === 'SuperAdmin' && <Header activeView={activeView} onViewChange={setActiveView} />}
-                <main className="flex-1 overflow-y-auto p-8">
-                    {activeView === 'monitoring' && currentUser.role === 'SuperAdmin' ? (
-                        <MonitoringDashboard
-                            systemLogs={mockData.systemLogs}
-                            versionInfo={mockData.versionInfo}
-                            connectivityServices={mockData.connectivityServices}
-                            apiCall={apiCall}
-                        />
-                    ) : (
-                       ActiveComponent ? <ActiveComponent {...featureComponentProps} /> : <FeatureDetail feature={activeFeature || null} />
-                    )}
-                </main>
-            </div>
+            <main className="flex-1 flex flex-col overflow-hidden">
+                <Header activeView={activeView} onViewChange={setActiveView} />
+                <div className="flex-1 overflow-y-auto p-8">
+                    {activeView === 'app' && ActiveComponent && React.createElement(ActiveComponent, componentProps)}
+                    {activeView === 'monitoring' && <MonitoringDashboard 
+                        systemLogs={data.systemLogs} 
+                        versionInfo={data.versionInfo} 
+                        connectivityServices={data.connectivityServices}
+                        apiCall={apiCall}
+                    />}
+                </div>
+            </main>
         </div>
     );
 };

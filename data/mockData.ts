@@ -7,6 +7,8 @@ import type {
     IvrNode,
     Campaign,
     Contact,
+    // FIX: Add ContactNote to imports
+    ContactNote,
     Qualification,
     QualificationGroup,
     Trunk,
@@ -433,6 +435,9 @@ const personalCallbacks: PersonalCallback[] = [
     }
 ];
 
+// FIX: Add contactNotes to mock data
+const contactNotes: ContactNote[] = [];
+
 const systemConnectionSettings: SystemConnectionSettings = {
     database: {
         host: 'localhost',
@@ -473,5 +478,6 @@ export const mockData = {
     activityTypes,
     planningEvents,
     personalCallbacks,
+    contactNotes,
     systemConnectionSettings
 };
