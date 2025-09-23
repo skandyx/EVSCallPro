@@ -2,9 +2,9 @@ const db = require('./services/db');
 const { executeFlow } = require('./services/ivr-executor.js');
 
 /**
- * Handles an AGI request using the asterisk.agi.io library.
+ * Handles an AGI request using the 'agi' library.
  * This async function receives a context object for the call.
- * @param {object} context The asterisk.agi.io context object.
+ * @param {object} context The 'agi' context object.
  */
 async function agiHandler(context) {
   try {

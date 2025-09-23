@@ -1,8 +1,6 @@
-// FIX: Replaced the module-based type reference with a relative path.
-// This directly tells the TypeScript compiler where to find the Cypress type
-// definitions, resolving "Cannot find name 'cy'" and other related errors when
-// the project's tsconfig is not correctly configured to include Cypress types.
-/// <reference path="../../node_modules/cypress/index.d.ts" />
+// FIX: Replaced the 'types' reference with a relative 'path' to the cypress type definitions.
+// This is a workaround for environments where TypeScript's type resolution is not correctly configured (e.g., missing tsconfig.json).
+/// <reference path="../../node_modules/cypress/types/index.d.ts" />
 
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
