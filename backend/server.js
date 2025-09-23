@@ -81,7 +81,7 @@ app.get('/api/application-data', async (req, res) => {
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
             systemLogs: [],
-            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asterisk.agi.io': '0.0.2' },
+            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asterisk.agi.io': '0.0.1' },
             connectivityServices: [],
             systemConnectionSettings: { database: {}, asterisk: {} }
         });
