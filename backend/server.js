@@ -2,7 +2,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const agi = require('asterisk-agi');
+const agi = require('asterisk.io');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -81,7 +81,7 @@ app.get('/api/application-data', async (req, res) => {
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
             systemLogs: [],
-            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asterisk-agi': '1.0.1' },
+            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asterisk.io': '0.0.1' },
             connectivityServices: [],
             systemConnectionSettings: { database: {}, asterisk: {} }
         });
@@ -100,15 +100,8 @@ app.get('*', (req, res) => {
 
 // --- AGI SERVER ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-const agiServer = new agi.AgiServer();
-agiServer.start(agiPort);
+agi.createServer(agiHandler).listen(agiPort);
 console.log(`AGI server listening on port ${agiPort}`);
-
-agiServer.on('connection', (context) => {
-    // Pass the context to the async handler.
-    // The handler's own error management will deal with issues.
-    agiHandler(context);
-});
 
 // --- WEBSOCKET & AMI (Conditional Start) ---
 if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {

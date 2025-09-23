@@ -1,11 +1,4 @@
-// FIX: The TypeScript compiler is not finding the Cypress global types,
-// likely due to a missing or misconfigured tsconfig.json.
-// As a workaround, we are removing the failing type reference and declaring 
-// the Cypress globals as `any` to suppress the compiler errors.
-// This removes type safety for this test file but makes it valid within the project setup.
-declare var describe: any;
-declare var it: any;
-declare var cy: any;
+/// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
@@ -52,3 +45,6 @@ describe('Critical Application Flow', () => {
     cy.get('main').contains("Le script s'affichera ici.");
   });
 });
+
+// Fix: Add an empty export to ensure this file is treated as a module, which can help resolve issues with global type definitions like Cypress.
+export {};

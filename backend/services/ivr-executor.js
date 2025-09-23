@@ -1,19 +1,19 @@
 /**
- * Executes an IVR flow using the provided AGI context from 'asterisk-agi'.
- * @param {object} context The 'asterisk-agi' context object.
+ * Executes an IVR flow using the provided AGI context from 'asterisk.io'.
+ * @param {object} context The 'asterisk.io' context object.
  * @param {object} flow The IVR flow object from the database.
  */
 async function executeFlow(context, flow) {
     let currentNode = flow.nodes.find(n => n.type === 'start');
     if (!currentNode) {
-        await context.verboseAsync('IVR Flow has no start node. Hanging up.');
+        await context.verbose('IVR Flow has no start node. Hanging up.');
         return;
     }
 
-    await context.verboseAsync(`Starting IVR Flow: ${flow.name}`);
+    await context.verbose(`Starting IVR Flow: ${flow.name}`);
 
     while (currentNode) {
-        await context.verboseAsync(`Executing node: ${currentNode.name} (Type: ${currentNode.type}, ID: ${currentNode.id})`);
+        await context.verbose(`Executing node: ${currentNode.name} (Type: ${currentNode.type}, ID: ${currentNode.id})`);
         let nextNodeId = null;
 
         try {
@@ -25,18 +25,18 @@ async function executeFlow(context, flow) {
                 
                 case 'media':
                     // In a real app, 'prompt' would be a filename. We'll use verbose for simulation.
-                    await context.verboseAsync(`Streaming media: ${currentNode.content.prompt}`);
-                    // await context.streamFileAsync(currentNode.content.prompt); // Uncomment when audio files exist
+                    await context.verbose(`Streaming media: ${currentNode.content.prompt}`);
+                    // await context.streamFile(currentNode.content.prompt); // Uncomment when audio files exist
                     // Use TextToSpeech for now, ensuring the prompt is quoted for Asterisk.
-                    await context.execAsync('TextToSpeech', `"${currentNode.content.prompt.replace(/"/g, '\\"')}"`);
+                    await context.exec('TextToSpeech', `"${currentNode.content.prompt.replace(/"/g, '\\"')}"`);
                     const mediaConnection = flow.connections.find(c => c.fromNodeId === currentNode.id && c.fromPortId === 'out');
                     nextNodeId = mediaConnection ? mediaConnection.toNodeId : null;
                     break;
 
                 case 'menu':
-                    await context.verboseAsync(`Menu prompt: ${currentNode.content.prompt}`);
+                    await context.verbose(`Menu prompt: ${currentNode.content.prompt}`);
                     // AGI's getData is better for menus than sayText + waitForDigit
-                    const digit = await context.getDataAsync(currentNode.content.prompt, 5000, 1); // 5s timeout, 1 digit
+                    const digit = await context.getData(currentNode.content.prompt, 5000, 1); // 5s timeout, 1 digit
                     let menuConnection;
                     if (digit) {
                          menuConnection = flow.connections.find(c => {
@@ -53,16 +53,16 @@ async function executeFlow(context, flow) {
                     }
                     nextNodeId = menuConnection ? menuConnection.toNodeId : null;
                     if (!nextNodeId) {
-                        await context.verboseAsync(`No route for digit '${digit || 'timeout'}'.`);
+                        await context.verbose(`No route for digit '${digit || 'timeout'}'.`);
                     }
                     break;
 
                 case 'transfer':
-                    await context.verboseAsync(`Transferring call to: ${currentNode.content.number}`);
+                    await context.verbose(`Transferring call to: ${currentNode.content.number}`);
                     // Using Dial is more robust for transfers
-                    await context.execAsync('Dial', `SIP/${currentNode.content.number}`);
-                    const dialStatus = await context.getVariableAsync('DIALSTATUS');
-                    await context.verboseAsync(`Dial status: ${dialStatus}`);
+                    await context.exec('Dial', `SIP/${currentNode.content.number}`);
+                    const dialStatus = await context.getVariable('DIALSTATUS');
+                    await context.verbose(`Dial status: ${dialStatus}`);
                     // If the call fails, we can route to the 'failure' port
                     if (dialStatus !== 'ANSWER') {
                         const failureConnection = flow.connections.find(c => c.fromNodeId === currentNode.id && c.fromPortId === 'out');
@@ -75,49 +75,49 @@ async function executeFlow(context, flow) {
                 
                 case 'calendar':
                     // This is a simplified simulation. A real implementation would be more complex.
-                    await context.verboseAsync(`Checking calendar rules...`);
+                    await context.verbose(`Checking calendar rules...`);
                     const now = new Date();
                     // For now, let's just assume it's "open" and take the first event path.
                     // In a real scenario, you'd iterate through events, check days, times, dates.
                     const defaultConnection = flow.connections.find(c => c.fromNodeId === currentNode.id && c.fromPortId === 'out-default');
                     nextNodeId = defaultConnection ? defaultConnection.toNodeId : null;
-                    await context.verboseAsync(`Calendar result: Following default path.`);
+                    await context.verbose(`Calendar result: Following default path.`);
                     break;
 
                 case 'voicemail':
-                    await context.verboseAsync(`Sending to voicemail: ${currentNode.content.prompt}`);
-                    await context.execAsync('TextToSpeech', `"${currentNode.content.prompt.replace(/"/g, '\\"')}"`);
-                    // await context.execAsync('VoiceMail', '1234@default'); // Example voicemail box
+                    await context.verbose(`Sending to voicemail: ${currentNode.content.prompt}`);
+                    await context.exec('TextToSpeech', `"${currentNode.content.prompt.replace(/"/g, '\\"')}"`);
+                    // await context.exec('VoiceMail', '1234@default'); // Example voicemail box
                     nextNodeId = null; // Voicemail is usually a terminal action
                     break;
 
                 case 'hangup':
-                    await context.verboseAsync('Hanging up call.');
+                    await context.verbose('Hanging up call.');
                     nextNodeId = null; // This will terminate the loop
                     break;
 
                 default:
-                    await context.verboseAsync(`Unknown node type: ${currentNode.type}`);
+                    await context.verbose(`Unknown node type: ${currentNode.type}`);
                     nextNodeId = null;
                     break;
             }
         } catch (error) {
             console.error(`Error executing node ${currentNode.id}:`, error);
-            await context.verboseAsync(`An error occurred. Ending call.`);
+            await context.verbose(`An error occurred. Ending call.`);
             nextNodeId = null;
         }
 
         if (nextNodeId) {
             currentNode = flow.nodes.find(n => n.id === nextNodeId);
             if (!currentNode) {
-                 await context.verboseAsync(`Next node ID '${nextNodeId}' not found in flow.`);
+                 await context.verbose(`Next node ID '${nextNodeId}' not found in flow.`);
             }
         } else {
             currentNode = null;
         }
     }
 
-    await context.verboseAsync('IVR Flow finished.');
+    await context.verbose('IVR Flow finished.');
 }
 
 module.exports = { executeFlow };
