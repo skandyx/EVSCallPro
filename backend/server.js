@@ -2,7 +2,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const { AGI } = require('async-agi');
+const { AGI } = require('fast-agi');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
