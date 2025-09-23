@@ -1,0 +1,51 @@
+#!/bin/bash
+# Script pour appliquer les nouvelles configurations Asterisk de manière sécurisée.
+# Doit être exécuté en tant que root.
+
+set -e # Arrête le script si une commande échoue
+
+# --- Variables ---
+ASTERISK_CONFIG_DIR="/etc/asterisk"
+BACKUP_DIR="/var/backups/asterisk_config_$(date +%Y%m%d_%H%M%S)"
+SOURCE_CONFIG_DIR="$(dirname "$0")/../asterisk-configs" # Chemin relatif au script
+
+# --- Vérification des droits ---
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Ce script doit être exécuté en tant que root." >&2
+  exit 1
+fi
+
+echo "--- Démarrage du déploiement de la configuration Asterisk ---"
+
+# --- 1. Sauvegarde des configurations existantes ---
+echo "1. Création d'une sauvegarde de la configuration actuelle dans ${BACKUP_DIR}..."
+mkdir -p "$BACKUP_DIR"
+cp -r "${ASTERISK_CONFIG_DIR}/" "$BACKUP_DIR"
+echo "Sauvegarde terminée."
+
+# --- 2. Copie des nouvelles configurations ---
+echo "2. Copie des nouveaux fichiers de configuration..."
+
+# Fichiers principaux
+cp "${SOURCE_CONFIG_DIR}/evscallpro-outbound.conf" "${ASTERISK_CONFIG_DIR}/extensions.d/"
+cp "${SOURCE_CONFIG_DIR}/evscallpro-inbound.conf" "${ASTERISK_CONFIG_DIR}/extensions.d/"
+cp "${SOURCE_CONFIG_DIR}/yeastar-trunks.conf" "${ASTERISK_CONFIG_DIR}/pjsip.d/"
+cp "${SOURCE_CONFIG_DIR}/rtp.conf" "${ASTERISK_CONFIG_DIR}/"
+
+# Fichier de configuration du manager AMI
+mkdir -p "${ASTERISK_CONFIG_DIR}/manager.d"
+cp "${SOURCE_CONFIG_DIR}/manager.d/evscallpro.conf" "${ASTERISK_CONFIG_DIR}/manager.d/"
+
+echo "Fichiers copiés avec succès."
+
+# --- 3. Assurer les bonnes permissions ---
+echo "3. Application des permissions correctes..."
+chown -R asterisk:asterisk "$ASTERISK_CONFIG_DIR"
+echo "Permissions appliquées."
+
+# --- 4. Rechargement des modules Asterisk ---
+echo "4. Rechargement des modules Asterisk..."
+asterisk -rx "core reload"
+echo "Rechargement terminé."
+
+echo "--- Déploiement de la configuration terminé avec succès! ---"

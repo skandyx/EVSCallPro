@@ -1,23 +1,15 @@
-// backend/routes/call.js
 const express = require('express');
 const router = express.Router();
 const db = require('../services/db');
-const YeastarClient = require('../services/yeastarClient');
-
-const PBX_CONNECTION_MODE = process.env.PBX_CONNECTION_MODE || 'asterisk_ami';
-let asteriskRouter;
-if (PBX_CONNECTION_MODE === 'asterisk_ami') {
-    asteriskRouter = require('../services/asteriskRouter');
-}
+const yeastarClient = require('../services/yeastarClient');
+const asteriskRouter = require('../services/asteriskRouter');
 
 /**
  * @openapi
  * /call/originate:
  *   post:
- *     tags:
- *       - Click-to-Call
  *     summary: Lance un appel sortant pour un agent.
- *     description: Déclenche un appel du PBX vers l'agent, puis vers la destination finale.
+ *     tags: [Campagnes]
  *     requestBody:
  *       required: true
  *       content:
@@ -25,65 +17,56 @@ if (PBX_CONNECTION_MODE === 'asterisk_ami') {
  *           schema:
  *             type: object
  *             properties:
- *               agentId:
- *                 type: string
- *               destination:
- *                 type: string
+ *               agentId: { type: string }
+ *               destination: { type: string }
  *     responses:
  *       200:
  *         description: Appel initié avec succès.
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 pbxCallId:
- *                   type: string
- *       400:
- *         description: Informations manquantes ou invalides.
+ *             schema: { type: object, properties: { callId: { type: string } } }
  *       404:
- *         description: Agent ou site introuvable.
+ *         description: Agent, site ou configuration PBX non trouvé.
  *       500:
- *         description: Erreur interne ou échec de communication avec le PBX.
+ *         description: Erreur lors de l'initiation de l'appel.
  */
 router.post('/originate', async (req, res) => {
     const { agentId, destination } = req.body;
-    if (!agentId || !destination) {
-        return res.status(400).json({ error: "agentId et destination sont requis." });
-    }
 
     try {
         const agent = await db.getUserById(agentId);
         if (!agent) {
             return res.status(404).json({ error: "Agent non trouvé." });
         }
-        if (!agent.siteId) {
-            return res.status(400).json({ error: "L'agent n'est assigné à aucun site." });
-        }
 
-        // --- [NOUVEAU] Logique de bascule ---
-        if (PBX_CONNECTION_MODE === 'asterisk_ami') {
-            // Mode Asterisk Central
-            const result = await asteriskRouter.originateCall(agent, destination);
-            res.status(200).json(result);
+        if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {
+            // --- NOUVELLE LOGIQUE ASTERISK ---
+            if (!agent.extension || !agent.siteId) {
+                return res.status(404).json({ error: "L'agent n'a pas d'extension ou de site configuré." });
+            }
+            const callResult = await asteriskRouter.originateCall(agent.extension, destination, agent.siteId);
+            res.json({ callId: callResult.uniqueid });
+
         } else {
-            // Mode API Yeastar (Ancien mode)
+            // --- ANCIENNE LOGIQUE YEASTAR API ---
+            if (!agent.siteId) {
+                return res.status(404).json({ error: "L'agent n'est assigné à aucun site." });
+            }
             const pbxConfig = await db.getPbxConfigBySiteId(agent.siteId);
             if (!pbxConfig) {
-                return res.status(404).json({ error: "Configuration PBX pour le site de l'agent non trouvée." });
+                return res.status(404).json({ error: "Configuration PBX non trouvée pour le site de l'agent." });
             }
-
-            const client = new YeastarClient(pbxConfig, db);
-            const campaign = await db.getActiveCampaignForAgent(agentId);
-            const callerId = campaign ? campaign.caller_id : '0000000000';
-
-            const result = await client.originate(agent.extension, destination, callerId);
-            res.status(200).json(result);
+            const client = await yeastarClient.getClient(pbxConfig);
+            // Pour le click-to-call, la destination est le numéro du client.
+            // L'extension de l'agent est la source de l'appel.
+            // Le callerId est défini dans la campagne.
+            const callerId = 'CRM'; // À récupérer de la campagne si nécessaire
+            const callResult = await client.originate(agent.loginId, destination, callerId);
+            res.json({ callId: callResult.call_id });
         }
-
     } catch (error) {
-        console.error("Erreur lors de l'origination de l'appel :", error.message);
-        res.status(500).json({ error: "Échec de l'initiation de l'appel", details: error.message });
+        console.error('Originate call failed:', error.message);
+        res.status(500).json({ error: `Erreur lors du lancement de l'appel: ${error.message}` });
     }
 });
 

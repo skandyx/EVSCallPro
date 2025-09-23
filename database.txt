@@ -26,9 +26,8 @@ CREATE TYPE qualification_type AS ENUM ('positive', 'neutral', 'negative');
 CREATE TYPE ivr_node_type AS ENUM ('start', 'menu', 'media', 'transfer', 'voicemail', 'hangup', 'calendar');
 CREATE TYPE trunk_auth_type AS ENUM ('register', 'ip');
 CREATE TYPE call_direction AS ENUM ('inbound', 'outbound');
--- Nouveau type pour le statut technique de l'appel, basé sur la documentation Yeastar
+-- Ajout pour le CDR complet
 CREATE TYPE call_status_type AS ENUM ('ANSWERED', 'NO ANSWER', 'BUSY', 'FAILED', 'CONGESTION');
-
 
 -- =============================================================================
 -- SECTION 2 : TABLES PRINCIPALES
@@ -47,26 +46,11 @@ CREATE TABLE sites (
 );
 COMMENT ON TABLE sites IS 'Stocke les différents sites physiques et leurs PBX Yeastar associés.';
 
--- Nouvelle table pour les configurations des PBX Yeastar par site
-CREATE TABLE pbx_configs (
-    id TEXT PRIMARY KEY,
-    site_id TEXT NOT NULL UNIQUE REFERENCES sites(id) ON DELETE CASCADE,
-    ip_address TEXT NOT NULL,
-    api_user TEXT NOT NULL,
-    api_password_encrypted TEXT NOT NULL,
-    api_version INTEGER NOT NULL DEFAULT 1, -- 1 pour v1, 2 pour v2
-    last_seen_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-COMMENT ON TABLE pbx_configs IS 'Stores connection details for each site''s Yeastar PBX.';
-
-
 -- Table des utilisateurs de l'application
 CREATE TABLE users (
     id TEXT PRIMARY KEY,
     login_id TEXT NOT NULL UNIQUE,
-    extension VARCHAR(10) UNIQUE, -- Nouvelle colonne pour l'extension téléphonique
+    extension VARCHAR(10) UNIQUE, -- AJOUT POUR ASTERISK
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
     email TEXT UNIQUE,
@@ -78,6 +62,13 @@ CREATE TABLE users (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 COMMENT ON TABLE users IS 'Contient tous les utilisateurs de la plateforme, leurs rôles et informations de connexion.';
+COMMENT ON COLUMN users.extension IS 'Numéro d''extension SIP de l''agent, utilisé par Asterisk. Doit correspondre au login_id.';
+
+-- PATCH SQL À APPLIQUER SUR UNE BASE EXISTANTE :
+-- ALTER TABLE users ADD COLUMN extension VARCHAR(10) UNIQUE;
+-- UPDATE users SET extension = login_id;
+-- Assurez-vous ensuite que les nouvelles créations/mises à jour d'utilisateurs synchronisent extension et login_id.
+
 CREATE INDEX idx_users_role ON users("role");
 CREATE INDEX idx_users_site_id ON users(site_id);
 
@@ -237,53 +228,54 @@ CREATE TABLE audio_files (
 );
 COMMENT ON TABLE audio_files IS 'Bibliothèque de médias pour les SVI et musiques d''attente.';
 
+-- Table de configuration des PBX (pour le mode Yeastar API)
+CREATE TABLE pbx_configs (
+    id TEXT PRIMARY KEY,
+    site_id TEXT NOT NULL UNIQUE REFERENCES sites(id) ON DELETE CASCADE,
+    ip_address TEXT NOT NULL,
+    api_user TEXT NOT NULL,
+    api_password TEXT NOT NULL,
+    model TEXT NOT NULL, -- S100, S300
+    api_version INTEGER, -- 1 ou 2
+    last_seen_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+COMMENT ON TABLE pbx_configs IS 'Stocke les configurations de connexion pour chaque PBX Yeastar par site.';
 
 -- =============================================================================
 -- SECTION 3 : TABLES DE REPORTING ET DE SUIVI
 -- Ces tables stockent les données générées par l'activité du centre d'appels.
--- Elles sont optimisées pour l'écriture et la lecture de grands volumes de données.
 -- =============================================================================
 
--- Table de l'historique des appels (CDR - Call Detail Record)
+-- Table de l'historique des appels (CDR) - Version complète
 CREATE TABLE call_history (
     id TEXT PRIMARY KEY,
-    pbx_call_id TEXT NOT NULL UNIQUE, -- Identifiant unique de l'appel provenant du PBX.
-    
-    -- Informations de temps
     start_time TIMESTAMPTZ NOT NULL,
     answer_time TIMESTAMPTZ,
-    end_time TIMESTAMPTZ,
-    duration INTEGER, -- Durée totale de la sonnerie à la fin.
-    billable_duration INTEGER, -- Durée de la conversation (billsec).
-    
-    -- Informations d'appel
+    end_time TIMESTAMPTZ NOT NULL,
+    duration INTEGER NOT NULL, -- Durée totale en secondes
+    billable_duration INTEGER NOT NULL DEFAULT 0, -- Temps de parole en secondes
     direction call_direction NOT NULL,
-    source TEXT NOT NULL, -- Numéro de l'appelant.
-    destination TEXT NOT NULL, -- Numéro appelé.
-    call_status call_status_type, -- Statut technique de l'appel (ANSWERED, BUSY...).
-    
-    -- Informations de routage/debug (optionnel mais utile)
-    channel TEXT,
-    destination_channel TEXT,
-    
-    -- Enrichissement CRM (peut être NULL si l'appel n'est pas lié au CRM)
+    call_status call_status_type NOT NULL,
+    source TEXT NOT NULL,
+    destination TEXT NOT NULL,
     agent_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     contact_id TEXT REFERENCES contacts(id) ON DELETE SET NULL,
     campaign_id TEXT REFERENCES campaigns(id) ON DELETE SET NULL,
     qualification_id TEXT REFERENCES qualifications(id) ON DELETE SET NULL,
-    
-    -- Métadonnées
-    recording_path TEXT,
+    pbx_call_id TEXT, -- ID unique de l'appel du PBX (Yeastar/Asterisk)
+    recording_path TEXT, -- Chemin vers le fichier d'enregistrement
+    channel TEXT,
+    destination_channel TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-COMMENT ON TABLE call_history IS 'Journal CDR de tous les appels, enrichi avec les données CRM si disponibles.';
+COMMENT ON TABLE call_history IS 'Journal détaillé (CDR) de tous les appels traités par le système.';
 CREATE INDEX idx_call_history_start_time ON call_history(start_time);
 CREATE INDEX idx_call_history_agent_id ON call_history(agent_id);
 CREATE INDEX idx_call_history_campaign_id ON call_history(campaign_id);
-CREATE INDEX idx_call_history_contact_id ON call_history(contact_id);
 CREATE INDEX idx_call_history_source ON call_history(source);
 CREATE INDEX idx_call_history_destination ON call_history(destination);
-
 
 -- Table des sessions des agents
 CREATE TABLE agent_sessions (
@@ -366,41 +358,22 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Appliquer le trigger à toutes les tables qui ont un champ `updated_at`
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON contact_notes FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON sites FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON user_groups FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON scripts FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON qualification_groups FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON qualifications FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON contacts FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON trunks FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON ivr_flows FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON dids FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON audio_files FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON personal_callbacks FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON activity_types FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON planning_events FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-CREATE TRIGGER set_timestamp BEFORE UPDATE ON pbx_configs FOR EACH ROW EXECUTE FUNCTION trigger_set_timestamp();
-
-
--- =============================================================================
--- SECTION 6 : PATCHS DE SCHÉMA
--- Commandes à exécuter sur une base de données existante pour la mettre à jour.
--- =============================================================================
-/*
--- PATCH POUR L'ARCHITECTURE ASTERISK CENTRALE (TRUNK_OK)
--- Exécutez ces commandes sur votre base de données existante.
-
--- 1. Ajouter la colonne 'extension' à la table des utilisateurs
-ALTER TABLE users ADD COLUMN extension VARCHAR(10) UNIQUE;
-COMMENT ON COLUMN users.extension IS 'Extension téléphonique de l''agent, utilisée par Asterisk.';
-
--- 2. Remplir la nouvelle colonne avec les valeurs de 'login_id' pour les utilisateurs existants
-UPDATE users SET extension = login_id;
-
-*/
+DO $$
+DECLARE
+    t TEXT;
+BEGIN
+    FOR t IN 
+        SELECT table_name 
+        FROM information_schema.columns 
+        WHERE column_name = 'updated_at' AND table_schema = 'public'
+    LOOP
+        EXECUTE format('CREATE TRIGGER set_timestamp
+                        BEFORE UPDATE ON %I
+                        FOR EACH ROW
+                        EXECUTE FUNCTION trigger_set_timestamp();', t);
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Fin du schéma
 -- =============================================================================

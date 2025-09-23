@@ -2,7 +2,7 @@ const pool = require('./connection');
 const { keysToCamel } = require('./utils');
 
 // Define safe columns to be returned, excluding sensitive ones like password_hash
-const SAFE_USER_COLUMNS = 'id, login_id, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at, extension';
+const SAFE_USER_COLUMNS = 'id, login_id, extension, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at';
 
 const getUsers = async () => {
     const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users ORDER BY first_name, last_name`);
@@ -11,10 +11,7 @@ const getUsers = async () => {
 
 const getUserById = async (id) => {
     const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users WHERE id = $1`, [id]);
-    if (res.rows.length > 0) {
-        return keysToCamel(res.rows[0]);
-    }
-    return null;
+    return res.rows.length > 0 ? keysToCamel(res.rows[0]) : null;
 };
 
 const createUser = async (user, groupIds) => {
@@ -23,8 +20,8 @@ const createUser = async (user, groupIds) => {
         await client.query('BEGIN');
         
         const userQuery = `
-            INSERT INTO users (id, login_id, first_name, last_name, email, "role", is_active, password_hash, site_id, extension)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $2) -- Note: extension uses the same value as login_id ($2)
+            INSERT INTO users (id, login_id, extension, first_name, last_name, email, "role", is_active, password_hash, site_id)
+            VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9) -- extension prend la valeur de login_id
             RETURNING ${SAFE_USER_COLUMNS};
         `;
         const userRes = await client.query(userQuery, [
@@ -67,8 +64,13 @@ const updateUser = async (userId, user, groupIds) => {
         const hasPassword = user.password && user.password.trim() !== '';
         
         const queryParams = [
-            user.loginId, user.firstName, user.lastName, user.email || null,
-            user.role, user.isActive, user.siteId || null
+            user.loginId, // $1
+            user.firstName, // $2
+            user.lastName, // $3
+            user.email || null, // $4
+            user.role, // $5
+            user.isActive, // $6
+            user.siteId || null // $7
         ];
         
         let passwordUpdateClause = '';
@@ -82,9 +84,8 @@ const updateUser = async (userId, user, groupIds) => {
 
         const userQuery = `
             UPDATE users SET 
-                login_id = $1, first_name = $2, last_name = $3, email = $4, 
-                "role" = $5, is_active = $6, site_id = $7,
-                extension = $1 -- Note: extension is synced with login_id
+                login_id = $1, extension = $1, first_name = $2, last_name = $3, email = $4, 
+                "role" = $5, is_active = $6, site_id = $7
                 ${passwordUpdateClause}, updated_at = NOW()
             WHERE id = $${userIdIndex}
             RETURNING ${SAFE_USER_COLUMNS};

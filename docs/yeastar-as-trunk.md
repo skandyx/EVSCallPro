@@ -1,90 +1,90 @@
 # Guide de Configuration : Utiliser un Yeastar S-Series comme Trunk SIP
 
-Ce document explique comment configurer votre PBX Yeastar (S100/S300) pour qu'il agisse comme une simple passerelle (Trunk) vers votre serveur Asterisk central. Dans cette architecture, toute l'intelligence (SVI, files d'attente, routage) est gérée par Asterisk, et le Yeastar ne fait que transmettre les appels entre le réseau public (PSTN) et Asterisk via le VPN.
+Ce document explique comment configurer votre PBX Yeastar (S100/S300) pour qu'il agisse comme une simple passerelle (Trunk SIP) vers votre serveur Asterisk central. Dans cette architecture, toute l'intelligence (SVI, files d'attente, logique d'appel) réside sur Asterisk.
 
-## Prérequis
+## Objectif
 
-- **Serveur Asterisk Central** : L'adresse IP de votre serveur Asterisk doit être connue et joignable depuis le Yeastar via le VPN.
-- **Réseau** : Le VPN entre le site et le serveur central doit être stable.
-- **Accès Admin** : Vous devez avoir les droits d'administrateur sur l'interface web du Yeastar.
+- **Appels sortants** : L'agent `1001` (enregistré sur Asterisk) appelle le `0612345678`. Asterisk route l'appel vers le Trunk SIP du Yeastar du site de l'agent, qui l'envoie vers l'opérateur téléphonique externe.
+- **Appels entrants** : Un client appelle un numéro (SDA) de votre entreprise. L'opérateur envoie l'appel au Yeastar, qui le transmet immédiatement au Trunk SIP d'Asterisk pour traitement par le SVI.
 
 ---
 
-## Étape 1 : Créer un Trunk SIP vers Asterisk
+## Étape 1 : Désactiver les Fonctions PBX Inutiles sur le Yeastar
 
-Nous allons créer une "connexion" SIP qui enverra tous les appels entrants vers Asterisk.
+Puisque le Yeastar ne servira que de passerelle, il est recommandé de désactiver les fonctionnalités qui pourraient interférer avec Asterisk.
 
-1.  **Connectez-vous à l'interface de votre Yeastar.**
+- **Désactiver SIP ALG sur votre routeur/pare-feu de site**. C'est une cause fréquente de problèmes audio.
+- Sur le Yeastar, supprimez ou désactivez :
+  - Les files d'attente existantes.
+  - Les SVI existants.
+  - Les groupes de sonnerie.
+- Gardez uniquement :
+  - Les **extensions des téléphones physiques** si vous en avez (même si non utilisés, ils peuvent servir de backup).
+  - La **configuration de vos Trunks opérateurs** (vers votre fournisseur comme OVH, Orange, etc.).
+
+---
+
+## Étape 2 : Créer un Trunk SIP "Service Provider" vers Asterisk
+
+Nous allons créer un "faux" Trunk de type `Service Provider` qui pointera vers l'IP de votre serveur Asterisk central.
+
+1.  **Accédez à l'interface de votre Yeastar.**
 2.  Naviguez vers `Paramètres > PBX > Trunks`.
-3.  Cliquez sur `Ajouter`.
-4.  Remplissez les informations suivantes :
-    - **Type de Trunk** : `Peer Trunk`.
-    - **Type** : `SIP`.
-    - **Nom du Trunk** : Donnez un nom explicite, par exemple `Trunk_vers_CRM_Asterisk`.
-    - **Nom d'hôte/IP** : Entrez l'**adresse IP de votre serveur Asterisk central**.
-    - **Domaine** : Entrez à nouveau l'**adresse IP de votre serveur Asterisk central**.
-
-    ![Création du Peer Trunk](https://support.yeastar.com/hc/article_attachments/360002165094/1-1.png)
-
-5.  **Désactiver la sécurité non nécessaire** :
-    - Laissez les champs `Nom d'utilisateur` et `Mot de passe` **vides**. L'authentification se fera par adresse IP.
-    - Assurez-vous que l'option `Qualify` est cochée. Cela permet au Yeastar de surveiller l'état de la connexion vers Asterisk.
-
-6.  **Sauvegardez** les modifications.
+3.  Cliquez sur **Ajouter**.
+4.  **Configuration du Trunk** :
+    - **Type de Trunk** : Choisissez `Service Provider`.
+    - **Nom** : `vers_asterisk_central`
+    - **Type de Protocole** : `SIP`
+    - **Nom d'hôte/IP** : Entrez l'**adresse IP (VPN) de votre serveur Asterisk**. Par exemple : `10.0.0.1`.
+    - **Domaine** : Entrez à nouveau l'**adresse IP (VPN) de votre serveur Asterisk**.
+    - **Type d'authentification** : `Aucun`. L'authentification se fera par adresse IP.
+5.  **Sauvegardez.**
 
 ---
 
-## Étape 2 : Créer une Route Entrante vers Asterisk
+## Étape 3 : Configurer les Routes d'Appels
 
-Maintenant, nous devons dire au Yeastar que **tous les appels** reçus de votre opérateur public doivent être envoyés via le Trunk que nous venons de créer.
+### 3.1 - Routes Entrantes (PSTN → Yeastar → Asterisk)
+
+Il faut dire au Yeastar que **tous les appels entrants** de vos numéros (SDA) doivent être envoyés vers le Trunk Asterisk.
 
 1.  Naviguez vers `Paramètres > PBX > Contrôle d'Appel > Routes Entrantes`.
-2.  Cliquez sur `Ajouter`.
-3.  Configurez la route comme suit :
-    - **Nom de la Route** : `Tout_vers_Asterisk`.
-    - **Trunks Membres** : Sélectionnez le ou les trunks de votre (vos) opérateur(s) téléphonique(s) public(s). **NE sélectionnez PAS** le trunk `Trunk_vers_CRM_Asterisk` que vous avez créé.
-    - **Modèle de Numérotation** :
-        - **Pattern** : `_X.`
-        - **Strip** : `0`
-        - *Explication* : `_X.` signifie "intercepter n'importe quel numéro appelé". Cela garantit que tous les appels entrants sont capturés par cette règle.
-    - **Destination** :
-        - Sélectionnez `Trunk SIP`.
-        - Dans la liste déroulante, choisissez le trunk que vous avez créé à l'étape 1 (`Trunk_vers_CRM_Asterisk`).
+2.  **Modifiez TOUTES vos routes entrantes existantes.**
+3.  Pour chaque route :
+    - **Destination** : Sélectionnez `Trunk`.
+    - Dans la liste déroulante qui apparaît, choisissez le trunk que vous venez de créer : `vers_asterisk_central`.
+4.  **Sauvegardez.**
 
-    ![Configuration de la Route Entrante](https://support.yeastar.com/hc/article_attachments/360002165214/2-1.png)
+Désormais, dès qu'un appel arrive sur le Yeastar depuis l'extérieur, il est immédiatement et sans condition transféré à Asterisk.
 
-4.  **Sauvegardez** la route. Assurez-vous qu'elle est en haut de la liste pour qu'elle soit traitée en priorité.
+### 3.2 - Routes Sortantes (Agent → Asterisk → Yeastar → PSTN)
 
----
-
-## Étape 3 : Créer une Route Sortante depuis Asterisk
-
-De la même manière, il faut autoriser les appels venant d'Asterisk à repartir vers le réseau public via votre opérateur.
+Asterisk enverra les appels sortants vers le Yeastar. Le Yeastar doit savoir comment les acheminer vers votre opérateur externe. Cette partie est probablement déjà configurée si votre Yeastar fonctionnait déjà.
 
 1.  Naviguez vers `Paramètres > PBX > Contrôle d'Appel > Routes Sortantes`.
-2.  Cliquez sur `Ajouter`.
-3.  Configurez la route :
-    - **Nom de la Route** : `Depuis_Asterisk_vers_PSTN`.
-    - **Trunks Membres** : Sélectionnez le `Trunk_vers_CRM_Asterisk` (c'est la source).
-    - **Modèle de Numérotation** :
-        - **Pattern** : `_X.` (pour autoriser tous les numéros).
-    - **Destination** :
-        - Sélectionnez le ou les trunks de votre (vos) opérateur(s) téléphonique(s) public(s).
-
-4.  **Sauvegardez**.
+2.  Assurez-vous que vos règles de numérotation (`_0.`, `_00.` etc.) sont bien configurées pour utiliser vos Trunks opérateurs externes.
+3.  **Point crucial de sécurité** : vous devez vous assurer que seuls les appels provenant d'Asterisk peuvent utiliser ces routes.
+    - Naviguez vers `Paramètres > Sécurité > Liste de blocage/d'autorisation IP`.
+    - **Ajoutez l'adresse IP (VPN) de votre serveur Asterisk** à la liste des IP autorisées avec un masque de sous-réseau `/32` (ex: `10.0.0.1/32`). Cela empêchera toute tentative d'appel frauduleux.
 
 ---
 
-## Étape 4 : Sécurité et Finalisation
+## Étape 4 : Réglages SIP Avancés
 
-1.  **Désactiver le NAT** : Si la communication se fait entièrement via VPN, il est recommandé de vérifier les paramètres SIP et de désactiver les options NAT sur le trunk `Trunk_vers_CRM_Asterisk` pour éviter des problèmes audio.
-    - Allez dans les options avancées du trunk et assurez-vous que `NAT` est sur `Non`.
+1.  Naviguez vers `Paramètres > PBX > SIP > NAT`.
+2.  **Désactivez NAT** si la communication se fait entièrement via un VPN stable où les adresses IP sont privées et routées.
+3.  Naviguez vers `Paramètres > PBX > SIP > Avancé`.
+4.  Assurez-vous que les codecs `ulaw` (ou `alaw` pour l'Europe) sont prioritaires dans la liste des codecs.
 
-2.  **Pare-feu du Yeastar** :
-    - Naviguez vers `Paramètres > Système > Sécurité > Pare-feu`.
-    - Créez une règle qui **accepte** tout le trafic `SIP` et `RTP` provenant de l'**adresse IP de votre serveur Asterisk central**. C'est crucial pour que les appels d'Asterisk ne soient pas bloqués.
+---
 
-3.  **Appliquer les Changements** :
-    - En haut de l'interface Yeastar, cliquez sur le bouton orange `Appliquer les changements` pour que toutes vos modifications prennent effet.
+## Checklist Finale
 
-Votre Yeastar est maintenant configuré comme une passerelle transparente. Toute la logique d'appel sera gérée par le serveur Asterisk central.
+- [ ] SIP ALG est désactivé sur le routeur du site.
+- [ ] Un Trunk de type "Service Provider" pointant vers l'IP VPN d'Asterisk a été créé sur le Yeastar.
+- [ ] Toutes les routes entrantes du Yeastar pointent vers ce nouveau Trunk Asterisk.
+- [ ] Les routes sortantes du Yeastar sont fonctionnelles.
+- [ ] L'adresse IP VPN du serveur Asterisk a été ajoutée à la liste blanche de sécurité du Yeastar.
+- [ ] Les codecs audio (ulaw/alaw) sont cohérents entre Asterisk et le Yeastar.
+
+Votre Yeastar est maintenant configuré comme une passerelle SIP simple et robuste pour votre infrastructure de centre d'appels centralisée.

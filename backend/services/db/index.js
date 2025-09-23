@@ -13,7 +13,6 @@ const siteQueries = require('./site.queries');
 const mediaQueries = require('./media.queries');
 const planningQueries = require('./planning.queries');
 const noteQueries = require('./note.queries');
-const pbxQueries = require('./pbx.queries');
 
 // For the DatabaseManager feature
 const executeQuery = async (query) => {
@@ -143,5 +142,4 @@ module.exports = {
     ...mediaQueries,
     ...planningQueries,
     ...noteQueries,
-    ...pbxQueries,
 };

@@ -1,0 +1,96 @@
+#!/bin/bash
+# Script pour ajouter dynamiquement un trunk PJSIP pour un nouveau site Yeastar.
+# Doit être exécuté en tant que root.
+
+set -e
+
+# --- Variables ---
+PJSIP_CONFIG_FILE="/etc/asterisk/pjsip.d/yeastar-trunks.conf"
+SITE_ID=$1
+YEASTAR_IP=$2
+SECRET=$3 # Le secret est optionnel, utilisé pour l'authentification par enregistrement
+
+# --- Vérification des arguments ---
+if [ -z "$SITE_ID" ] || [ -z "$YEASTAR_IP" ]; then
+  echo "Usage: $0 <siteId> <yeastarIp> [secret]"
+  echo "Exemple (Auth IP): $0 1 10.1.0.254"
+  echo "Exemple (Auth Register): $0 2 10.2.0.254 motdepassesecret"
+  exit 1
+fi
+
+echo "--- Ajout du Trunk pour le site ${SITE_ID} ---"
+
+# --- Construction de la configuration PJSIP ---
+CONFIG_BLOCK="
+; --- Trunk pour Site ${SITE_ID} ---
+[trunk-site${SITE_ID}]
+type=endpoint
+context=from-yeastar
+disallow=all
+allow=ulaw,alaw
+aors=trunk-site${SITE_ID}
+"
+
+# Ajout de l'authentification par IP (cas le plus courant en VPN)
+CONFIG_BLOCK+="identify_by=ip
+"
+
+# Construction de la section AOR
+AOR_BLOCK="
+[trunk-site${SITE_ID}]
+type=aor
+contact=sip:${YEASTAR_IP}:5060
+"
+
+# Construction de la section Identify
+IDENTIFY_BLOCK="
+[trunk-site${SITE_ID}]
+type=identify
+endpoint=trunk-site${SITE_ID}
+match=${YEASTAR_IP}
+"
+
+# Si un secret est fourni, on ajoute l'authentification par enregistrement (register)
+if [ -n "$SECRET" ]; then
+    REGISTRATION_BLOCK="
+[trunk-site${SITE_ID}]
+type=registration
+transport=transport-udp
+outbound_auth=trunk-site${SITE_ID}
+server_uri=sip:${YEASTAR_IP}
+client_uri=sip:asterisk@${YEASTAR_IP}
+retry_interval=60
+"
+    AUTH_BLOCK="
+[trunk-site${SITE_ID}]
+type=auth
+auth_type=userpass
+password=${SECRET}
+username=asterisk
+"
+    CONFIG_BLOCK+="\noutbound_auth=trunk-site${SITE_ID}"
+fi
+
+
+# --- Ajout au fichier de configuration ---
+echo "Ajout de la configuration au fichier ${PJSIP_CONFIG_FILE}..."
+
+# Utilise tee avec sudo pour écrire en tant que root, même si le script est lancé par un autre utilisateur avec sudo
+{
+    echo "$CONFIG_BLOCK"
+    echo "$AOR_BLOCK"
+    echo "$IDENTIFY_BLOCK"
+    if [ -n "$SECRET" ]; then
+        echo "$REGISTRATION_BLOCK"
+        echo "$AUTH_BLOCK"
+    fi
+} >> "$PJSIP_CONFIG_FILE"
+
+echo "Configuration ajoutée."
+
+# --- Rechargement PJSIP ---
+echo "Rechargement du module PJSIP..."
+asterisk -rx "pjsip reload"
+echo "Module PJSIP rechargé."
+
+echo "--- Le Trunk pour le site ${SITE_ID} a été ajouté avec succès! ---"
