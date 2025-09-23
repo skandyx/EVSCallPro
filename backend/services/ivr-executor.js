@@ -1,6 +1,6 @@
 /**
  * Executes an IVR flow using the provided AGI context.
- * @param {object} context The agi-node context object.
+ * @param {object} context The node-agi context object.
  * @param {object} flow The IVR flow object from the database.
  */
 async function executeFlow(context, flow) {

@@ -357,7 +357,7 @@ export interface VersionInfo {
     application: string;
     asterisk: string;
     database: string;
-    'agi-node': string;
+    'node-agi': string;
 }
 
 export interface ConnectivityService {
