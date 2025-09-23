@@ -2,7 +2,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const { AGI } = require('asterisk-agi-plus'); // Remplacement de fast-agi
+const agi = require('agi-node');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -81,7 +81,7 @@ app.get('/api/application-data', async (req, res) => {
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
             systemLogs: [],
-            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asterisk-agi-plus': '0.6.0' },
+            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'agi-node': '0.4.0' },
             connectivityServices: [],
             systemConnectionSettings: { database: {}, asterisk: {} }
         });
@@ -99,9 +99,11 @@ app.get('*', (req, res) => {
 });
 
 // --- AGI SERVER ---
-// asterisk-agi-plus s'initialise et écoute directement sur le port spécifié.
-new AGI(agiHandler, { port: parseInt(process.env.AGI_PORT || '4573', 10) });
-console.log(`AGI server listening on port ${process.env.AGI_PORT || 4573}`);
+const agiServer = new agi.AgiServer();
+agiServer.on('connection', agiHandler);
+const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
+agiServer.listen(agiPort);
+console.log(`AGI server listening on port ${agiPort}`);
 
 // --- WEBSOCKET & AMI (Conditional Start) ---
 if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {

@@ -1,6 +1,6 @@
-// FIX: Moved the Cypress types reference to be the very first line of the file, before any comments, to ensure it is correctly processed by the TypeScript compiler. This resolves all errors related to undefined Cypress globals like `describe`, `it`, and `cy`.
 /// <reference types="cypress" />
 
+// FIX: The Cypress types reference must be the very first line of the file for TypeScript to recognize it. The reference has been moved to the top, and the previous comment on this line was removed.
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
     // Visit the root URL

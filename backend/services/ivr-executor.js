@@ -27,7 +27,8 @@ async function executeFlow(context, flow) {
                     // In a real app, 'prompt' would be a filename. We'll use verbose for simulation.
                     await context.verbose(`Streaming media: ${currentNode.content.prompt}`);
                     // await context.streamFile(currentNode.content.prompt); // Uncomment when audio files exist
-                    await context.sayText(currentNode.content.prompt); // Use text-to-speech for now
+                    // Use TextToSpeech for now, ensuring the prompt is quoted for Asterisk.
+                    await context.exec('TextToSpeech', `"${currentNode.content.prompt.replace(/"/g, '\\"')}"`);
                     const mediaConnection = flow.connections.find(c => c.fromNodeId === currentNode.id && c.fromPortId === 'out');
                     nextNodeId = mediaConnection ? mediaConnection.toNodeId : null;
                     break;
@@ -85,7 +86,7 @@ async function executeFlow(context, flow) {
 
                 case 'voicemail':
                     await context.verbose(`Sending to voicemail: ${currentNode.content.prompt}`);
-                    await context.sayText(currentNode.content.prompt);
+                    await context.exec('TextToSpeech', `"${currentNode.content.prompt.replace(/"/g, '\\"')}"`);
                     // await context.exec('VoiceMail', '1234@default'); // Example voicemail box
                     nextNodeId = null; // Voicemail is usually a terminal action
                     break;
