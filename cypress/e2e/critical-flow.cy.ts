@@ -45,6 +45,3 @@ describe('Critical Application Flow', () => {
     cy.get('main').contains("Le script s'affichera ici.");
   });
 });
-
-// Fix: Add an empty export to ensure this file is treated as a module, which can help resolve issues with global type definitions like Cypress.
-export {};

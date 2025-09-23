@@ -1,4 +1,7 @@
 // --- DEPENDENCIES ---
+// Load environment variables from .env file BEFORE any other code runs.
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -18,7 +21,8 @@ const PORT = process.env.PORT || 3001;
 // --- MIDDLEWARE ---
 app.use(cors());
 app.use(express.json());
-app.use(cookieParser());
+// Initialize cookie-parser with a secret to enable signed cookies
+app.use(cookieParser(process.env.COOKIE_SECRET));
 app.use(express.static(path.join(__dirname, '..', 'dist')));
 
 // --- SWAGGER CONFIGURATION ---

@@ -57,6 +57,7 @@ router.post('/login', async (req, res) => {
             sameSite: 'strict',
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
             path: '/',
+            signed: true, // This ensures the cookie is signed
         });
 
         // Ne pas renvoyer le hash du mot de passe
@@ -82,7 +83,8 @@ router.post('/login', async (req, res) => {
  *         description: Refresh token invalide ou expiré.
  */
 router.post('/refresh', (req, res) => {
-    const refreshToken = req.cookies.refreshToken;
+    // Read the signed cookie instead of the regular one
+    const refreshToken = req.signedCookies.refreshToken;
     if (!refreshToken) {
         return res.status(401).json({ error: 'Refresh token manquant.' });
     }
