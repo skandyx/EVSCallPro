@@ -2,7 +2,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const { AGI } = require('agi-async');
+const { AGI } = require('async-agi');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -81,7 +81,7 @@ app.get('/api/application-data', async (req, res) => {
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
             systemLogs: [],
-            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'agi-async': '3.0.0' },
+            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'fast-agi': '3.0.0' },
             connectivityServices: [],
             systemConnectionSettings: { database: {}, asterisk: {} }
         });

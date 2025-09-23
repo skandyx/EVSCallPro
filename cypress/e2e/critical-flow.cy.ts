@@ -1,3 +1,5 @@
+// FIX: Added the triple-slash directive to include Cypress type definitions,
+// which resolves errors about missing global functions like 'describe', 'it', and 'cy'.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
