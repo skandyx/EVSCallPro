@@ -18,10 +18,10 @@
   "license": "ISC",
   "dependencies": {
     "asterisk-manager": "^0.1.16",
+    "asterisk-agi-plus": "^0.6.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "fast-agi": "^0.7.2",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.5",
     "swagger-jsdoc": "^6.2.8",

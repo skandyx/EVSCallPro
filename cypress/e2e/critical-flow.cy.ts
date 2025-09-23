@@ -1,4 +1,4 @@
-// FIX: Added a triple-slash directive to include Cypress type definitions, resolving TS errors.
+// FIX: The triple-slash directive for Cypress types must be at the top of the file to be effective.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
