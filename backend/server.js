@@ -41,8 +41,8 @@ const swaggerOptions = {
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 // --- API ROUTES ---
-const authRoutes = require('./backend/routes/auth.js');
-const callRoutes = require('./backend/routes/call.js');
+const authRoutes = require('./routes/auth.js');
+const callRoutes = require('./routes/call.js');
 // ... other routes will be added here
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -109,8 +109,8 @@ console.log(`AGI server listening on port ${agiPort}`);
 
 // --- WEBSOCKET & AMI (Conditional Start) ---
 if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {
-    const { initializeWebSocketServer } = require('./backend/services/webSocketServer.js');
-    const { initializeAmiListener } = require('./backend/services/amiListener.js');
+    const { initializeWebSocketServer } = require('./services/webSocketServer.js');
+    const { initializeAmiListener } = require('./services/amiListener.js');
     
     const wsServer = initializeWebSocketServer(server);
     initializeAmiListener(wsServer);

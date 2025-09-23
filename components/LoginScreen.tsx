@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { User } from '../types.ts';
 import { LogoIcon } from './Icons.tsx';
+import apiClient from '../src/lib/axios.ts';
 
 interface LoginScreenProps {
     onLoginSuccess: (data: { user: User, token: string }) => void;
@@ -18,28 +19,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         setIsLoading(true);
 
         try {
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ loginId, password }),
-            });
+            const response = await apiClient.post('/auth/login', { loginId, password });
+            const data = response.data;
 
-            if (response.ok) {
-                const data = await response.json(); // Expects { user, token }
-                if (data.user && data.user.isActive) {
-                    onLoginSuccess(data);
-                } else {
-                     setError("Ce compte utilisateur est désactivé.");
-                }
+            if (data.user && data.user.isActive) {
+                onLoginSuccess({ user: data.user, token: data.accessToken });
             } else {
-                const errorData = await response.json();
-                setError(errorData.error || "Identifiant ou mot de passe incorrect.");
+                 setError("Ce compte utilisateur est désactivé.");
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Login request failed:", err);
-            setError("Erreur de connexion au serveur.");
+            if (err.response && err.response.data && err.response.data.error) {
+                setError(err.response.data.error);
+            } else {
+                setError("Erreur de connexion au serveur.");
+            }
         } finally {
             setIsLoading(false);
         }
