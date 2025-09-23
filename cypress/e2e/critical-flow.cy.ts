@@ -1,6 +1,4 @@
-// FIX: Added a triple-slash directive to include Cypress type definitions.
-// This resolves TypeScript errors for 'describe', 'it', and 'cy' by making
-// Cypress's global commands available in the test file.
+// FIX: Added a triple-slash directive to include Cypress type definitions, resolving TS errors.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
