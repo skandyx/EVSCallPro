@@ -1,6 +1,5 @@
 /// <reference types="cypress" />
 
-// FIX: The Cypress types reference must be the very first line of the file for TypeScript to recognize it. The reference has been moved to the top, and the previous comment on this line was removed.
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
     // Visit the root URL

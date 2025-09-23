@@ -2,7 +2,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const agi = require('agi-node');
+const { AGI } = require('agi-async');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -81,7 +81,7 @@ app.get('/api/application-data', async (req, res) => {
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
             systemLogs: [],
-            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'agi-node': '0.4.0' },
+            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'agi-async': '3.0.0' },
             connectivityServices: [],
             systemConnectionSettings: { database: {}, asterisk: {} }
         });
@@ -99,10 +99,9 @@ app.get('*', (req, res) => {
 });
 
 // --- AGI SERVER ---
-const agiServer = new agi.AgiServer();
-agiServer.on('connection', agiHandler);
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-agiServer.listen(agiPort);
+const agiServer = new AGI(agiHandler);
+agiServer.start(agiPort);
 console.log(`AGI server listening on port ${agiPort}`);
 
 // --- WEBSOCKET & AMI (Conditional Start) ---

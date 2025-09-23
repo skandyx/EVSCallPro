@@ -2,12 +2,13 @@ const db = require('./services/db');
 const { executeFlow } = require('./services/ivr-executor.js');
 
 /**
- * Handles the logic for a single AGI call session.
- * @param {object} context The agi-node context object.
- * @param {object} vars The initial AGI variables.
+ * Handles an AGI request using the agi-async library.
+ * This async function receives a context object for the call.
+ * @param {object} context The agi-async context object.
  */
-async function handleCall(context, vars) {
+async function agiHandler(context) {
   try {
+    const vars = context.variables;
     await context.answer();
     await context.verbose('AGI Script Started.');
 
@@ -20,7 +21,6 @@ async function handleCall(context, vars) {
       await executeFlow(context, ivrFlow);
     } else {
       await context.verbose('No IVR flow configured for this number.');
-      // Using exec with TextToSpeech as a replacement for the proprietary sayText method.
       await context.exec('TextToSpeech', '"We are sorry, this service is currently unavailable."');
     }
 
@@ -32,25 +32,10 @@ async function handleCall(context, vars) {
         console.error('Could not even send verbose error message to Asterisk', e);
     }
   } finally {
+    // Ensure hangup is always called, even if the flow fails
     await context.verbose('AGI Script Finished.');
     await context.hangup();
   }
 }
 
-
-/**
- * Main handler for incoming AGI connections from agi-node.
- * This function sets up listeners for the AGI context events.
- * @param {object} context The agi-node context object (which is an EventEmitter).
- */
-function agiConnectionHandler(context) {
-    context.on('variables', (vars) => {
-        handleCall(context, vars);
-    });
-
-    context.on('error', (err) => {
-        console.error('AGI Context Error:', err);
-    });
-}
-
-module.exports = agiConnectionHandler;
+module.exports = agiHandler;
