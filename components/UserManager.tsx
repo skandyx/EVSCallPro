@@ -13,6 +13,21 @@ const generatePassword = (): string => {
     return password;
 };
 
+const ToggleSwitch: React.FC<{ enabled: boolean; onChange: (enabled: boolean) => void; }> = ({ enabled, onChange }) => (
+    <button
+        type="button"
+        onClick={() => onChange(!enabled)}
+        className={`${enabled ? 'bg-indigo-600' : 'bg-slate-200'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out`}
+        role="switch"
+        aria-checked={enabled}
+    >
+        <span
+            aria-hidden="true"
+            className={`${enabled ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+        />
+    </button>
+);
+
 interface UserModalProps {
     user: User;
     users: User[];
@@ -29,6 +44,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
     const [isEmailEnabled, setIsEmailEnabled] = useState(!!user.email);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'general' | 'groups' | 'campaigns'>('general');
+    const canManageStationMode = ['Superviseur', 'Administrateur', 'SuperAdmin'].includes(currentUser.role);
 
     const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(() => 
         user ? userGroups.filter(g => g.memberIds.includes(user.id)).map(g => g.id) : []
@@ -161,6 +177,22 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
                                     </div>
                                     <input type="email" name="email" id="email" value={formData.email || ''} onChange={handleChange} required={isEmailEnabled} disabled={!isEmailEnabled} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2 border disabled:bg-slate-50 disabled:text-slate-400"/>
                                 </div>
+                                <div>
+                                    <label htmlFor="mobileNumber" className="block text-sm font-medium text-slate-700">Numéro de mobile (pour "Connect to Phone")</label>
+                                    <input type="tel" name="mobileNumber" id="mobileNumber" value={formData.mobileNumber || ''} onChange={handleChange} placeholder="Ex: 0612345678" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2 border"/>
+                                </div>
+                                {canManageStationMode && (
+                                    <div className="flex items-center justify-between pt-4 border-t">
+                                        <div>
+                                            <label className="font-medium text-slate-700">Utiliser le mobile comme poste de travail</label>
+                                            <p className="text-xs text-slate-500">Si activé, les appels seront envoyés vers ce numéro mobile.</p>
+                                        </div>
+                                        <ToggleSwitch
+                                            enabled={!!formData.useMobileAsStation}
+                                            onChange={isEnabled => setFormData(f => ({ ...f, useMobileAsStation: isEnabled }))}
+                                        />
+                                    </div>
+                                )}
                                 <div>
                                     <label htmlFor="password" className="block text-sm font-medium text-slate-700">Mot de passe</label>
                                     <div className="mt-1 flex rounded-md shadow-sm">
@@ -314,6 +346,8 @@ const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, us
         campaignIds: [],
         password: '',
         siteId: null,
+        mobileNumber: '',
+        useMobileAsStation: false,
     });
     setIsModalOpen(true);
   };

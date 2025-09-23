@@ -2,7 +2,7 @@ const pool = require('./connection');
 const { keysToCamel } = require('./utils');
 
 // Define safe columns to be returned, excluding sensitive ones like password_hash
-const SAFE_USER_COLUMNS = 'id, login_id, extension, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at';
+const SAFE_USER_COLUMNS = 'id, login_id, extension, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at, mobile_number, use_mobile_as_station';
 
 const getUsers = async () => {
     const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users ORDER BY first_name, last_name`);
@@ -20,13 +20,13 @@ const createUser = async (user, groupIds) => {
         await client.query('BEGIN');
         
         const userQuery = `
-            INSERT INTO users (id, login_id, extension, first_name, last_name, email, "role", is_active, password_hash, site_id)
-            VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9) -- extension prend la valeur de login_id
+            INSERT INTO users (id, login_id, extension, first_name, last_name, email, "role", is_active, password_hash, site_id, mobile_number, use_mobile_as_station)
+            VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) -- extension prend la valeur de login_id
             RETURNING ${SAFE_USER_COLUMNS};
         `;
         const userRes = await client.query(userQuery, [
             user.id, user.loginId, user.firstName, user.lastName, user.email || null,
-            user.role, user.isActive, user.password, user.siteId || null
+            user.role, user.isActive, user.password, user.siteId || null, user.mobileNumber || null, user.useMobileAsStation || false
         ]);
 
         const newUser = userRes.rows[0];
@@ -70,7 +70,9 @@ const updateUser = async (userId, user, groupIds) => {
             user.email || null, // $4
             user.role, // $5
             user.isActive, // $6
-            user.siteId || null // $7
+            user.siteId || null, // $7
+            user.mobileNumber || null, // $8
+            user.useMobileAsStation || false, // $9
         ];
         
         let passwordUpdateClause = '';
@@ -85,7 +87,7 @@ const updateUser = async (userId, user, groupIds) => {
         const userQuery = `
             UPDATE users SET 
                 login_id = $1, extension = $1, first_name = $2, last_name = $3, email = $4, 
-                "role" = $5, is_active = $6, site_id = $7
+                "role" = $5, is_active = $6, site_id = $7, mobile_number = $8, use_mobile_as_station = $9
                 ${passwordUpdateClause}, updated_at = NOW()
             WHERE id = $${userIdIndex}
             RETURNING ${SAFE_USER_COLUMNS};

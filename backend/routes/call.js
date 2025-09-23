@@ -34,35 +34,58 @@ router.post('/originate', async (req, res) => {
     const { agentId, destination } = req.body;
 
     try {
+        // La méthode getUserById inclut maintenant les nouveaux champs mobile
         const agent = await db.getUserById(agentId);
         if (!agent) {
             return res.status(404).json({ error: "Agent non trouvé." });
         }
 
-        if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {
-            // --- NOUVELLE LOGIQUE ASTERISK ---
-            if (!agent.extension || !agent.siteId) {
-                return res.status(404).json({ error: "L'agent n'a pas d'extension ou de site configuré." });
+        // --- NOUVELLE LOGIQUE CONDITIONNELLE ---
+        const useMobile = agent.useMobileAsStation && agent.mobileNumber;
+
+        if (useMobile) {
+             // LOGIQUE "CONNECT TO PHONE" VIA MOBILE
+            console.log(`[Originate] Using mobile station for agent ${agent.id} -> ${agent.mobileNumber}`);
+            if (!agent.siteId) {
+                return res.status(404).json({ error: "L'agent n'a pas de site configuré pour déterminer le trunk de sortie." });
             }
-            const callResult = await asteriskRouter.originateCall(agent.extension, destination, agent.siteId);
-            res.json({ callId: callResult.uniqueid });
+             // L'AMI Originate est complexe. Voici la structure de l'appel :
+             // 1. On appelle le mobile de l'agent via un canal "Local".
+             // 2. Quand l'agent décroche, le canal "Local" exécute une application "Dial"
+             //    pour appeler le client final via le bon trunk de site.
+            const callResult = await asteriskRouter.originateConnectToPhone(
+                agent.mobileNumber, 
+                destination, 
+                agent.siteId, 
+                agent.loginId, // Utilisé comme CallerID pour l'appel vers le client
+                { campaignId: req.body.campaignId } // Passer des variables additionnelles
+            );
+            return res.json({ callId: callResult.uniqueid });
 
         } else {
-            // --- ANCIENNE LOGIQUE YEASTAR API ---
-            if (!agent.siteId) {
-                return res.status(404).json({ error: "L'agent n'est assigné à aucun site." });
+            // --- LOGIQUE CLASSIQUE (SOFTPHONE) ---
+            console.log(`[Originate] Using softphone station for agent ${agent.id} -> ${agent.extension}`);
+            if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {
+                if (!agent.extension || !agent.siteId) {
+                    return res.status(404).json({ error: "L'agent n'a pas d'extension ou de site configuré." });
+                }
+                const callResult = await asteriskRouter.originateCall(agent.extension, destination, agent.siteId);
+                return res.json({ callId: callResult.uniqueid });
+
+            } else {
+                // ANCIENNE LOGIQUE YEASTAR API
+                if (!agent.siteId) {
+                    return res.status(404).json({ error: "L'agent n'est assigné à aucun site." });
+                }
+                const pbxConfig = await db.getPbxConfigBySiteId(agent.siteId);
+                if (!pbxConfig) {
+                    return res.status(404).json({ error: "Configuration PBX non trouvée pour le site de l'agent." });
+                }
+                const client = await yeastarClient.getClient(pbxConfig);
+                const callerId = 'CRM';
+                const callResult = await client.originate(agent.loginId, destination, callerId);
+                return res.json({ callId: callResult.call_id });
             }
-            const pbxConfig = await db.getPbxConfigBySiteId(agent.siteId);
-            if (!pbxConfig) {
-                return res.status(404).json({ error: "Configuration PBX non trouvée pour le site de l'agent." });
-            }
-            const client = await yeastarClient.getClient(pbxConfig);
-            // Pour le click-to-call, la destination est le numéro du client.
-            // L'extension de l'agent est la source de l'appel.
-            // Le callerId est défini dans la campagne.
-            const callerId = 'CRM'; // À récupérer de la campagne si nécessaire
-            const callResult = await client.originate(agent.loginId, destination, callerId);
-            res.json({ callId: callResult.call_id });
         }
     } catch (error) {
         console.error('Originate call failed:', error.message);

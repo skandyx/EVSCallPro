@@ -58,16 +58,16 @@ CREATE TABLE users (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     password_hash TEXT NOT NULL, -- Stocker un hash du mot de passe, JAMAIS en clair
     site_id TEXT REFERENCES sites(id) ON DELETE SET NULL,
+    mobile_number TEXT,
+    use_mobile_as_station BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 COMMENT ON TABLE users IS 'Contient tous les utilisateurs de la plateforme, leurs rôles et informations de connexion.';
 COMMENT ON COLUMN users.extension IS 'Numéro d''extension SIP de l''agent, utilisé par Asterisk. Doit correspondre au login_id.';
+COMMENT ON COLUMN users.mobile_number IS 'Numéro de mobile de l''agent pour la fonctionnalité "Connect to Phone".';
+COMMENT ON COLUMN users.use_mobile_as_station IS 'Flag pour activer l''appel via le mobile de l''agent.';
 
--- PATCH SQL À APPLIQUER SUR UNE BASE EXISTANTE :
--- ALTER TABLE users ADD COLUMN extension VARCHAR(10) UNIQUE;
--- UPDATE users SET extension = login_id;
--- Assurez-vous ensuite que les nouvelles créations/mises à jour d'utilisateurs synchronisent extension et login_id.
 
 CREATE INDEX idx_users_role ON users("role");
 CREATE INDEX idx_users_site_id ON users(site_id);

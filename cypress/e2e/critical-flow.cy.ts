@@ -1,3 +1,7 @@
+// FIX: Added a triple-slash directive to include Cypress type definitions.
+// This resolves TypeScript errors for 'describe', 'it', and 'cy' by making
+// Cypress's global commands available in the test file.
+/// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
@@ -39,6 +43,8 @@ describe('Critical Application Flow', () => {
     // After login, the agent view should be visible
     cy.get('header').contains("Interface Agent");
     cy.get('main').contains("État de l'Agent");
-    cy.get('main').contains("Script");
+    // FIX: Updated test assertion to be more specific to the content displayed
+    // when an agent logs in and is waiting for a call.
+    cy.get('main').contains("Le script s'affichera ici.");
   });
 });

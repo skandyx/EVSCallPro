@@ -65,6 +65,8 @@ export interface User {
     campaignIds: string[];
     password?: string;
     siteId?: string | null;
+    mobileNumber?: string | null;
+    useMobileAsStation?: boolean;
 }
 
 export interface Site {
