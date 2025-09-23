@@ -1,3 +1,5 @@
+
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Feature, CallHistoryRecord, User, Campaign, Qualification, AgentSession } from '../types.ts';
 import { ArrowUpTrayIcon, TimeIcon, PhoneIcon, ChartBarIcon } from './Icons.tsx';
@@ -37,12 +39,13 @@ const formatDuration = (seconds: number, type: 'full' | 'short' = 'short') => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-const findEntityName = (id: string | null, collection: Array<{id: string, name?: string, firstName?: string, lastName?: string, description?: string}>, returnString: boolean = false): string | JSX.Element => {
+// FIX: Changed return type to React.ReactNode to resolve type ambiguity with global DOM Element.
+const findEntityName = (id: string | null, collection: Array<{id: string, name?: string, firstName?: string, lastName?: string, description?: string}>, returnString: boolean = false): string | React.ReactNode => {
     if (!id) return returnString ? 'N/A' : <span className="text-slate-400 italic">N/A</span>;
     const item = collection.find(i => i.id === id);
     if (!item) return returnString ? 'Inconnu' : <span className="text-red-500">Inconnu</span>;
     const name = item.name || `${item.firstName} ${item.lastName}` || item.description;
-    return returnString ? name || '' : name || '';
+    return returnString ? (name || '') : <>{name || ''}</>;
 };
 
 type ReportTab = 'timesheet' | 'campaign' | 'agent' | 'history' | 'charts';
@@ -142,6 +145,7 @@ const ReportingDashboard: React.FC<ReportingDashboardProps> = ({ feature, callHi
     const campaignReportData = useMemo(() => {
         const report: { [key: string]: { name: string, calls: number, totalDuration: number, success: number } } = {};
         filteredHistory.forEach(call => {
+            if (!call.campaignId) return;
             if (!report[call.campaignId]) {
                 report[call.campaignId] = { name: findEntityName(call.campaignId, campaigns, true) as string, calls: 0, totalDuration: 0, success: 0 };
             }

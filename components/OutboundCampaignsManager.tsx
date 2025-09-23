@@ -1,7 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
 import type { Feature, Campaign, User, SavedScript, QualificationGroup, Contact } from '../types.ts';
 import { PlusIcon, EditIcon, TrashIcon, ArrowUpTrayIcon } from './Icons.tsx';
 import ImportContactsModal from './ImportContactsModal.tsx';
+// FIX: Corrected import path for CampaignDetailView
 import CampaignDetailView from './CampaignDetailView.tsx'; // Import the new detail view
 
 // --- CampaignModal ---

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { User, UserRole } from '../types.ts';
 import { ArrowUpTrayIcon, CheckIcon, XMarkIcon, ArrowRightIcon } from './Icons.tsx';
@@ -71,7 +72,7 @@ const ImportUsersModal: React.FC<ImportUsersModalProps> = ({ onClose, onImport, 
                     
                     if (result.errors.length > 0) console.warn("Erreurs de parsing:", result.errors);
                     headers = result.meta.fields || [];
-                    data = result.data;
+                    data = result.data as CsvRow[];
                 }
 
                 setCsvHeaders(headers);

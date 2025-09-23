@@ -1,0 +1,1 @@
+full contents of scripts/prod-check.sh.txt

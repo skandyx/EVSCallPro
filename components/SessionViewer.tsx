@@ -1,86 +1,70 @@
+
 import React, { useState, useMemo } from 'react';
 import type { Feature, AgentSession, User } from '../types.ts';
+import { InformationCircleIcon } from './Icons.tsx';
 
-const SessionViewer: React.FC<{
+interface SessionViewerProps {
     feature: Feature;
     agentSessions: AgentSession[];
     users: User[];
-}> = ({ feature, agentSessions, users }) => {
-    const today = new Date().toISOString().split('T')[0];
+}
+
+const formatDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.round(seconds % 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
+const SessionViewer: React.FC<SessionViewerProps> = ({ feature, agentSessions, users }) => {
+    const [searchTerm, setSearchTerm] = useState('');
     const [filters, setFilters] = useState({
-        startDate: today,
-        endDate: today,
-        searchTerm: '',
+        startDate: '',
+        endDate: '',
     });
-
-    const formatDuration = (seconds: number) => {
-        if(isNaN(seconds) || seconds < 0) return '00:00:00';
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.round(seconds % 60);
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    const findEntityName = (id: string | null, collection: Array<{id: string, firstName?: string, lastName?: string}>): JSX.Element => {
-        if (!id) return <span className="text-slate-400 italic">N/A</span>;
-        const item = collection.find(i => i.id === id);
-        if (!item) return <span className="text-red-500">Inconnu</span>;
-        return <>{`${item.firstName} ${item.lastName}`}</>;
-    };
-    
-    const findEntityNameAsString = (id: string | null, collection: Array<{id: string, firstName?: string, lastName?: string}>): string => {
-        if (!id) return 'N/A';
-        const item = collection.find(i => i.id === id);
-        if (!item) return 'Inconnu';
-        return `${item.firstName} ${item.lastName}`;
-    };
 
     const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFilters(prev => ({ ...prev, [name]: value }));
     };
 
-    const filteredSessions = useMemo(() => {
-        const start = new Date(filters.startDate);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(filters.endDate);
-        end.setHours(23, 59, 59, 999);
-        const term = filters.searchTerm.toLowerCase();
+    const findAgentName = (agentId: string) => {
+        const user = users.find(u => u.id === agentId);
+        return user ? `${user.firstName} ${user.lastName}` : 'Agent Inconnu';
+    };
 
+    const filteredSessions = useMemo(() => {
         return agentSessions.filter(session => {
             const sessionDate = new Date(session.loginTime);
-            if (sessionDate < start || sessionDate > end) return false;
-            
-            if (term) {
-                const agentName = findEntityNameAsString(session.agentId, users).toLowerCase();
-                if (!agentName.includes(term)) {
+            if (filters.startDate && sessionDate < new Date(filters.startDate)) {
+                return false;
+            }
+            if (filters.endDate) {
+                const endDate = new Date(filters.endDate);
+                endDate.setHours(23, 59, 59, 999);
+                if (sessionDate > endDate) {
                     return false;
                 }
             }
+            if (searchTerm) {
+                const agentName = findAgentName(session.agentId).toLowerCase();
+                return agentName.includes(searchTerm.toLowerCase());
+            }
             return true;
         }).sort((a, b) => new Date(b.loginTime).getTime() - new Date(a.loginTime).getTime());
-    }, [agentSessions, filters, users]);
-    
-    const getSessionDuration = (loginTime: string, logoutTime: string | null): number => {
-        if (!logoutTime) return 0;
-        const start = new Date(loginTime).getTime();
-        const end = new Date(logoutTime).getTime();
-        return (end - start) / 1000;
-    };
+    }, [agentSessions, searchTerm, filters]);
 
-    const dailySummary = useMemo(() => {
-        const summary: { [agentId: string]: { name: JSX.Element; duration: number } } = {};
+    const agentSummary = useMemo(() => {
+        const summary: { [key: string]: { name: string, totalDuration: number } } = {};
         filteredSessions.forEach(session => {
             if (!summary[session.agentId]) {
-                summary[session.agentId] = {
-                    name: findEntityName(session.agentId, users),
-                    duration: 0,
-                };
+                summary[session.agentId] = { name: findAgentName(session.agentId), totalDuration: 0 };
             }
-            summary[session.agentId].duration += getSessionDuration(session.loginTime, session.logoutTime);
+            const duration = (new Date(session.logoutTime).getTime() - new Date(session.loginTime).getTime()) / 1000;
+            summary[session.agentId].totalDuration += duration;
         });
-        return Object.values(summary).sort((a, b) => b.duration - a.duration);
-    }, [filteredSessions, users]);
+        return Object.values(summary).sort((a,b) => b.totalDuration - a.totalDuration);
+    }, [filteredSessions]);
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
@@ -89,76 +73,65 @@ const SessionViewer: React.FC<{
                 <p className="mt-2 text-lg text-slate-600">{feature.description}</p>
             </header>
             
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
-                    <div className="grid grid-cols-2 gap-2">
-                         <div>
-                            <label htmlFor="startDate" className="block text-sm font-medium text-slate-700">Du</label>
-                            <input type="date" name="startDate" id="startDate" value={filters.startDate} onChange={handleFilterChange} className="mt-1 block w-full p-2 border border-slate-300 rounded-md"/>
-                        </div>
-                        <div>
-                            <label htmlFor="endDate" className="block text-sm font-medium text-slate-700">Au</label>
-                            <input type="date" name="endDate" id="endDate" value={filters.endDate} onChange={handleFilterChange} className="mt-1 block w-full p-2 border border-slate-300 rounded-md"/>
-                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <input
+                            type="search"
+                            placeholder="Rechercher par nom d'agent..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="md:col-span-2 p-2 border border-slate-300 rounded-md"
+                        />
+                         <div className="grid grid-cols-2 gap-2">
+                             <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="p-2 border border-slate-300 rounded-md bg-white"/>
+                             <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="p-2 border border-slate-300 rounded-md bg-white"/>
+                         </div>
                     </div>
-                    <div className="md:col-span-2">
-                        <label htmlFor="searchTerm" className="block text-sm font-medium text-slate-700">Rechercher un agent</label>
-                        <input type="text" name="searchTerm" id="searchTerm" value={filters.searchTerm} onChange={handleFilterChange} placeholder="Nom de l'agent..." className="mt-1 block w-full p-2 border border-slate-300 rounded-md"/>
+
+                     <div className="overflow-x-auto h-[60vh] relative">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50 sticky top-0">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Agent</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Heure de Connexion</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Heure de Déconnexion</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Durée</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-slate-200 text-sm">
+                                {filteredSessions.map(session => (
+                                    <tr key={session.id}>
+                                        <td className="px-6 py-4 font-medium text-slate-800">{findAgentName(session.agentId)}</td>
+                                        <td className="px-6 py-4 text-slate-600">{new Date(session.loginTime).toLocaleString('fr-FR')}</td>
+                                        <td className="px-6 py-4 text-slate-600">{new Date(session.logoutTime).toLocaleString('fr-FR')}</td>
+                                        <td className="px-6 py-4 font-mono">{formatDuration((new Date(session.logoutTime).getTime() - new Date(session.loginTime).getTime()) / 1000)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                         {filteredSessions.length === 0 && (
+                            <div className="text-center py-12 text-slate-500">
+                                <InformationCircleIcon className="w-12 h-12 mx-auto text-slate-400"/>
+                                <h3 className="mt-2 text-lg font-semibold">Aucune session trouvée</h3>
+                                <p className="mt-1 text-sm">Essayez d'ajuster vos filtres de recherche.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
-                        <h2 className="text-xl font-semibold text-slate-800 mb-4">Détail des Sessions</h2>
-                        <div className="overflow-x-auto h-[60vh] relative">
-                            <table className="min-w-full divide-y divide-slate-200">
-                                <thead className="bg-slate-50 sticky top-0">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Agent</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Heure de Connexion</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Heure de Déconnexion</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Durée</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-slate-200">
-                                    {filteredSessions.map(session => (
-                                        <tr key={session.id}>
-                                            <td className="px-6 py-4 text-sm font-medium text-slate-800">{findEntityName(session.agentId, users)}</td>
-                                            <td className="px-6 py-4 text-sm text-slate-600">{new Date(session.loginTime).toLocaleDateString('fr-FR')}</td>
-                                            <td className="px-6 py-4 text-sm font-mono text-slate-600">{new Date(session.loginTime).toLocaleTimeString('fr-FR')}</td>
-                                            <td className="px-6 py-4 text-sm font-mono text-slate-600">{session.logoutTime ? new Date(session.logoutTime).toLocaleTimeString('fr-FR') : <span className="text-green-600 font-semibold">En cours</span>}</td>
-                                            <td className="px-6 py-4 text-sm font-mono text-slate-800">{session.logoutTime ? formatDuration(getSessionDuration(session.loginTime, session.logoutTime)) : '-'}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            {filteredSessions.length === 0 && <p className="text-center py-8 text-slate-500">Aucun enregistrement de session trouvé pour les filtres sélectionnés.</p>}
-                        </div>
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-semibold text-slate-800 mb-4">Total par agent</h2>
-                        <div className="overflow-x-auto h-[60vh] relative">
-                             <table className="min-w-full divide-y divide-slate-200">
-                                <thead className="bg-slate-50 sticky top-0">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Agent</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Temps total</th>
-                                    </tr>
-                                </thead>
-                                 <tbody className="bg-white divide-y divide-slate-200">
-                                    {dailySummary.map((summary, index) => (
-                                        <tr key={index}>
-                                            <td className="px-6 py-4 text-sm font-medium text-slate-800">{summary.name}</td>
-                                            <td className="px-6 py-4 text-sm font-mono text-slate-800">{formatDuration(summary.duration)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h2 className="text-2xl font-semibold text-slate-800 mb-4">Total par Agent</h2>
+                    <div className="space-y-3 h-[68vh] overflow-y-auto">
+                        {agentSummary.map(summary => (
+                            <div key={summary.name} className="flex justify-between items-center p-3 bg-slate-50 rounded-md">
+                                <span className="font-medium text-slate-700">{summary.name}</span>
+                                <span className="font-mono font-semibold text-indigo-600 bg-indigo-100 px-2 py-1 rounded-md text-xs">{formatDuration(summary.totalDuration)}</span>
+                            </div>
+                        ))}
+                         {agentSummary.length === 0 && <p className="text-center text-sm text-slate-500 pt-8">Aucune donnée à résumer.</p>}
                     </div>
                 </div>
-
             </div>
         </div>
     );
