@@ -3,7 +3,23 @@ const express = require('express');
 const router = express.Router();
 const db = require('../services/db');
 
-// CREATE a new group
+/**
+ * @openapi
+ * /user-groups:
+ *   post:
+ *     summary: Crée un nouveau groupe d'utilisateurs.
+ *     tags: [Groupes]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UserGroup'
+ *     responses:
+ *       201:
+ *         description: Groupe créé.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/UserGroup' } } }
+ */
 router.post('/', async (req, res) => {
     try {
         const group = req.body;
@@ -15,7 +31,28 @@ router.post('/', async (req, res) => {
     }
 });
 
-// UPDATE a group
+/**
+ * @openapi
+ * /user-groups/{id}:
+ *   put:
+ *     summary: Met à jour un groupe d'utilisateurs.
+ *     tags: [Groupes]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UserGroup'
+ *     responses:
+ *       200:
+ *         description: Groupe mis à jour.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/UserGroup' } } }
+ */
 router.put('/:id', async (req, res) => {
     try {
         const group = req.body;
@@ -27,7 +64,21 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE a group
+/**
+ * @openapi
+ * /user-groups/{id}:
+ *   delete:
+ *     summary: Supprime un groupe d'utilisateurs.
+ *     tags: [Groupes]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       204:
+ *         description: Groupe supprimé.
+ */
 router.delete('/:id', async (req, res) => {
     try {
         await db.deleteUserGroup(req.params.id);

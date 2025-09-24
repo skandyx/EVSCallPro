@@ -3,7 +3,26 @@ const express = require('express');
 const router = express.Router();
 const db = require('../services/db');
 
-// CREATE a new user
+/**
+ * @openapi
+ * /users:
+ *   post:
+ *     summary: Crée un nouvel utilisateur.
+ *     tags: [Utilisateurs]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               groupIds: { type: array, items: { type: 'string' } }
+ *               user: { $ref: '#/components/schemas/User' }
+ *     responses:
+ *       201:
+ *         description: Utilisateur créé.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/User' } } }
+ */
 router.post('/', async (req, res) => {
     try {
         const { groupIds, ...user } = req.body;
@@ -15,7 +34,31 @@ router.post('/', async (req, res) => {
     }
 });
 
-// UPDATE a user
+/**
+ * @openapi
+ * /users/{id}:
+ *   put:
+ *     summary: Met à jour un utilisateur existant.
+ *     tags: [Utilisateurs]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               groupIds: { type: array, items: { type: 'string' } }
+ *               user: { $ref: '#/components/schemas/User' }
+ *     responses:
+ *       200:
+ *         description: Utilisateur mis à jour.
+ *         content: { application/json: { schema: { $ref: '#/components/schemas/User' } } }
+ */
 router.put('/:id', async (req, res) => {
     try {
         const { groupIds, ...user } = req.body;
@@ -27,7 +70,21 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE a user
+/**
+ * @openapi
+ * /users/{id}:
+ *   delete:
+ *     summary: Supprime un utilisateur.
+ *     tags: [Utilisateurs]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       204:
+ *         description: Utilisateur supprimé.
+ */
 router.delete('/:id', async (req, res) => {
     try {
         await db.deleteUser(req.params.id);

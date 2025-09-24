@@ -53,10 +53,43 @@ const swaggerOptions = {
             description: 'API pour la solution de centre de contact EVSCallPro.',
         },
         servers: [{ url: `/api` }],
+        components: {
+            schemas: {
+                User: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string' }, loginId: { type: 'string' }, firstName: { type: 'string' }, lastName: { type: 'string' }, email: { type: 'string', nullable: true }, role: { type: 'string' }, isActive: { type: 'boolean' }, siteId: { type: 'string', nullable: true }, mobileNumber: { type: 'string', nullable: true }, useMobileAsStation: { type: 'boolean' }
+                    }
+                },
+                UserGroup: {
+                    type: 'object',
+                    properties: { id: { type: 'string' }, name: { type: 'string' }, memberIds: { type: 'array', items: { type: 'string' } } }
+                },
+                Campaign: {
+                    type: 'object',
+                    properties: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, scriptId: { type: 'string', nullable: true }, callerId: { type: 'string' }, isActive: { type: 'boolean' }, dialingMode: { type: 'string' }, wrapUpTime: { type: 'integer' } }
+                },
+                Contact: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string' }, firstName: { type: 'string' }, lastName: { type: 'string' }, phoneNumber: { type: 'string' }, postalCode: { type: 'string' }, customFields: { type: 'object' }
+                    }
+                },
+                Script: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, pages: { type: 'array', items: { type: 'object' } } } },
+                Qualification: { type: 'object', properties: { id: { type: 'string' }, code: { type: 'string' }, description: { type: 'string' }, type: { type: 'string' }, groupId: { type: 'string', nullable: true }, parentId: { type: 'string', nullable: true } } },
+                QualificationGroup: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } } },
+                IvrFlow: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, nodes: { type: 'array', items: { type: 'object' } }, connections: { type: 'array', items: { type: 'object' } } } },
+                Trunk: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, domain: { type: 'string' }, authType: { type: 'string' } } },
+                Did: { type: 'object', properties: { id: { type: 'string' }, number: { type: 'string' }, description: { type: 'string' }, trunkId: { type: 'string' }, ivrFlowId: { type: 'string', nullable: true } } },
+                Site: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' } } },
+                PlanningEvent: { type: 'object', properties: { id: { type: 'string' }, agentId: { type: 'string' }, activityId: { type: 'string' }, startDate: { type: 'string', format: 'date-time' }, endDate: { type: 'string', format: 'date-time' } } },
+                ContactNote: { type: 'object', properties: { id: { type: 'string' }, contactId: { type: 'string' }, agentId: { type: 'string' }, campaignId: { type: 'string' }, note: { type: 'string' } } },
+            }
+        }
     },
     apis: [
-        './backend/routes/*.js',
-        './backend/server.js'
+        './routes/*.js',
+        './server.js'
     ],
 };
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -82,7 +115,7 @@ app.use('/api/contacts', require('./routes/contacts.js'));
 // --- SPECIAL SYSTEM ROUTES ---
 /**
  * @openapi
- * /api/application-data:
+ * /application-data:
  *   get:
  *     summary: Récupère toutes les données nécessaires au démarrage de l'application.
  *     tags: [Application]

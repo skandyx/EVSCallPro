@@ -1,4 +1,3 @@
-// FIX: Add a reference to Cypress types to make TypeScript recognize globals like `describe`, `it`, and `cy`.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
