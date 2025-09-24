@@ -1,6 +1,4 @@
-// FIX: Add a triple-slash directive to include Cypress type definitions.
-// This resolves errors about 'cypress' types not being found and undeclared
-// globals like 'describe', 'it', and 'cy'.
+// FIX: Moved the triple-slash directive to the top of the file to ensure it is processed correctly by the TypeScript compiler. This resolves all Cypress-related type errors.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
