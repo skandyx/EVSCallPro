@@ -8,11 +8,7 @@ Ce document décrit les étapes nécessaires pour installer et configurer l'ense
 
 Ce guide couvre l'**installation d'amorçage** (bootstrap), effectuée une seule fois par un administrateur système. Une fois l'installation terminée, toute la **gestion continue** (création d'utilisateurs, de campagnes, de SVI, etc.) se fait **exclusivement via l'interface web de l'application**.
 
-L'application peut fonctionner selon deux modes de connexion à la téléphonie, définis par la variable `PBX_CONNECTION_MODE` dans le fichier de configuration du backend :
-1.  **`YEASTAR_API` (Ancien mode)** : Le backend pilote directement chaque PBX Yeastar de site via son API.
-2.  **`ASTERISK_AMI` (Nouveau mode centralisé)** : Le backend pilote un unique serveur Asterisk central, qui route les appels vers les Yeastar agissant comme de simples passerelles.
-
-Ce guide se concentre sur le déploiement du mode **`ASTERISK_AMI`**, qui est l'architecture cible.
+L'application fonctionne avec une architecture centralisée où le backend pilote un unique serveur Asterisk, qui route les appels vers les passerelles téléphoniques de chaque site (par exemple, des Yeastar).
 
 ---
 
@@ -97,7 +93,7 @@ sudo npm install -g pm2
     cp .env.example .env
     nano .env
     ```
-    Modifiez le fichier `.env` avec les informations correctes. **Voici un exemple complet pour le mode `ASTERISK_AMI`**:
+    Modifiez le fichier `.env` avec les informations correctes. **Voici un exemple complet**:
     ```env
     # --- Base de Données ---
     DB_HOST=localhost
@@ -108,11 +104,6 @@ sudo npm install -g pm2
 
     # --- Serveur AGI ---
     AGI_PORT=4573
-    
-    # --- Mode de Connexion Téléphonie ---
-    # Mettre 'ASTERISK_AMI' pour la nouvelle architecture centralisée.
-    # Mettre 'YEASTAR_API' pour l'ancien mode de connexion directe.
-    PBX_CONNECTION_MODE=ASTERISK_AMI
 
     # --- Connexion Asterisk Manager Interface (AMI) ---
     # Doit correspondre à la configuration dans asterisk-configs/manager.d/evscallpro.conf
@@ -234,7 +225,7 @@ sudo npm install -g pm2
 
 ## Étape 8 : Configuration Post-Installation (Ajout d'un Site)
 
-Pour chaque site physique disposant d'un Yeastar, vous devez l'ajouter en tant que Trunk dans Asterisk via le script fourni.
+Pour chaque site physique disposant d'une passerelle téléphonique (ex: Yeastar), vous devez l'ajouter en tant que Trunk dans Asterisk pour le routage des appels.
 
 1.  **Rendez le script exécutable** :
     ```bash
@@ -243,7 +234,7 @@ Pour chaque site physique disposant d'un Yeastar, vous devez l'ajouter en tant q
 
 2.  **Exécutez le script pour chaque site** :
     ```bash
-    # Syntaxe: sudo ./scripts/addSiteTrunk.sh <ID_du_Site> <IP_VPN_du_Yeastar>
+    # Syntaxe: sudo ./scripts/addSiteTrunk.sh <ID_du_Site> <IP_VPN_de_la_Passerelle>
     # L'ID du site doit correspondre à celui dans la table 'sites' de la BDD.
     
     # Exemple pour le site de Paris (ID 1, IP 10.1.0.254)

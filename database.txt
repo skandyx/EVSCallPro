@@ -38,13 +38,10 @@ CREATE TYPE call_status_type AS ENUM ('ANSWERED', 'NO ANSWER', 'BUSY', 'FAILED',
 CREATE TABLE sites (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
-    yeastar_ip TEXT NOT NULL,
-    api_user TEXT NOT NULL,
-    api_password TEXT, -- Doit être chiffré dans une application réelle
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-COMMENT ON TABLE sites IS 'Stocke les différents sites physiques et leurs PBX Yeastar associés.';
+COMMENT ON TABLE sites IS 'Stocke les différents sites physiques pour le routage des appels via Asterisk.';
 
 -- Table des utilisateurs de l'application
 CREATE TABLE users (
@@ -227,21 +224,6 @@ CREATE TABLE audio_files (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 COMMENT ON TABLE audio_files IS 'Bibliothèque de médias pour les SVI et musiques d''attente.';
-
--- Table de configuration des PBX (pour le mode Yeastar API)
-CREATE TABLE pbx_configs (
-    id TEXT PRIMARY KEY,
-    site_id TEXT NOT NULL UNIQUE REFERENCES sites(id) ON DELETE CASCADE,
-    ip_address TEXT NOT NULL,
-    api_user TEXT NOT NULL,
-    api_password TEXT NOT NULL,
-    model TEXT NOT NULL, -- S100, S300
-    api_version INTEGER, -- 1 ou 2
-    last_seen_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-COMMENT ON TABLE pbx_configs IS 'Stocke les configurations de connexion pour chaque PBX Yeastar par site.';
 
 -- =============================================================================
 -- SECTION 3 : TABLES DE REPORTING ET DE SUIVI

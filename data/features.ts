@@ -485,29 +485,29 @@ export const features: Feature[] = [
         id: 'sites-config',
         title: 'Configuration des Sites',
         category: 'Paramètres',
-        description: 'Gérez les différents sites physiques et leurs configurations PBX Yeastar associées.',
+        description: 'Gérez les différents sites physiques pour le routage des appels sortants.',
         component: SiteManager,
         userJourney: {
             title: 'Parcours Utilisateur: Ajouter une nouvelle agence',
             steps: [
                 "L'administrateur se rend dans 'Configuration des Sites'.",
                 "Il clique sur 'Ajouter un Site'.",
-                "Il nomme le site 'Agence de Lyon' et renseigne l'adresse IP du Yeastar local.",
-                "Il entre les identifiants de l'utilisateur API du PBX.",
-                "Il sauvegarde. Le site est maintenant disponible pour y assigner des agents."
+                "Il nomme le site 'Agence de Lyon'.",
+                "Il sauvegarde. Le site est maintenant disponible pour y assigner des agents.",
+                "Le système utilisera ce site pour router les appels sortants via la bonne passerelle téléphonique."
             ],
         },
         specs: {
             title: 'Spécifications Techniques',
             points: [
                 "Chaque site doit avoir un nom unique.",
-                "Les informations de connexion au PBX (IP, API) sont stockées de manière sécurisée.",
+                "Un site est utilisé par Asterisk pour sélectionner le bon Trunk de sortie.",
                 "La suppression d'un site désassignera automatiquement les agents qui y étaient liés."
             ],
         },
         simplificationTip: {
             title: 'Conseil de Simplification',
-            content: "Même si vous n'avez qu'un seul emplacement physique, créez un site 'Principal'. Cela prépare votre configuration pour une future expansion et garantit le bon fonctionnement du Click-to-Call."
+            content: "Même si vous n'avez qu'un seul emplacement physique, créez un site 'Principal'. Cela prépare votre configuration pour une future expansion et garantit le bon fonctionnement du routage des appels."
         }
     },
     {

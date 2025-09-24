@@ -12,6 +12,8 @@ const path = require('path');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 const cookieParser = require('cookie-parser');
+const { initializeWebSocketServer } = require('./services/webSocketServer.js');
+const { initializeAmiListener } = require('./services/amiListener.js');
 
 // --- INITIALIZATION ---
 const app = express();
@@ -107,17 +109,11 @@ const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
 agi.createServer(agiHandler).listen(agiPort);
 console.log(`AGI server listening on port ${agiPort}`);
 
-// --- WEBSOCKET & AMI (Conditional Start) ---
-if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {
-    const { initializeWebSocketServer } = require('./services/webSocketServer.js');
-    const { initializeAmiListener } = require('./services/amiListener.js');
-    
-    const wsServer = initializeWebSocketServer(server);
-    initializeAmiListener(wsServer);
-    console.log('Running in ASTERISK_AMI mode. WebSocket and AMI Listener initialized.');
-} else {
-    console.log(`Running in ${process.env.PBX_CONNECTION_MODE || 'YEASTAR_API'} mode. WebSocket and AMI Listener are disabled.`);
-}
+// --- WEBSOCKET & AMI ---
+const wsServer = initializeWebSocketServer(server);
+initializeAmiListener(wsServer);
+console.log('WebSocket and AMI Listener initialized.');
+
 
 // --- START SERVER ---
 server.listen(PORT, () => {

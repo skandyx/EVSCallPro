@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../services/db');
-const yeastarClient = require('../services/yeastarClient');
 const asteriskRouter = require('../services/asteriskRouter');
 
 /**
@@ -65,27 +64,11 @@ router.post('/originate', async (req, res) => {
         } else {
             // --- LOGIQUE CLASSIQUE (SOFTPHONE) ---
             console.log(`[Originate] Using softphone station for agent ${agent.id} -> ${agent.extension}`);
-            if (process.env.PBX_CONNECTION_MODE === 'ASTERISK_AMI') {
-                if (!agent.extension || !agent.siteId) {
-                    return res.status(404).json({ error: "L'agent n'a pas d'extension ou de site configuré." });
-                }
-                const callResult = await asteriskRouter.originateCall(agent.extension, destination, agent.siteId);
-                return res.json({ callId: callResult.uniqueid });
-
-            } else {
-                // ANCIENNE LOGIQUE YEASTAR API
-                if (!agent.siteId) {
-                    return res.status(404).json({ error: "L'agent n'est assigné à aucun site." });
-                }
-                const pbxConfig = await db.getPbxConfigBySiteId(agent.siteId);
-                if (!pbxConfig) {
-                    return res.status(404).json({ error: "Configuration PBX non trouvée pour le site de l'agent." });
-                }
-                const client = await yeastarClient.getClient(pbxConfig);
-                const callerId = 'CRM';
-                const callResult = await client.originate(agent.loginId, destination, callerId);
-                return res.json({ callId: callResult.call_id });
+            if (!agent.extension || !agent.siteId) {
+                return res.status(404).json({ error: "L'agent n'a pas d'extension ou de site configuré." });
             }
+            const callResult = await asteriskRouter.originateCall(agent.extension, destination, agent.siteId);
+            return res.json({ callId: callResult.uniqueid });
         }
     } catch (error) {
         console.error('Originate call failed:', error.message);

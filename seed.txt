@@ -19,9 +19,9 @@ DELETE FROM sites;
 -- Insertion des sites de démonstration.
 -- =============================================================================
 
-INSERT INTO sites (id, name, yeastar_ip, api_user) VALUES
-('site-paris', 'Siège de Paris', '192.168.1.100', 'crm_api_paris'),
-('site-lyon', 'Agence de Lyon', '192.168.2.100', 'crm_api_lyon');
+INSERT INTO sites (id, name) VALUES
+('site-paris', 'Siège de Paris'),
+('site-lyon', 'Agence de Lyon');
 
 -- =============================================================================
 -- SECTION 2 : UTILISATEURS

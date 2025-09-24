@@ -69,9 +69,9 @@ La seule dépendance à Internet restante est celle, très faible, nécessaire p
 
 ---
 
-### Q3 : Quelle est la meilleure architecture pour plusieurs sites, chacun avec son propre Yeastar ?
+### Q3 : Quelle est l'architecture pour plusieurs sites, chacun avec son propre Yeastar ?
 
-**Réponse :** L'architecture **centralisée avec Asterisk (mode `ASTERISK_AMI`) est de loin la meilleure solution.**
+**Réponse :** L'architecture utilisée est un système **centralisé avec Asterisk**. C'est la solution la plus robuste et scalable.
 
 #### Le Flux d'Appel Expliqué :
 
@@ -80,7 +80,7 @@ La seule dépendance à Internet restante est celle, très faible, nécessaire p
 3. **Appel Sortant** :
    *  Un agent sur le Site A clique pour appeler un client.
    *  La demande part de son téléphone vers le **serveur Asterisk central**.
-   *  Asterisk, sachant que l'agent est du Site A (grâce à l'information stockée au login), route l'appel vers le **Trunk SIP pointant vers le Yeastar du Site A**.
+   *  Asterisk, sachant que l'agent est du Site A (grâce à l'information stockée dans son profil utilisateur), route l'appel vers le **Trunk SIP pointant vers le Yeastar du Site A**.
    *  Le Yeastar du Site A envoie l'appel à l'extérieur via son opérateur local.
    *  *Le flux est identique pour un agent du Site B, mais en utilisant le Trunk du Yeastar du Site B.*
 

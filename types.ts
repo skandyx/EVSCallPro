@@ -72,9 +72,6 @@ export interface User {
 export interface Site {
     id: string;
     name: string;
-    yeastarIp: string;
-    apiUser: string;
-    apiPassword?: string;
 }
 
 export interface UserGroup {

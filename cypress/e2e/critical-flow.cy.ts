@@ -1,6 +1,6 @@
-// FIX: Moved the triple-slash directive to the top of the file to ensure it is processed correctly by the TypeScript compiler. This resolves all Cypress-related type errors.
 /// <reference types="cypress" />
 
+// FIX: Moved the triple-slash directive to the top of the file to ensure it is processed correctly by the TypeScript compiler. This resolves all Cypress-related type errors.
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
     // Visit the root URL
