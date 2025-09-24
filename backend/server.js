@@ -16,9 +16,10 @@ process.on('unhandledRejection', (reason, promise) => {
 require('dotenv').config();
 
 const express = require('express');
-const http = require('http');
+const http = require('http' );
+const net = require('net'); // <-- CORRECTION : Ajout du module 'net' pour le serveur AGI
 const cors = require('cors');
-const agi = require('asteriskagi');
+const Agi = require('asteriskagi'); // <-- CORRECTION : Renommé en 'Agi' (convention pour une classe)
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -30,7 +31,7 @@ const { initializeAmiListener } = require('./services/amiListener.js');
 
 // --- INITIALIZATION ---
 const app = express();
-const server = http.createServer(app);
+const server = http.createServer(app );
 const PORT = process.env.PORT || 3001;
 
 // --- MIDDLEWARE ---
@@ -51,7 +52,6 @@ const swaggerOptions = {
         },
         servers: [{ url: `/api` }],
     },
-    // FIX: Replaced glob pattern with explicit file paths for robustness with PM2.
     apis: [
         path.join(__dirname, 'routes/auth.js'),
         path.join(__dirname, 'routes/call.js'),
@@ -63,12 +63,10 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 // --- API ROUTES ---
 const authRoutes = require('./routes/auth.js');
 const callRoutes = require('./routes/call.js');
-// ... other routes will be added here
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/api/auth', authRoutes);
 app.use('/api/call', callRoutes);
-// ... other routes usage
 
 /**
  * @openapi
@@ -100,7 +98,6 @@ app.get('/api/application-data', async (req, res) => {
             qualificationGroups, ivrFlows, audioFiles, trunks, dids, sites,
             planningEvents, activityTypes, personalCallbacks, callHistory, agentSessions,
             contactNotes,
-            // Mocked/Static data for now
             moduleVisibility: { categories: {}, features: {} },
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
@@ -115,24 +112,38 @@ app.get('/api/application-data', async (req, res) => {
     }
 });
 
-// Generic CRUD routes will be added here
-
 // --- SERVE FRONTEND ---
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
 
-// --- AGI SERVER ---
+// --- AGI SERVER (CORRECTED) ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-// Correct instantiation for the 'asteriskagi' library. It must be called with 'new'.
-const agiServer = new agi(agiHandler);
 
-agiServer.on('error', (err) => {
+// 1. Créez un serveur TCP avec le module 'net' de Node.js
+const agiNetServer = net.createServer((socket) => {
+    console.log('[AGI] New AGI connection received.');
+
+    // 2. Pour chaque connexion, instanciez 'Agi' en lui passant le handler et le socket
+    const agiContext = new Agi(agiHandler, socket);
+
+    agiContext.on('error', (err) => {
+        console.error('[AGI] Error on AGI context:', err);
+    });
+
+    agiContext.on('close', () => {
+        console.log('[AGI] AGI context closed.');
+    });
+
+}).on('error', (err) => {
+    // Gère les erreurs du serveur TCP lui-même (ex: port déjà utilisé)
     console.error(`[AGI] Critical error on AGI server, port ${agiPort}:`, err);
+    throw err;
 });
 
-agiServer.listen(agiPort, () => {
-    console.log(`[AGI] Server listening on port ${agiPort}`);
+// 3. Démarrez le serveur TCP pour écouter les connexions d'Asterisk
+agiNetServer.listen(agiPort, () => {
+    console.log(`[AGI] Server listening for connections from Asterisk on port ${agiPort}`);
 });
 
 
