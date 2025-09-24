@@ -124,14 +124,16 @@ app.get('*', (req, res) => {
 
 // --- AGI SERVER ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-const agiServer = new agi.AGIServer(agiHandler, agiPort);
+// Correct instantiation for the 'asteriskagi' library. It returns a net.Server instance.
+const agiServer = agi(agiHandler);
 
 agiServer.on('error', (err) => {
-    console.error(`[AGI] Failed to start AGI server on port ${agiPort}. Is the port already in use?`, err);
-    process.exit(1);
+    console.error(`[AGI] Critical error on AGI server, port ${agiPort}:`, err);
 });
 
-console.log(`[AGI] Server configured to listen on port ${agiPort}`);
+agiServer.listen(agiPort, () => {
+    console.log(`[AGI] Server listening on port ${agiPort}`);
+});
 
 
 // --- WEBSOCKET & AMI ---
