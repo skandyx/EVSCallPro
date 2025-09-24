@@ -38,7 +38,12 @@ const swaggerOptions = {
         },
         servers: [{ url: `/api` }],
     },
-    apis: [path.join(__dirname, 'routes', '*.js'), path.join(__dirname, 'server.js')],
+    // FIX: Replaced glob pattern with explicit file paths for robustness with PM2.
+    apis: [
+        path.join(__dirname, 'routes/auth.js'),
+        path.join(__dirname, 'routes/call.js'),
+        path.join(__dirname, 'server.js')
+    ],
 };
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
