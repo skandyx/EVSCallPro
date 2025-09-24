@@ -17,9 +17,8 @@
   "author": "EVS",
   "license": "ISC",
   "dependencies": {
-    "agi": "^0.0.1-alpha.3",
+    "agi-async": "^1.1.0",
     "asterisk-manager": "^0.1.16",
-    "asterisk.io": "^0.0.1-alpha.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
