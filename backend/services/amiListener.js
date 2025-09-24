@@ -1,4 +1,4 @@
-const ami = require('./amiClient'); // Use the shared client instance
+const { amiClient, connectWithRetry } = require('./amiClient');
 const db = require('./db');
 const { broadcastToRoom } = require('./webSocketServer');
 
@@ -8,7 +8,7 @@ const agentMap = new Map(); // Map<extension, userId>
  * Initialise la connexion à l'interface AMI d'Asterisk et configure les écouteurs d'événements.
  */
 async function initializeAmiListener() {
-    console.log('[AMI] Initializing AMI Listener...');
+    console.log('[AMI Listener] Initializing...');
 
     // Pré-charger la correspondance entre extensions et IDs d'utilisateurs
     try {
@@ -18,23 +18,18 @@ async function initializeAmiListener() {
                 agentMap.set(user.extension, user.id);
             }
         });
-        console.log(`[AMI] Pre-loaded ${agentMap.size} agent extensions.`);
+        console.log(`[AMI Listener] Pre-loaded ${agentMap.size} agent extensions.`);
     } catch (error) {
-        console.error('[AMI] Failed to pre-load agent extensions:', error);
-        // On continue quand même, les nouveaux logins mettront à jour la map.
+        console.error('[AMI Listener] Failed to pre-load agent extensions:', error);
     }
 
-    // The connection is handled by amiClient.js. We just attach our event listener.
-    ami.on('managerevent', (evt) => {
+    // Attache les écouteurs d'événements métier
+    amiClient.on('managerevent', (evt) => {
         handleAmiEvent(evt);
     });
     
-    // Log to confirm listener is attached
-    if (ami.isConnected()) {
-        console.log('[AMI Listener] Listener attached to already connected client.');
-    } else {
-        ami.on('connect', () => console.log('[AMI Listener] Listener ready on client connect.'));
-    }
+    // Lance la connexion initiale avec la logique de tentatives
+    connectWithRetry();
 }
 
 /**

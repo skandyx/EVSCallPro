@@ -1,32 +1,86 @@
 const AsteriskManager = require('asterisk-manager');
 
 let ami = null;
+let isConnecting = false;
+const RECONNECT_DELAY = 5000; // 5 secondes
+
+const amiConfig = {
+    port: process.env.AMI_PORT,
+    host: process.env.AMI_HOST,
+    username: process.env.AMI_USER,
+    password: process.env.AMI_SECRET,
+    reconnect: false // Nous gérons la reconnexion manuellement
+};
 
 /**
- * Creates and returns a singleton instance of the Asterisk Manager client.
- * This ensures that the entire application uses a single, persistent connection.
- * @returns {AsteriskManager} The AMI client instance.
+ * Crée et retourne une singleton instance of the Asterisk Manager client.
  */
 const getAmiClient = () => {
     if (!ami) {
-        console.log('[AMI Client] Initializing new AMI connection...');
+        console.log('[AMI Client] Initializing AMI client...');
         ami = new AsteriskManager(
-            process.env.AMI_PORT,
-            process.env.AMI_HOST,
-            process.env.AMI_USER,
-            process.env.AMI_SECRET,
-            true // Enable reconnection
+            amiConfig.port,
+            amiConfig.host,
+            amiConfig.username,
+            amiConfig.password,
+            true // Events on
         );
-        ami.keepConnected();
+
+        ami.on('error', (err) => {
+            console.error('[AMI Client] AMI Error:', err);
+            // L'erreur de connexion est gérée par le 'disconnect' ou 'internalError'
+        });
         
-        // It's good practice to log connection events for debugging.
-        ami.on('connect', () => console.log('[AMI Client] Connected.'));
-        ami.on('disconnect', () => console.warn('[AMI Client] Disconnected.'));
-        ami.on('reconnection', () => console.log('[AMI Client] Reconnecting...'));
-        ami.on('internalError', (error) => console.error('[AMI Client] Internal Error:', error));
+        ami.on('internalError', (error) => {
+            console.error('[AMI Client] Internal Error, will attempt to reconnect:', error);
+            ami.disconnect(); // Assure une déconnexion propre avant la tentative de reconnexion
+        });
+
     }
     return ami;
 };
 
-// Export the singleton instance
-module.exports = getAmiClient();
+const connectWithRetry = () => {
+    const client = getAmiClient();
+
+    if (client.isConnected() || isConnecting) {
+        return;
+    }
+
+    isConnecting = true;
+    console.log('[AMI Client] Attempting to connect...');
+
+    // Handlers de déconnexion et de reconnexion
+    const handleDisconnect = () => {
+        isConnecting = false;
+        console.warn('[AMI Client] Disconnected. Scheduling reconnect.');
+        
+        // Supprime les anciens listeners pour éviter les doublons
+        client.removeListener('connect', handleConnect);
+        client.removeListener('disconnect', handleDisconnect);
+
+        setTimeout(connectWithRetry, RECONNECT_DELAY);
+    };
+
+    const handleConnect = () => {
+        isConnecting = false;
+        console.log('[AMI Client] Connected successfully.');
+        
+        // Une fois connecté, on écoute pour une future déconnexion
+        client.once('disconnect', handleDisconnect);
+    };
+
+    client.once('connect', handleConnect);
+    
+    // Lance la connexion
+    client.connect(() => {
+      // Le callback de connexion est parfois instable, on se fie plutôt à l'événement 'connect'.
+    });
+};
+
+
+// Exporte le client singleton pour un accès direct, et la fonction de connexion pour l'initialisation
+module.exports = {
+    amiClient: getAmiClient(),
+    connectWithRetry
+};
