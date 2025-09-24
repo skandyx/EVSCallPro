@@ -2,15 +2,32 @@ const pool = require('./connection');
 const { keysToCamel } = require('./utils');
 
 // Define safe columns to be returned, excluding sensitive ones like password_hash
-const SAFE_USER_COLUMNS = 'id, login_id, extension, first_name, last_name, email, "role", is_active, site_id, created_at, updated_at, mobile_number, use_mobile_as_station';
+const SAFE_USER_COLUMNS = 'u.id, u.login_id, u.extension, u.first_name, u.last_name, u.email, u."role", u.is_active, u.site_id, u.created_at, u.updated_at, u.mobile_number, u.use_mobile_as_station';
 
 const getUsers = async () => {
-    const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users ORDER BY first_name, last_name`);
+    // The query is now enriched with a LEFT JOIN and ARRAY_AGG to fetch assigned campaign IDs for each user.
+    // COALESCE ensures that even users with no campaigns get an empty array instead of null.
+    const query = `
+        SELECT ${SAFE_USER_COLUMNS}, COALESCE(ARRAY_AGG(ca.campaign_id) FILTER (WHERE ca.campaign_id IS NOT NULL), '{}') as campaign_ids
+        FROM users u
+        LEFT JOIN campaign_agents ca ON u.id = ca.user_id
+        GROUP BY u.id
+        ORDER BY u.first_name, u.last_name;
+    `;
+    const res = await pool.query(query);
     return res.rows.map(keysToCamel);
 };
 
 const getUserById = async (id) => {
-    const res = await pool.query(`SELECT ${SAFE_USER_COLUMNS} FROM users WHERE id = $1`, [id]);
+    // This query also needs to be enriched to provide a complete user object
+     const query = `
+        SELECT ${SAFE_USER_COLUMNS}, COALESCE(ARRAY_AGG(ca.campaign_id) FILTER (WHERE ca.campaign_id IS NOT NULL), '{}') as campaign_ids
+        FROM users u
+        LEFT JOIN campaign_agents ca ON u.id = ca.user_id
+        WHERE u.id = $1
+        GROUP BY u.id;
+    `;
+    const res = await pool.query(query, [id]);
     return res.rows.length > 0 ? keysToCamel(res.rows[0]) : null;
 };
 
@@ -22,7 +39,7 @@ const createUser = async (user, groupIds) => {
         const userQuery = `
             INSERT INTO users (id, login_id, extension, first_name, last_name, email, "role", is_active, password_hash, site_id, mobile_number, use_mobile_as_station)
             VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) -- extension prend la valeur de login_id
-            RETURNING ${SAFE_USER_COLUMNS};
+            RETURNING id, login_id, first_name, last_name, email, "role", is_active, site_id, mobile_number, use_mobile_as_station;
         `;
         const userRes = await client.query(userQuery, [
             user.id, user.loginId, user.firstName, user.lastName, user.email || null,
@@ -30,6 +47,7 @@ const createUser = async (user, groupIds) => {
         ]);
 
         const newUser = userRes.rows[0];
+        newUser.campaign_ids = []; // Initialize with empty array
 
         if (groupIds && groupIds.length > 0) {
             for (const groupId of groupIds) {
@@ -44,6 +62,7 @@ const createUser = async (user, groupIds) => {
             for (const campaignId of user.campaignIds) {
                 await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [newUser.id, campaignId]);
             }
+            newUser.campaign_ids = user.campaignIds;
         }
 
         await client.query('COMMIT');
@@ -90,7 +109,7 @@ const updateUser = async (userId, user, groupIds) => {
                 "role" = $5, is_active = $6, site_id = $7, mobile_number = $8, use_mobile_as_station = $9
                 ${passwordUpdateClause}, updated_at = NOW()
             WHERE id = $${userIdIndex}
-            RETURNING ${SAFE_USER_COLUMNS};
+            RETURNING id, login_id, first_name, last_name, email, "role", is_active, site_id, mobile_number, use_mobile_as_station;
         `;
 
         const { rows: updatedUserRows } = await client.query(userQuery, queryParams);
@@ -117,7 +136,11 @@ const updateUser = async (userId, user, groupIds) => {
         if (campaignsToAdd.length > 0) for (const campaignId of campaignsToAdd) await client.query('INSERT INTO campaign_agents (user_id, campaign_id) VALUES ($1, $2)', [userId, campaignId]);
         
         await client.query('COMMIT');
-        return keysToCamel(updatedUserRows[0]);
+        
+        const finalUser = updatedUserRows[0];
+        finalUser.campaign_ids = user.campaignIds || [];
+        
+        return keysToCamel(finalUser);
     } catch (e) {
         await client.query('ROLLBACK');
         console.error("Error in updateUser transaction:", e);

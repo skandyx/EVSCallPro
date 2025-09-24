@@ -30,6 +30,7 @@ const { initializeWebSocketServer } = require('./services/webSocketServer.js');
 const { initializeAmiListener } = require('./services/amiListener.js');
 const os = require('os');
 const fs = require('fs/promises');
+const authMiddleware = require('./middleware/auth.middleware.js');
 
 
 // --- INITIALIZATION ---
@@ -54,6 +55,13 @@ const swaggerOptions = {
         },
         servers: [{ url: `/api` }],
         components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT',
+                }
+            },
             schemas: {
                 User: {
                     type: 'object',
@@ -85,7 +93,10 @@ const swaggerOptions = {
                 PlanningEvent: { type: 'object', properties: { id: { type: 'string' }, agentId: { type: 'string' }, activityId: { type: 'string' }, startDate: { type: 'string', format: 'date-time' }, endDate: { type: 'string', format: 'date-time' } } },
                 ContactNote: { type: 'object', properties: { id: { type: 'string' }, contactId: { type: 'string' }, agentId: { type: 'string' }, campaignId: { type: 'string' }, note: { type: 'string' } } },
             }
-        }
+        },
+        security: [{
+            bearerAuth: []
+        }]
     },
     apis: [
         './routes/*.js',
@@ -97,7 +108,12 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 
 // --- API ROUTES ---
+// Public route
 app.use('/api/auth', require('./routes/auth.js'));
+
+// Protected routes
+app.use(authMiddleware); // All routes below this are now protected
+
 app.use('/api/call', require('./routes/call.js'));
 app.use('/api/users', require('./routes/users.js'));
 app.use('/api/user-groups', require('./routes/groups.js'));
@@ -119,6 +135,8 @@ app.use('/api/contacts', require('./routes/contacts.js'));
  *   get:
  *     summary: Récupère toutes les données nécessaires au démarrage de l'application.
  *     tags: [Application]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Un objet contenant toutes les collections de données.

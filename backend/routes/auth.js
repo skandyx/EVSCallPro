@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const db = require('../services/db');
+const authMiddleware = require('../middleware/auth.middleware');
 
 const ACCESS_TOKEN_SECRET = process.env.JWT_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET;
@@ -113,5 +114,39 @@ router.post('/logout', (req, res) => {
     res.clearCookie('refreshToken', { path: '/' });
     res.status(200).json({ message: 'Déconnexion réussie.' });
 });
+
+/**
+ * @openapi
+ * /auth/me:
+ *   get:
+ *     summary: Récupère les informations de l'utilisateur actuellement authentifié.
+ *     tags: [Authentification]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Données de l'utilisateur.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user: { $ref: '#/components/schemas/User' }
+ *       401:
+ *         description: Non authentifié.
+ */
+router.get('/me', authMiddleware, async (req, res) => {
+    try {
+        const user = await db.getUserById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Utilisateur non trouvé.' });
+        }
+        res.json({ user });
+    } catch (error) {
+        console.error('Error fetching current user:', error);
+        res.status(500).json({ error: "Erreur interne du serveur." });
+    }
+});
+
 
 module.exports = router;

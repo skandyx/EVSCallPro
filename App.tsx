@@ -27,45 +27,59 @@ const App: React.FC = () => {
 
     const fetchApplicationData = useCallback(async () => {
         try {
-            setIsLoading(true);
+            // setIsLoading(true) is not needed here as it's handled by the session check
             const response = await apiClient.get('/application-data');
             setAllData(response.data);
         } catch (error) {
             console.error("Failed to fetch application data:", error);
             showAlert("Impossible de charger les données de l'application.", 'error');
-            // Gérer le cas où le token est invalide (l'intercepteur Axios devrait gérer le logout)
-        } finally {
-            setIsLoading(false);
         }
-    }, []);
+    }, [showAlert]);
     
-    // Check for existing token on mount
+    // Check for existing token on mount and restore session
     useEffect(() => {
-        const token = localStorage.getItem('authToken');
-        if (token) {
-            // Pourrait être amélioré en vérifiant la validité du token avec un endpoint /me
-            fetchApplicationData();
-        } else {
+        const checkSession = async () => {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                try {
+                    // Call the new /me endpoint to verify the token and get user data
+                    const response = await apiClient.get('/auth/me');
+                    setCurrentUser(response.data.user);
+                    // Once user is confirmed, fetch the rest of the app data
+                    await fetchApplicationData();
+                } catch (error) {
+                    // Token is invalid or expired
+                    console.error("Session check failed:", error);
+                    localStorage.removeItem('authToken');
+                    setCurrentUser(null);
+                }
+            }
             setIsLoading(false);
-        }
+        };
+
+        checkSession();
     }, [fetchApplicationData]);
 
     const handleLoginSuccess = ({ user, token }: { user: User, token: string }) => {
         localStorage.setItem('authToken', token);
         setCurrentUser(user);
-        fetchApplicationData();
+        setIsLoading(true);
+        fetchApplicationData().finally(() => setIsLoading(false));
     };
 
     const handleLogout = () => {
         localStorage.removeItem('authToken');
         setCurrentUser(null);
         setAllData({});
+        // No need to call API for logout, token is removed client-side
     };
 
     const handleSaveOrUpdate = async (dataType: string, data: any, endpoint?: string) => {
         try {
+            const isNew = data.id.toString().startsWith('new-') || data.id.toString().startsWith('group-') || data.id.toString().startsWith('qg-') || data.id.toString().startsWith('site-') || data.id.toString().startsWith('trunk-') || data.id.toString().startsWith('did-');
             const url = endpoint || `/${dataType.toLowerCase()}`;
-            const response = data.id.startsWith('new-') || data.id.startsWith('group-') || data.id.startsWith('qg-') || data.id.startsWith('site-') || data.id.startsWith('trunk-') || data.id.startsWith('did-')
+
+            const response = isNew
                 ? await apiClient.post(url, data)
                 : await apiClient.put(`${url}/${data.id}`, data);
             
