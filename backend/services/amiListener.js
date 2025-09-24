@@ -1,8 +1,7 @@
-const AsteriskManager = require('asterisk-manager');
+const ami = require('./amiClient'); // Use the shared client instance
 const db = require('./db');
 const { broadcastToRoom } = require('./webSocketServer');
 
-let ami;
 const agentMap = new Map(); // Map<extension, userId>
 
 /**
@@ -25,25 +24,17 @@ async function initializeAmiListener() {
         // On continue quand même, les nouveaux logins mettront à jour la map.
     }
 
-    ami = new AsteriskManager(
-        process.env.AMI_PORT,
-        process.env.AMI_HOST,
-        process.env.AMI_USER,
-        process.env.AMI_SECRET,
-        true
-    );
-
-    ami.keepConnected(); // Gère la reconnexion automatique
-
+    // The connection is handled by amiClient.js. We just attach our event listener.
     ami.on('managerevent', (evt) => {
-        // Logique de traitement des événements ici
         handleAmiEvent(evt);
     });
-
-    ami.on('connect', () => console.log('[AMI] Connected to Asterisk Manager Interface.'));
-    ami.on('disconnect', () => console.warn('[AMI] Disconnected from AMI.'));
-    ami.on('reconnection', () => console.log('[AMI] Reconnecting to AMI...'));
-    ami.on('internalError', (error) => console.error('[AMI] Internal Error:', error));
+    
+    // Log to confirm listener is attached
+    if (ami.isConnected()) {
+        console.log('[AMI Listener] Listener attached to already connected client.');
+    } else {
+        ami.on('connect', () => console.log('[AMI Listener] Listener ready on client connect.'));
+    }
 }
 
 /**

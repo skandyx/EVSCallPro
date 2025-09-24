@@ -1,3 +1,6 @@
+// FIX: Add a triple-slash directive to include Cypress type definitions.
+// This resolves errors about 'cypress' types not being found and undeclared
+// globals like 'describe', 'it', and 'cy'.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
