@@ -1,4 +1,3 @@
-// FIX: Added the triple-slash directive to include Cypress types, which resolves errors where TypeScript couldn't find globals like 'describe', 'it', and 'cy'.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
