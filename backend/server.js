@@ -18,7 +18,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const agi = require('asterisk.io');
+const agi = require('asterisk-io');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
