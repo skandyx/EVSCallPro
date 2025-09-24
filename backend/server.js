@@ -38,7 +38,7 @@ const swaggerOptions = {
         },
         servers: [{ url: `/api` }],
     },
-    apis: ['./routes/*.js', './server.js'], // FIX: Corrected paths to be relative to the backend directory
+    apis: [path.join(__dirname, 'routes', '*.js'), path.join(__dirname, 'server.js')],
 };
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
