@@ -1,3 +1,16 @@
+// --- GLOBAL ERROR HANDLERS ---
+// These are crucial for debugging silent crashes.
+process.on('uncaughtException', (error) => {
+  console.error('FATAL: Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('FATAL: Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+
 // --- DEPENDENCIES ---
 // Load environment variables from .env file BEFORE any other code runs.
 require('dotenv').config();
@@ -111,14 +124,21 @@ app.get('*', (req, res) => {
 
 // --- AGI SERVER ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-agi.createServer(agiHandler).listen(agiPort);
-console.log(`AGI server listening on port ${agiPort}`);
+const agiServer = agi.createServer(agiHandler);
+
+agiServer.on('error', (err) => {
+    console.error(`[AGI] Failed to start AGI server on port ${agiPort}. Is the port already in use?`, err);
+    process.exit(1);
+});
+
+agiServer.listen(agiPort, () => {
+    console.log(`[AGI] server listening on port ${agiPort}`);
+});
+
 
 // --- WEBSOCKET & AMI ---
-const wsServer = initializeWebSocketServer(server);
-initializeAmiListener(wsServer);
-console.log('WebSocket and AMI Listener initialized.');
-
+initializeWebSocketServer(server);
+initializeAmiListener(); // This function now handles its own errors and retries
 
 // --- START SERVER ---
 server.listen(PORT, () => {
