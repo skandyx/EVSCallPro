@@ -18,7 +18,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const agi = require('asterisk-io');
+const agi = require('agi');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -105,7 +105,7 @@ app.get('/api/application-data', async (req, res) => {
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
             systemLogs: [],
-            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asterisk.io': '0.0.1' },
+            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'agi': '0.0.1-alpha.3' },
             connectivityServices: [],
             systemConnectionSettings: { database: {}, asterisk: {} }
         });
