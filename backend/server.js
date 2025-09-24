@@ -18,7 +18,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const { AGI } = require('agi-async');
+const agi = require('asteriskagi');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -124,16 +124,14 @@ app.get('*', (req, res) => {
 
 // --- AGI SERVER ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-const agiServer = new AGI(agiHandler, { port: agiPort });
+const agiServer = new agi.AGIServer(agiHandler, agiPort);
 
 agiServer.on('error', (err) => {
     console.error(`[AGI] Failed to start AGI server on port ${agiPort}. Is the port already in use?`, err);
     process.exit(1);
 });
 
-agiServer.on('listening', () => {
-    console.log(`[AGI] server listening on port ${agiPort}`);
-});
+console.log(`[AGI] Server configured to listen on port ${agiPort}`);
 
 
 // --- WEBSOCKET & AMI ---
