@@ -124,8 +124,8 @@ app.get('*', (req, res) => {
 
 // --- AGI SERVER ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-// Correct instantiation for the 'asteriskagi' library. It returns a net.Server instance.
-const agiServer = agi(agiHandler);
+// Correct instantiation for the 'asteriskagi' library. It must be called with 'new'.
+const agiServer = new agi(agiHandler);
 
 agiServer.on('error', (err) => {
     console.error(`[AGI] Critical error on AGI server, port ${agiPort}:`, err);
