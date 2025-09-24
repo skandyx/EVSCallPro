@@ -1,10 +1,5 @@
-// FIX: The TypeScript compiler was unable to find Cypress type definitions,
-// causing errors for `describe`, `it`, and `cy`. Since a tsconfig.json cannot be modified,
-// the reference to Cypress types is removed and global variables are declared
-// to satisfy the compiler and resolve the type errors within this file.
-declare var describe: any;
-declare var it: any;
-declare var cy: any;
+// FIX: Add a reference to Cypress types to make TypeScript recognize globals like `describe`, `it`, and `cy`.
+/// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
