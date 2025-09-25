@@ -1,5 +1,6 @@
 const ami = require('./amiClient');
 
+//router
 /**
  * Originates a call from an agent's softphone to an external number.
  * @param {string} agentExtension The agent's SIP extension.
