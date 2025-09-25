@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import type { Feature } from '../types.ts';
 import { DatabaseIcon, PlayIcon, InformationCircleIcon, CheckIcon, XMarkIcon } from './Icons.tsx';
+import apiClient from '../src/lib/axios.ts';
 
 interface DatabaseManagerProps {
     feature: Feature;
-    apiCall: (url: string, method: string, body?: any) => Promise<any>;
 }
 
 const PREDEFINED_QUERIES = [
@@ -21,7 +22,7 @@ const ToggleSwitch: React.FC<{ enabled: boolean; onChange: (enabled: boolean) =>
     </button>
 );
 
-const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) => {
+const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature }) => {
     const [query, setQuery] = useState('SELECT * FROM users LIMIT 10;');
     const [results, setResults] = useState<{ columns: string[], rows: any[], rowCount: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -33,8 +34,8 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
     useEffect(() => {
         const fetchSchema = async () => {
             try {
-                const schemaData = await apiCall('/api/db-schema', 'GET');
-                setSchema(schemaData);
+                const response = await apiClient.get('/system/db-schema');
+                setSchema(response.data);
             } catch (err) {
                 setError("Impossible de charger le schéma de la base de données.");
             } finally {
@@ -42,7 +43,7 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
             }
         };
         fetchSchema();
-    }, [apiCall]);
+    }, []);
 
     const isWriteQuery = !isReadOnly && /^(UPDATE|DELETE|INSERT|DROP|CREATE|ALTER|TRUNCATE)\b/i.test(query.trim());
 
@@ -60,10 +61,10 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
         setResults(null);
 
         try {
-            const data = await apiCall('/api/db-query', 'POST', { query, readOnly: isReadOnly });
-            setResults(data);
+            const response = await apiClient.post('/system/db-query', { query, readOnly: isReadOnly });
+            setResults(response.data);
         } catch (err: any) {
-            setError(err.message || "Une erreur est survenue.");
+            setError(err.response?.data?.message || err.message || "Une erreur est survenue.");
         } finally {
             setIsLoading(false);
         }

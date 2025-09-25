@@ -1,12 +1,13 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import type { SystemLog, VersionInfo, ConnectivityService } from '../types.ts';
 import { CpuChipIcon, CircleStackIcon, HddIcon, TimeIcon, ShieldCheckIcon, WifiIcon, TrashIcon, BugAntIcon, FolderIcon } from './Icons.tsx';
+import apiClient from '../src/lib/axios.ts';
 
 interface MonitoringDashboardProps {
     systemLogs: SystemLog[];
     versionInfo: VersionInfo;
     connectivityServices: ConnectivityService[];
-    apiCall: (url: string, method: string) => Promise<any>;
 }
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
@@ -108,7 +109,7 @@ const ConnectivityTester: React.FC<{ services: ConnectivityService[] }> = ({ ser
     );
 };
 
-const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, versionInfo, connectivityServices, apiCall }) => {
+const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, versionInfo, connectivityServices }) => {
     const [stats, setStats] = useState({
         cpu: { brand: '', load: 0 },
         ram: { total: 0, used: 0 },
@@ -122,7 +123,8 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, v
     const fetchStats = useCallback(async () => {
         try {
             const startTime = performance.now();
-            const data = await apiCall('/api/system-stats', 'GET');
+            const response = await apiClient.get('/system/stats');
+            const data = response.data;
             const endTime = performance.now();
 
             const apiLatency = Math.round(endTime - startTime);
@@ -145,7 +147,7 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, v
             console.error("Failed to fetch system stats:", error);
             setHealth('DOWN');
         }
-    }, [apiCall]);
+    }, []);
 
     useEffect(() => {
         fetchStats(); // Initial fetch

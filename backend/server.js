@@ -1,3 +1,4 @@
+
 // --- GLOBAL ERROR HANDLERS ---
 // These are crucial for debugging silent crashes.
 process.on('uncaughtException', (error) => {

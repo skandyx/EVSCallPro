@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Feature, User, FeatureId, ModuleVisibility, SavedScript, Campaign, Contact, UserGroup, Site, Qualification, QualificationGroup, IvrFlow, AudioFile, Trunk, Did, BackupLog, BackupSchedule, AgentSession, CallHistoryRecord, SystemLog, VersionInfo, ConnectivityService, ActivityType, PlanningEvent, SystemConnectionSettings, ContactNote, PersonalCallback } from './types.ts';
 import { features } from './data/features.ts';
@@ -158,7 +159,6 @@ const App: React.FC = () => {
             onDeleteSite: (id: string) => handleDelete('sites', id),
             onSavePlanningEvent: (event: PlanningEvent) => handleSaveOrUpdate('planning-events', event),
             onDeletePlanningEvent: (id: string) => handleDelete('planning-events', id),
-            apiCall: apiClient, // Passe l'instance axios configurée
         };
         
         return <FeatureComponent {...componentProps} />;
@@ -193,7 +193,7 @@ const App: React.FC = () => {
                     <div className="flex-1 flex flex-col min-w-0">
                         <Header activeView={activeView} onViewChange={setActiveView} />
                         <main className="flex-1 overflow-y-auto p-8">
-                             {activeView === 'app' ? renderFeatureComponent() : <MonitoringDashboard {...({ ...allData, apiCall: apiClient } as any)} />}
+                             {activeView === 'app' ? renderFeatureComponent() : <MonitoringDashboard {...({ ...allData } as any)} />}
                         </main>
                     </div>
                 </div>

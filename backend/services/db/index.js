@@ -1,3 +1,4 @@
+
 // This module serves as a central point for all database queries,
 // making it easier to manage and import them throughout the application.
 
@@ -15,6 +16,7 @@ module.exports = {
     ...require('./planning.queries'),
     ...require('./note.queries'),
     ...require('./pbx.queries'),
+    ...require('./database.queries'),
     
     // A function to get all contacts for the application data dump.
     // In a real large-scale app, this would be paginated or avoided.
