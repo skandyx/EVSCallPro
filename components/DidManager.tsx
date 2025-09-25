@@ -108,7 +108,7 @@ const DidManager: React.FC<DidManagerProps> = ({ feature, dids, trunks, ivrFlows
     }
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8">
+        <div className="space-y-8">
             {isModalOpen && <DidModal did={editingDid} trunks={trunks} ivrFlows={ivrFlows} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>

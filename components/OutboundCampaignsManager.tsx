@@ -213,7 +213,7 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
     }
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className="space-y-8">
             {isModalOpen && (
                 <CampaignModal
                     campaign={editingCampaign}

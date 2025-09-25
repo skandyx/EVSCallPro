@@ -62,7 +62,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-        if (name === 'loginId' || name === 'email') setError(null);
+        if (name === 'loginId') setError(null);
         if (type === 'checkbox') {
             setFormData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
         } else {
@@ -94,21 +94,11 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-        
         const loginIdExists = users.some(u => u.loginId === formData.loginId && u.id !== formData.id);
         if (loginIdExists) {
             setError("L'identifiant / extension existe déjà pour un autre utilisateur.");
             setActiveTab('general');
             return;
-        }
-
-        if (isEmailEnabled && formData.email) {
-            const emailExists = users.some(u => u.email && u.email.toLowerCase() === formData.email!.toLowerCase() && u.id !== formData.id);
-            if (emailExists) {
-                setError("L'adresse email est déjà utilisée par un autre utilisateur.");
-                setActiveTab('general');
-                return;
-            }
         }
 
         // Prevent last SuperAdmin from changing their role
@@ -175,6 +165,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
                                 <div>
                                     <label htmlFor="loginId" className="block text-sm font-medium text-slate-700">Identifiant / Extension</label>
                                     <input type="text" name="loginId" id="loginId" value={formData.loginId} onChange={handleChange} required pattern="\d{4,6}" title="Doit contenir 4 à 6 chiffres." placeholder="Ex: 1001" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2 border"/>
+                                    {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
                                     <p className="mt-1 text-xs text-slate-500">Doit être un numéro unique de 4 à 6 chiffres.</p>
                                 </div>
                                 <div>
@@ -186,7 +177,6 @@ const UserModal: React.FC<UserModalProps> = ({ user, users, campaigns, userGroup
                                     </div>
                                     <input type="email" name="email" id="email" value={formData.email || ''} onChange={handleChange} required={isEmailEnabled} disabled={!isEmailEnabled} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2 border disabled:bg-slate-50 disabled:text-slate-400"/>
                                 </div>
-                                 {error && <p className="mt-1 text-sm text-red-600 font-semibold">{error}</p>}
                                 <div>
                                     <label htmlFor="mobileNumber" className="block text-sm font-medium text-slate-700">Numéro de mobile (pour "Connect to Phone")</label>
                                     <input type="tel" name="mobileNumber" id="mobileNumber" value={formData.mobileNumber || ''} onChange={handleChange} placeholder="Ex: 0612345678" className="mt-1 block w-full rounded-md border-slate-300 shadow-sm p-2 border"/>
@@ -429,7 +419,7 @@ const UserManager: React.FC<UserManagerProps> = ({ feature, users, campaigns, us
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="space-y-8">
       {isModalOpen && editingUser && <UserModal user={editingUser} users={users} campaigns={campaigns} userGroups={userGroups} sites={sites} currentUser={currentUser} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
       {isImportModalOpen && <ImportUsersModal onClose={() => setIsImportModalOpen(false)} onImport={onImportUsers} existingUsers={users} />}
       {isGeneratingModalOpen && <GenerateModal onClose={() => setIsGeneratingModalOpen(false)} onConfirm={handleConfirmGeneration} />}

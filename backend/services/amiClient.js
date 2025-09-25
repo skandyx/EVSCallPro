@@ -73,11 +73,9 @@ const connectWithRetry = () => {
     client.once('connect', handleConnect);
     
     // Lance la connexion
-    // FIX: The .connect() method of this library does not take a callback.
-    // The configuration is passed in the constructor. Calling it with a function
-    // as an argument caused a TypeError [ERR_INVALID_ARG_TYPE].
-    // The call should be parameter-less.
-    client.connect();
+    client.connect(() => {
+      // Le callback de connexion est parfois instable, on se fie plutôt à l'événement 'connect'.
+    });
 };
 
 

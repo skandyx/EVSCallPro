@@ -570,7 +570,7 @@ const ReportingDashboard: React.FC<ReportingDashboardProps> = ({ feature, callHi
     }
 
     return (
-         <div className="max-w-7xl mx-auto space-y-6">
+         <div className="space-y-6">
             <header className="flex justify-between items-start">
                 <div>
                     <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>

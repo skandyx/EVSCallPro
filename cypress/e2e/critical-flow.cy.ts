@@ -1,4 +1,10 @@
-/// <reference types="cypress" />
+// FIX: The TypeScript compiler was unable to find Cypress type definitions,
+// causing errors for `describe`, `it`, and `cy`. Since a tsconfig.json cannot be modified,
+// the reference to Cypress types is removed and global variables are declared
+// to satisfy the compiler and resolve the type errors within this file.
+declare var describe: any;
+declare var it: any;
+declare var cy: any;
 
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
@@ -35,7 +41,6 @@ describe('Critical Application Flow', () => {
     cy.get('input[name="loginId"]').type('1001');
     cy.get('input[name="password"]').type('1001');
 
-    // Submit the form
     cy.get('button[type="submit"]').click();
 
     // After login, the agent view should be visible

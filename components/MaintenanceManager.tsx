@@ -38,7 +38,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ feature, backup
     };
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8">
+        <div className="space-y-8">
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>
                 <p className="mt-2 text-lg text-slate-600">{feature.description}</p>
@@ -76,52 +76,55 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ feature, backup
                                 <option value="weekly">Hebdomadaire</option>
                             </select>
                         </div>
-                         <div>
-                            <label htmlFor="time" className="block text-sm font-medium text-slate-700">Heure (UTC)</label>
-                            <input type="time" id="time" name="time" value={schedule.time} onChange={handleScheduleChange} disabled={schedule.frequency === 'none'} className="mt-1 block w-full p-2 border border-slate-300 rounded-md disabled:bg-slate-100"/>
-                        </div>
-                         <div className="flex justify-end items-center pt-2">
-                             {showSuccess && <span className="text-green-600 text-sm font-semibold mr-4">Planification enregistrée !</span>}
-                             <button onClick={handleSaveSchedule} disabled={isSaving} className="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded-lg shadow-md disabled:opacity-50">
-                                 {isSaving ? 'Enregistrement...' : 'Enregistrer la planification'}
-                            </button>
-                         </div>
+                         {schedule.frequency !== 'none' && (
+                            <div>
+                                <label htmlFor="time" className="block text-sm font-medium text-slate-700">Heure de la sauvegarde</label>
+                                <input type="time" id="time" name="time" value={schedule.time} onChange={handleScheduleChange} className="mt-1 block w-full p-2 border border-slate-300 rounded-md"/>
+                            </div>
+                         )}
+                    </div>
+                    <div className="mt-6 flex items-center justify-end">
+                        {showSuccess && <span className="text-green-600 font-semibold mr-4">Enregistré !</span>}
+                        <button onClick={handleSaveSchedule} disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md disabled:bg-indigo-400">
+                            {isSaving ? 'Enregistrement...' : 'Enregistrer la planification'}
+                        </button>
                     </div>
                 </div>
             </div>
 
              <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
                 <h2 className="text-2xl font-semibold text-slate-800 mb-4">Historique des Sauvegardes</h2>
-                 <div className="overflow-x-auto">
+                <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Date & Heure</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Statut</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Nom du Fichier</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Fichier</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
                             {backupLogs.map(log => (
                                 <tr key={log.id}>
-                                    <td className="px-6 py-4 text-sm text-slate-600">{new Date(log.timestamp).toLocaleString('fr-FR')}</td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{new Date(log.timestamp).toLocaleString('fr-FR')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
                                         {log.status === 'success' ? (
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"><CheckIcon className="w-4 h-4 mr-1"/> Succès</span>
+                                            <span className="flex items-center text-sm text-green-600"><CheckIcon className="w-4 h-4 mr-1"/> Succès</span>
                                         ) : (
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"><XMarkIcon className="w-4 h-4 mr-1"/> Échec</span>
+                                            <span className="flex items-center text-sm text-red-600"><XMarkIcon className="w-4 h-4 mr-1"/> Échec</span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-slate-800 font-mono">{log.fileName}</td>
-                                    <td className="px-6 py-4 text-right text-sm font-medium">
-                                        <button className="text-indigo-600 hover:text-indigo-900 mr-4">Restaurer</button>
-                                        <button className="text-red-600 hover:text-red-900"><TrashIcon className="w-4 h-4 inline-block -mt-1"/> Supprimer</button>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">{log.fileName}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
+                                        <button className="text-indigo-600 hover:text-indigo-900" disabled={log.status === 'failure'}>Télécharger</button>
+                                        <button className="text-red-600 hover:text-red-900">Supprimer</button>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
+                     {backupLogs.length === 0 && <p className="text-center py-8 text-slate-500">Aucune sauvegarde n'a été effectuée.</p>}
                 </div>
             </div>
         </div>

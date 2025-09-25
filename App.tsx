@@ -27,127 +27,73 @@ const App: React.FC = () => {
 
     const fetchApplicationData = useCallback(async () => {
         try {
-            // setIsLoading(true) is not needed here as it's handled by the session check
+            setIsLoading(true);
             const response = await apiClient.get('/application-data');
             setAllData(response.data);
         } catch (error) {
             console.error("Failed to fetch application data:", error);
             showAlert("Impossible de charger les données de l'application.", 'error');
-        }
-    }, [showAlert]);
-    
-    // Check for existing token on mount and restore session
-    useEffect(() => {
-        const checkSession = async () => {
-            const token = localStorage.getItem('authToken');
-            if (token) {
-                try {
-                    // Call the new /me endpoint to verify the token and get user data
-                    const response = await apiClient.get('/auth/me');
-                    setCurrentUser(response.data.user);
-                    // Once user is confirmed, fetch the rest of the app data
-                    await fetchApplicationData();
-                } catch (error) {
-                    // Token is invalid or expired
-                    console.error("Session check failed:", error);
-                    localStorage.removeItem('authToken');
-                    setCurrentUser(null);
-                }
-            }
+            // Gérer le cas où le token est invalide (l'intercepteur Axios devrait gérer le logout)
+        } finally {
             setIsLoading(false);
-        };
-
-        checkSession();
+        }
+    }, []);
+    
+    // Check for existing token on mount
+    useEffect(() => {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            // Pourrait être amélioré en vérifiant la validité du token avec un endpoint /me
+            fetchApplicationData();
+        } else {
+            setIsLoading(false);
+        }
     }, [fetchApplicationData]);
 
     const handleLoginSuccess = ({ user, token }: { user: User, token: string }) => {
         localStorage.setItem('authToken', token);
         setCurrentUser(user);
-        setIsLoading(true);
-        fetchApplicationData().finally(() => setIsLoading(false));
+        fetchApplicationData();
     };
 
     const handleLogout = () => {
         localStorage.removeItem('authToken');
         setCurrentUser(null);
         setAllData({});
-        // No need to call API for logout, token is removed client-side
     };
 
     const handleSaveOrUpdate = async (dataType: string, data: any, endpoint?: string) => {
         try {
-            // A special map because some `dataType` values (for endpoints) don't match `allData` keys (for state).
-            const dataTypeToStateKey: { [key: string]: keyof typeof allData } = {
-                'users': 'users', 'user-groups': 'userGroups', 'scripts': 'savedScripts',
-                'campaigns': 'campaigns', 'qualifications': 'qualifications', 'qualification-groups': 'qualificationGroups',
-                'ivr-flows': 'ivrFlows', 'audio-files': 'audioFiles', 'trunks': 'trunks',
-                'dids': 'dids', 'sites': 'sites', 'planning-events': 'planningEvents'
-            };
-
-            const collectionKey = dataTypeToStateKey[dataType];
-            const collection = collectionKey ? allData[collectionKey] : [];
-            const itemExistsInState = Array.isArray(collection) ? collection.some((item: any) => item.id === data.id) : false;
-            
-            // CORRECTED LOGIC: The sole source of truth to determine if an item is new
-            // is its absence from the current application state. The format of the ID is irrelevant.
-            const isNew = !itemExistsInState;
-
             const url = endpoint || `/${dataType.toLowerCase()}`;
-            
-            const response = isNew
+            const response = data.id.startsWith('new-') || data.id.startsWith('group-') || data.id.startsWith('qg-') || data.id.startsWith('site-') || data.id.startsWith('trunk-') || data.id.startsWith('did-')
                 ? await apiClient.post(url, data)
                 : await apiClient.put(`${url}/${data.id}`, data);
             
             await fetchApplicationData(); // Re-fetch all data to ensure consistency
             showAlert('Enregistrement réussi !', 'success');
             return response.data;
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.error || `Échec de l'enregistrement.`;
+        } catch (error) {
             console.error(`Failed to save ${dataType}:`, error);
-            showAlert(errorMessage, 'error');
+            showAlert(`Échec de l'enregistrement.`, 'error');
             throw error;
         }
     };
     
-    // FIX: Corrected the signature and implementation of the `handleDelete` function to accept an optional `endpoint` parameter. This resolves errors where it was called with three arguments instead of the expected two, ensuring that API calls for deletion are made to the correct custom endpoints when provided.
-    const handleDelete = async (dataType: string, id: string, endpoint?: string) => {
+    const handleDelete = async (dataType: string, id: string) => {
         if (window.confirm("Êtes-vous sûr de vouloir supprimer cet élément ?")) {
             try {
-                const url = endpoint || `/${dataType.toLowerCase()}`;
-                await apiClient.delete(`${url}/${id}`);
+                await apiClient.delete(`/${dataType.toLowerCase()}/${id}`);
                 await fetchApplicationData();
                 showAlert('Suppression réussie !', 'success');
-            } catch (error: any) {
-                const errorMessage = error.response?.data?.error || `Échec de la suppression.`;
+            } catch (error) {
                 console.error(`Failed to delete ${dataType}:`, error);
-                showAlert(errorMessage, 'error');
+                showAlert(`Échec de la suppression.`, 'error');
             }
         }
     };
 
     const handleSaveUser = async (user: User, groupIds: string[]) => {
        await handleSaveOrUpdate('users', { ...user, groupIds });
-    };
-
-    const handleBulkUsers = async (users: User[], successMessage: string) => {
-        try {
-            await apiClient.post('/users/bulk', { users });
-            await fetchApplicationData();
-            showAlert(successMessage, 'success');
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.error || `Échec de la création en masse.`;
-            console.error(`Failed to bulk create users:`, error);
-            showAlert(errorMessage, 'error');
-            throw error;
-        }
-    };
-    
-    const handleGenerateUsers = async (users: User[]) => {
-        await handleBulkUsers(users, `${users.length} utilisateurs générés avec succès.`);
-    };
-
-    const handleImportUsers = async (users: User[]) => {
-        await handleBulkUsers(users, `${users.length} utilisateurs importés avec succès.`);
     };
 
     const handleImportContacts = async (campaignId: string, contacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => {
@@ -187,8 +133,6 @@ const App: React.FC = () => {
             currentUser,
             onSaveUser: handleSaveUser,
             onDeleteUser: (id: string) => handleDelete('users', id),
-            onGenerateUsers: handleGenerateUsers,
-            onImportUsers: handleImportUsers,
             onSaveUserGroup: (group: UserGroup) => handleSaveOrUpdate('user-groups', group),
             onDeleteUserGroup: (id: string) => handleDelete('user-groups', id),
             onSaveOrUpdateScript: (script: SavedScript) => handleSaveOrUpdate('scripts', script),
@@ -199,17 +143,17 @@ const App: React.FC = () => {
             onImportContacts: handleImportContacts,
             onSaveQualification: (q: Qualification) => handleSaveOrUpdate('qualifications', q),
             onDeleteQualification: (id: string) => handleDelete('qualifications', id),
-            onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => handleSaveOrUpdate('qualification-groups', { ...group, assignedQualIds }, '/qualification-groups/groups'),
-            onDeleteQualificationGroup: (id: string) => handleDelete('qualification-groups', id, '/qualification-groups/groups'),
+            onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => handleSaveOrUpdate('qualification-groups', { ...group, assignedQualIds }),
+            onDeleteQualificationGroup: (id: string) => handleDelete('qualification-groups', id),
             onSaveOrUpdateIvrFlow: (flow: IvrFlow) => handleSaveOrUpdate('ivr-flows', flow),
             onDeleteIvrFlow: (id: string) => handleDelete('ivr-flows', id),
             onDuplicateIvrFlow: async (id: string) => { await apiClient.post(`/ivr-flows/${id}/duplicate`); await fetchApplicationData(); },
             onSaveAudioFile: (file: AudioFile) => handleSaveOrUpdate('audio-files', file),
             onDeleteAudioFile: (id: string) => handleDelete('audio-files', id),
-            onSaveTrunk: (trunk: Trunk) => handleSaveOrUpdate('trunks', trunk, '/telephony/trunks'),
-            onDeleteTrunk: (id: string) => handleDelete('trunks', id, '/telephony/trunks'),
-            onSaveDid: (did: Did) => handleSaveOrUpdate('dids', did, '/telephony/dids'),
-            onDeleteDid: (id: string) => handleDelete('dids', id, '/telephony/dids'),
+            onSaveTrunk: (trunk: Trunk) => handleSaveOrUpdate('trunks', trunk),
+            onDeleteTrunk: (id: string) => handleDelete('trunks', id),
+            onSaveDid: (did: Did) => handleSaveOrUpdate('dids', did),
+            onDeleteDid: (id: string) => handleDelete('dids', id),
             onSaveSite: (site: Site) => handleSaveOrUpdate('sites', site),
             onDeleteSite: (id: string) => handleDelete('sites', id),
             onSavePlanningEvent: (event: PlanningEvent) => handleSaveOrUpdate('planning-events', event),

@@ -423,6 +423,64 @@ export const features: Feature[] = [
             content: "Le filtre par date est le plus puissant. Laissez la recherche vide pour voir l'activité de tous les agents sur la période choisie et identifier rapidement les tendances globales."
         }
     },
+    // FIX: Added 'Maintenance' and 'Help' features to use the imported components and make them available in the UI.
+    {
+        id: 'maintenance',
+        title: 'Maintenance & Sauvegardes',
+        category: 'Système',
+        description: 'Gérez les sauvegardes, les restaurations et les mises à jour du système.',
+        component: MaintenanceManager,
+        userJourney: {
+            title: 'Parcours Utilisateur: Lancer une sauvegarde manuelle',
+            steps: [
+                "L'administrateur se rend dans 'Système' > 'Maintenance'.",
+                "Il clique sur 'Lancer une sauvegarde maintenant'.",
+                "Le système confirme le lancement et une nouvelle entrée apparaît dans l'historique des sauvegardes.",
+            ],
+        },
+        specs: {
+            title: 'Spécifications Techniques',
+            points: [
+                "Sauvegardes manuelles et planifiées (quotidiennes, hebdomadaires).",
+                "Les sauvegardes sont des archives .tar.gz de la configuration et de la base de données.",
+                "Les 10 dernières sauvegardes sont conservées.",
+                "Notification par email en cas d'échec de la sauvegarde planifiée (à venir)."
+            ],
+        },
+        simplificationTip: {
+            title: 'Conseil de Simplification',
+            content: "Pour une tranquillité d'esprit maximale, configurez une sauvegarde quotidienne automatique. La sauvegarde manuelle est surtout utile avant une modification majeure du système que vous pourriez vouloir annuler."
+        }
+    },
+    {
+        id: 'help',
+        title: 'Aide & Documentation',
+        category: 'Système',
+        description: 'Trouvez des réponses à vos questions et des guides pour utiliser la plateforme.',
+        component: HelpCenter,
+        userJourney: {
+            title: "Parcours Utilisateur: Trouver de l'aide sur les SVI",
+            steps: [
+                "L'utilisateur est bloqué lors de la création d'un SVI.",
+                "Il se rend dans 'Système' > 'Aide & Documentation'.",
+                "Il ouvre la section 'Flux SVI' et lit l'explication et l'exemple.",
+                "L'utilisateur a compris comment relier les noeuds et peut continuer son travail."
+            ],
+        },
+        specs: {
+            title: 'Spécifications Techniques',
+            points: [
+                "Documentation organisée par fonctionnalité majeure.",
+                "Exemples visuels et schémas pour illustrer les concepts.",
+                "Recherche par mot-clé (à venir).",
+                "Lien vers le support technique (à venir)."
+            ],
+        },
+        simplificationTip: {
+            title: 'Conseil',
+            content: "La section d'aide est un excellent point de départ si vous n'êtes pas sûr de comment une fonctionnalité est censée fonctionner. Elle fournit des exemples concrets de cas d'usage."
+        }
+    },
      {
         id: 'trunks',
         title: 'Trunks SIP',

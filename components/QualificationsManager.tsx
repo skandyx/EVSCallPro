@@ -267,7 +267,7 @@ const QualificationsManager: React.FC<QualificationsManagerProps> = ({ feature, 
     };
     
     return (
-        <div className="max-w-5xl mx-auto space-y-8">
+        <div className="space-y-8">
             {isGroupModalOpen && <GroupEditModal 
                 group={editingGroup} 
                 allQualifications={qualifications} 
