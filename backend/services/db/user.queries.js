@@ -21,7 +21,7 @@ const getUsers = async () => {
 const getUserById = async (id) => {
     // This query also needs to be enriched to provide a complete user object
      const query = `
-        SELECT ${SAFE_USER_COLUMNS}, COALESCE(ARRAY_AGG(ca.campaign_id) FILTER (WHERE ca.campaign_id IS NOT NULL), '{}') as campaign_ids
+        SELECT ${SAFE_USER_COLUMNS}, u.is_active, COALESCE(ARRAY_AGG(ca.campaign_id) FILTER (WHERE ca.campaign_id IS NOT NULL), '{}') as campaign_ids
         FROM users u
         LEFT JOIN campaign_agents ca ON u.id = ca.user_id
         WHERE u.id = $1
@@ -29,6 +29,18 @@ const getUserById = async (id) => {
     `;
     const res = await pool.query(query, [id]);
     return res.rows.length > 0 ? keysToCamel(res.rows[0]) : null;
+};
+
+const handleDbError = (e) => {
+    if (e.code === '23505') { // Unique violation
+        if (e.constraint === 'users_login_id_key' || e.constraint === 'users_extension_key') {
+            throw new Error(`L'identifiant/extension existe déjà.`);
+        }
+        if (e.constraint === 'users_email_key') {
+            throw new Error(`L'adresse email est déjà utilisée.`);
+        }
+    }
+    throw e;
 };
 
 const createUser = async (userData) => {
@@ -70,7 +82,7 @@ const createUser = async (userData) => {
         return keysToCamel(newUser);
     } catch (e) {
         await client.query('ROLLBACK');
-        throw e;
+        handleDbError(e);
     } finally {
         client.release();
     }
@@ -146,7 +158,7 @@ const updateUser = async (userId, userData) => {
     } catch (e) {
         await client.query('ROLLBACK');
         console.error("Error in updateUser transaction:", e);
-        throw e;
+        handleDbError(e);
     } finally {
         client.release();
     }
@@ -156,13 +168,14 @@ const deleteUser = async (id) => {
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
 };
 
+const generatePassword = () => Math.random().toString(36).slice(-8);
+
 const createUsersBulk = async (users) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const createdUsers = [];
         for (const user of users) {
-            // Note: bulk/import does not pass groupIds or campaignIds, so we don't handle them here.
             const userQuery = `
                 INSERT INTO users (id, login_id, extension, first_name, last_name, email, "role", is_active, password_hash, site_id, mobile_number, use_mobile_as_station)
                 VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -175,11 +188,11 @@ const createUsersBulk = async (users) => {
                 user.lastName,
                 user.email || null,
                 user.role || 'Agent',
-                'isActive' in user ? user.isActive : true, // Default to true
-                user.password, // This is required
+                'isActive' in user ? user.isActive : true,
+                user.password || generatePassword(), // ROBUSTNESS: Ensure password is not null
                 user.siteId || null,
                 user.mobileNumber || null,
-                'useMobileAsStation' in user ? user.useMobileAsStation : false // Default to false
+                'useMobileAsStation' in user ? user.useMobileAsStation : false
             ]);
             createdUsers.push(res.rows[0]);
         }
@@ -187,7 +200,7 @@ const createUsersBulk = async (users) => {
         return createdUsers.map(keysToCamel);
     } catch (e) {
         await client.query('ROLLBACK');
-        throw e;
+        handleDbError(e);
     } finally {
         client.release();
     }

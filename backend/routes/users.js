@@ -33,7 +33,7 @@ router.post('/bulk', async (req, res) => {
         res.status(201).json(createdUsers);
     } catch (error) {
         console.error('Error creating users in bulk:', error);
-        res.status(500).json({ error: 'Échec de la création des utilisateurs en masse.' });
+        res.status(500).json({ error: error.message || 'Échec de la création des utilisateurs en masse.' });
     }
 });
 
@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
         res.status(201).json(newUser);
     } catch (error) {
         console.error('Error creating user:', error);
-        res.status(500).json({ error: 'Failed to create user' });
+        res.status(500).json({ error: error.message || 'Failed to create user' });
     }
 });
 
@@ -100,7 +100,7 @@ router.put('/:id', async (req, res) => {
         res.json(updatedUser);
     } catch (error) {
         console.error('Error updating user:', error);
-        res.status(500).json({ error: 'Failed to update user' });
+        res.status(500).json({ error: error.message || 'Failed to update user' });
     }
 });
 
@@ -121,6 +121,15 @@ router.put('/:id', async (req, res) => {
  */
 router.delete('/:id', async (req, res) => {
     try {
+        // SECURITY FIX: Add server-side validation before deleting.
+        const user = await db.getUserById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Utilisateur non trouvé.' });
+        }
+        if (user.isActive) {
+            return res.status(400).json({ error: 'Impossible de supprimer un utilisateur actif. Veuillez le désactiver d\'abord.' });
+        }
+        
         await db.deleteUser(req.params.id);
         res.status(204).send();
     } catch (error) {

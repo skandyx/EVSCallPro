@@ -101,9 +101,10 @@ const App: React.FC = () => {
             await fetchApplicationData(); // Re-fetch all data to ensure consistency
             showAlert('Enregistrement réussi !', 'success');
             return response.data;
-        } catch (error) {
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.error || `Échec de l'enregistrement.`;
             console.error(`Failed to save ${dataType}:`, error);
-            showAlert(`Échec de l'enregistrement.`, 'error');
+            showAlert(errorMessage, 'error');
             throw error;
         }
     };
@@ -116,9 +117,10 @@ const App: React.FC = () => {
                 await apiClient.delete(`${url}/${id}`);
                 await fetchApplicationData();
                 showAlert('Suppression réussie !', 'success');
-            } catch (error) {
+            } catch (error: any) {
+                const errorMessage = error.response?.data?.error || `Échec de la suppression.`;
                 console.error(`Failed to delete ${dataType}:`, error);
-                showAlert(`Échec de la suppression.`, 'error');
+                showAlert(errorMessage, 'error');
             }
         }
     };
@@ -132,9 +134,10 @@ const App: React.FC = () => {
             await apiClient.post('/users/bulk', { users });
             await fetchApplicationData();
             showAlert(successMessage, 'success');
-        } catch (error) {
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.error || `Échec de la création en masse.`;
             console.error(`Failed to bulk create users:`, error);
-            showAlert(`Échec de la création en masse.`, 'error');
+            showAlert(errorMessage, 'error');
             throw error;
         }
     };

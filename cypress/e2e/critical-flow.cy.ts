@@ -1,4 +1,3 @@
-// FIX: Add a triple-slash directive to include Cypress type definitions. This resolves errors where TypeScript cannot find names like 'describe', 'it', and 'cy'.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
