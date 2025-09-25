@@ -1,19 +1,19 @@
 /**
- * Executes an IVR flow using the provided AGI channel.
- * @param {object} channel The agi-async channel object.
+ * Executes an IVR flow using the provided AGI context.
+ * @param {object} context The asteriskagi context object.
  * @param {object} flow The IVR flow object from the database.
  */
-async function executeFlow(channel, flow) {
+async function executeFlow(context, flow) {
     let currentNode = flow.nodes.find(n => n.type === 'start');
     if (!currentNode) {
-        await channel.verbose('IVR Flow has no start node. Hanging up.');
+        await context.verbose('IVR Flow has no start node. Hanging up.');
         return;
     }
 
-    await channel.verbose(`Starting IVR Flow: ${flow.name}`);
+    await context.verbose(`Starting IVR Flow: ${flow.name}`);
 
     while (currentNode) {
-        await channel.verbose(`Executing node: ${currentNode.name} (Type: ${currentNode.type}, ID: ${currentNode.id})`);
+        await context.verbose(`Executing node: ${currentNode.name} (Type: ${currentNode.type}, ID: ${currentNode.id})`);
         let nextNodeId = null;
 
         try {
@@ -25,17 +25,17 @@ async function executeFlow(channel, flow) {
                 
                 case 'media':
                     // In a real app, 'prompt' would be a filename. We'll use verbose for simulation.
-                    await channel.verbose(`Streaming media: ${currentNode.content.prompt}`);
-                    // await channel.streamFile(currentNode.content.prompt); // Uncomment when audio files exist
+                    await context.verbose(`Streaming media: ${currentNode.content.prompt}`);
+                    // await context.streamFile(currentNode.content.prompt); // Uncomment when audio files exist
                     // Use sayText for now as a fallback
-                    await channel.sayText(currentNode.content.prompt);
+                    await context.sayText(currentNode.content.prompt);
                     const mediaConnection = flow.connections.find(c => c.fromNodeId === currentNode.id && c.fromPortId === 'out');
                     nextNodeId = mediaConnection ? mediaConnection.toNodeId : null;
                     break;
 
                 case 'menu':
-                    await channel.verbose(`Menu prompt: ${currentNode.content.prompt}`);
-                    const digit = await channel.waitForDigit(5000); // 5s timeout
+                    await context.verbose(`Menu prompt: ${currentNode.content.prompt}`);
+                    const digit = await context.waitForDigit(5000); // 5s timeout
                     let menuConnection;
                     if (digit) {
                          menuConnection = flow.connections.find(c => {
@@ -52,15 +52,15 @@ async function executeFlow(channel, flow) {
                     }
                     nextNodeId = menuConnection ? menuConnection.toNodeId : null;
                     if (!nextNodeId) {
-                        await channel.verbose(`No route for digit '${digit || 'timeout'}'.`);
+                        await context.verbose(`No route for digit '${digit || 'timeout'}'.`);
                     }
                     break;
 
                 case 'transfer':
-                    await channel.verbose(`Transferring call to: ${currentNode.content.number}`);
-                    await channel.dial(currentNode.content.number);
-                    const dialStatus = await channel.getVariable('DIALSTATUS');
-                    await channel.verbose(`Dial status: ${dialStatus}`);
+                    await context.verbose(`Transferring call to: ${currentNode.content.number}`);
+                    await context.dial(currentNode.content.number);
+                    const dialStatus = await context.getVariable('DIALSTATUS');
+                    await context.verbose(`Dial status: ${dialStatus}`);
                     // If the call fails, we can route to the 'failure' port
                     if (dialStatus !== 'ANSWER') {
                         const failureConnection = flow.connections.find(c => c.fromNodeId === currentNode.id && c.fromPortId === 'out');
@@ -73,49 +73,49 @@ async function executeFlow(channel, flow) {
                 
                 case 'calendar':
                     // This is a simplified simulation. A real implementation would be more complex.
-                    await channel.verbose(`Checking calendar rules...`);
+                    await context.verbose(`Checking calendar rules...`);
                     const now = new Date();
                     // For now, let's just assume it's "open" and take the first event path.
                     // In a real scenario, you'd iterate through events, check days, times, dates.
                     const defaultConnection = flow.connections.find(c => c.fromNodeId === currentNode.id && c.fromPortId === 'out-default');
                     nextNodeId = defaultConnection ? defaultConnection.toNodeId : null;
-                    await channel.verbose(`Calendar result: Following default path.`);
+                    await context.verbose(`Calendar result: Following default path.`);
                     break;
 
                 case 'voicemail':
-                    await channel.verbose(`Sending to voicemail: ${currentNode.content.prompt}`);
-                    await channel.sayText(currentNode.content.prompt);
-                    // await channel.exec('VoiceMail', '1234@default'); // Example voicemail box
+                    await context.verbose(`Sending to voicemail: ${currentNode.content.prompt}`);
+                    await context.sayText(currentNode.content.prompt);
+                    // await context.exec('VoiceMail', '1234@default'); // Example voicemail box
                     nextNodeId = null; // Voicemail is usually a terminal action
                     break;
 
                 case 'hangup':
-                    await channel.verbose('Hanging up call.');
+                    await context.verbose('Hanging up call.');
                     nextNodeId = null; // This will terminate the loop
                     break;
 
                 default:
-                    await channel.verbose(`Unknown node type: ${currentNode.type}`);
+                    await context.verbose(`Unknown node type: ${currentNode.type}`);
                     nextNodeId = null;
                     break;
             }
         } catch (error) {
             console.error(`Error executing node ${currentNode.id}:`, error);
-            await channel.verbose(`An error occurred. Ending call.`);
+            await context.verbose(`An error occurred. Ending call.`);
             nextNodeId = null;
         }
 
         if (nextNodeId) {
             currentNode = flow.nodes.find(n => n.id === nextNodeId);
             if (!currentNode) {
-                 await channel.verbose(`Next node ID '${nextNodeId}' not found in flow.`);
+                 await context.verbose(`Next node ID '${nextNodeId}' not found in flow.`);
             }
         } else {
             currentNode = null;
         }
     }
 
-    await channel.verbose('IVR Flow finished.');
+    await context.verbose('IVR Flow finished.');
 }
 
 module.exports = { executeFlow };

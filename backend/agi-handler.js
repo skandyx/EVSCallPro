@@ -3,38 +3,38 @@ const { executeFlow } = require('./services/ivr-executor.js');
 
 /**
  * Handles an AGI request from Asterisk.
- * This async function receives a channel object for the call.
- * @param {object} channel The agi-async channel object.
+ * This async function receives a context object for the call.
+ * @param {object} context The asteriskagi context object.
  */
-async function agiHandler(channel) {
+async function agiHandler(context) {
   try {
-    const vars = channel.variables;
-    await channel.answer();
-    await channel.verbose('AGI Script Started.');
+    const vars = context.variables;
+    await context.answer();
+    await context.verbose('AGI Script Started.');
 
     const dnid = vars.agi_network_script || vars.agi_dnid || 'default';
-    await channel.verbose(`Call received for DNID: ${dnid}`);
+    await context.verbose(`Call received for DNID: ${dnid}`);
 
     const ivrFlow = await db.getIvrFlowByDnid(dnid);
 
     if (ivrFlow) {
-      await executeFlow(channel, ivrFlow);
+      await executeFlow(context, ivrFlow);
     } else {
-      await channel.verbose('No IVR flow configured for this number.');
-      await channel.streamFile('ss-noservice'); // "We are sorry, the number you have dialed is not in service"
+      await context.verbose('No IVR flow configured for this number.');
+      await context.streamFile('ss-noservice'); // "We are sorry, the number you have dialed is not in service"
     }
 
   } catch (err) {
     console.error('An unhandled error occurred in agiHandler:', err);
     try {
-        await channel.verbose('An unexpected error occurred.');
+        await context.verbose('An unexpected error occurred.');
     } catch (e) {
         console.error('Could not even send verbose error message to Asterisk', e);
     }
   } finally {
     // Ensure hangup is always called, even if the flow fails
-    await channel.verbose('AGI Script Finished.');
-    await channel.hangup();
+    await context.verbose('AGI Script Finished.');
+    await context.hangup();
   }
 }
 
