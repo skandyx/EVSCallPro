@@ -17,9 +17,8 @@ require('dotenv').config();
 
 const express = require('express');
 const http = require('http');
-const net = require('net');
 const cors = require('cors');
-const Agi = require('asteriskagi');
+const agi = require('agi-async');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -185,7 +184,7 @@ app.get('/api/application-data', async (req, res) => {
             backupLogs: [],
             backupSchedule: { frequency: 'daily', time: '02:00' },
             systemLogs: [],
-            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asteriskagi': '1.2.2' },
+            versionInfo: { application: '1.0.0', asterisk: '18.x', database: '14.x', 'asterisk.io': '3.0.0' },
             connectivityServices: [
                 { id: 'db', name: 'Base de Données', target: `${process.env.DB_HOST}:${process.env.DB_PORT}` },
                 { id: 'ami', name: 'Asterisk AMI', target: `${process.env.AMI_HOST}:${process.env.AMI_PORT}` },
@@ -230,20 +229,18 @@ app.post('/api/system-connection', async (req, res) => {
     }
 });
 
-// AGI SERVER
+// --- AGI SERVER ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-const agiNetServer = net.createServer((socket) => {
-    console.log('[AGI] New AGI connection received.');
-    const agiContext = new Agi(agiHandler, socket);
-    agiContext.on('error', (err) => console.error('[AGI] Error on AGI context:', err));
-    agiContext.on('close', () => console.log('[AGI] AGI context closed.'));
-}).on('error', (err) => {
+const agiServer = new agi.Server(agiHandler);
+
+agiServer.on('error', (err) => {
     console.error(`[AGI] Critical error on AGI server, port ${agiPort}:`, err);
-    throw err;
 });
-agiNetServer.listen(agiPort, () => {
+
+agiServer.listen(agiPort, () => {
     console.log(`[AGI] Server listening for connections from Asterisk on port ${agiPort}`);
 });
+
 
 // --- WEBSOCKET & AMI ---
 initializeWebSocketServer(server);

@@ -104,9 +104,10 @@ const DidManager: React.FC<DidManagerProps> = ({ feature, dids, trunks, ivrFlows
 
     const getIvrFlowName = (flowId: string | null) => {
         if (!flowId) return <span className="text-slate-400 italic">Non assigné</span>;
-        return ivrFlows.find(f => f.id === flowId)?.name || <span className="text-red-500">Flux introuvable</span>;
-    }
-
+        const flow = ivrFlows.find(f => f.id === flowId);
+        return flow ? flow.name : <span className="text-red-500">Flux Inconnu</span>;
+    };
+    
     return (
         <div className="max-w-7xl mx-auto space-y-8">
             {isModalOpen && <DidModal did={editingDid} trunks={trunks} ivrFlows={ivrFlows} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
@@ -117,7 +118,7 @@ const DidManager: React.FC<DidManagerProps> = ({ feature, dids, trunks, ivrFlows
             
             <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-semibold text-slate-800">Numéros configurés</h2>
+                    <h2 className="text-2xl font-semibold text-slate-800">Numéros (SDA) configurés</h2>
                     <button onClick={handleAddNew} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md inline-flex items-center">
                         <PlusIcon className="w-5 h-5 mr-2" />Ajouter un numéro
                     </button>
@@ -129,25 +130,27 @@ const DidManager: React.FC<DidManagerProps> = ({ feature, dids, trunks, ivrFlows
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Numéro</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Description</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Destination</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Trunk</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Destination SVI</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-slate-200">
                             {dids.map(did => (
                                 <tr key={did.id}>
-                                    <td className="px-6 py-4 font-medium text-slate-800 font-mono">{did.number}</td>
+                                    <td className="px-6 py-4 font-mono font-medium text-slate-800">{did.number}</td>
                                     <td className="px-6 py-4 text-slate-600">{did.description}</td>
+                                    <td className="px-6 py-4 text-slate-600">{trunks.find(t => t.id === did.trunkId)?.name || 'Inconnu'}</td>
                                     <td className="px-6 py-4 text-slate-600">{getIvrFlowName(did.ivrFlowId)}</td>
                                     <td className="px-6 py-4 text-right text-sm font-medium space-x-4">
-                                        <button onClick={() => handleEdit(did)} className="text-indigo-600 hover:text-indigo-900"><EditIcon className="w-4 h-4 inline-block -mt-1"/> Modifier</button>
-                                        <button onClick={() => onDeleteDid(did.id)} className="text-red-600 hover:text-red-900"><TrashIcon className="w-4 h-4 inline-block -mt-1"/> Supprimer</button>
+                                        <button onClick={() => handleEdit(did)} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center"><EditIcon className="w-4 h-4 mr-1"/> Modifier</button>
+                                        <button onClick={() => onDeleteDid(did.id)} className="text-red-600 hover:text-red-900 inline-flex items-center"><TrashIcon className="w-4 h-4 mr-1"/> Supprimer</button>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
-                     {dids.length === 0 && <p className="text-center py-8 text-slate-500">Aucun numéro configuré.</p>}
+                     {dids.length === 0 && <p className="text-center py-8 text-slate-500">Aucun numéro (SDA) configuré.</p>}
                 </div>
             </div>
         </div>
