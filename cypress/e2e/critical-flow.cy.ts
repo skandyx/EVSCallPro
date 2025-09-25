@@ -1,3 +1,4 @@
+// FIX: Add a triple-slash directive to include Cypress type definitions. This resolves errors where TypeScript cannot find names like 'describe', 'it', and 'cy'.
 /// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
@@ -35,6 +36,7 @@ describe('Critical Application Flow', () => {
     cy.get('input[name="loginId"]').type('1001');
     cy.get('input[name="password"]').type('1001');
 
+    // Submit the form
     cy.get('button[type="submit"]').click();
 
     // After login, the agent view should be visible

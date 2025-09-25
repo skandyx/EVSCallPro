@@ -76,9 +76,6 @@ const App: React.FC = () => {
 
     const handleSaveOrUpdate = async (dataType: string, data: any, endpoint?: string) => {
         try {
-            const CLIENT_ID_PREFIXES = ['new-', 'group-', 'qg-', 'site-', 'trunk-', 'did-', 'campaign-', 'script-', 'qual-', 'ivr-flow-', 'audio-', 'plan-'];
-            const isClientGeneratedId = CLIENT_ID_PREFIXES.some(prefix => data.id.toString().startsWith(prefix));
-
             // A special map because some `dataType` values (for endpoints) don't match `allData` keys (for state).
             const dataTypeToStateKey: { [key: string]: keyof typeof allData } = {
                 'users': 'users', 'user-groups': 'userGroups', 'scripts': 'savedScripts',
@@ -91,9 +88,9 @@ const App: React.FC = () => {
             const collection = collectionKey ? allData[collectionKey] : [];
             const itemExistsInState = Array.isArray(collection) ? collection.some((item: any) => item.id === data.id) : false;
             
-            // An item is truly new if it has a client-generated ID format AND it doesn't already exist in our state.
-            // This correctly handles editing an item whose ID was originally generated on the client.
-            const isNew = isClientGeneratedId && !itemExistsInState;
+            // CORRECTED LOGIC: The sole source of truth to determine if an item is new
+            // is its absence from the current application state. The format of the ID is irrelevant.
+            const isNew = !itemExistsInState;
 
             const url = endpoint || `/${dataType.toLowerCase()}`;
             
