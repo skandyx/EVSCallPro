@@ -24,7 +24,7 @@ const originateCall = (agentExtension, destination, siteId) => {
             }
         };
 
-        ami.action(action, (err, res) => {
+        ami.amiClient.action(action, (err, res) => {
             if (err) return reject(err);
             resolve(res);
         });
@@ -62,7 +62,7 @@ const originateConnectToPhone = (agentMobile, destination, siteId, callerId, var
             }
         };
 
-        ami.action(action, (err, res) => {
+        ami.amiClient.action(action, (err, res) => {
             if (err) return reject(err);
             resolve(res);
         });
