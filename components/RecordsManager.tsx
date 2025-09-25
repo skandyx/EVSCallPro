@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Feature } from '../types.ts';
 
@@ -8,7 +7,7 @@ interface RecordsManagerProps {
 
 const RecordsManager: React.FC<RecordsManagerProps> = ({ feature }) => {
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>
                 <p className="mt-2 text-lg text-slate-600">{feature.description}</p>

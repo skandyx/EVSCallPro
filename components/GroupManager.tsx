@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { Feature, User, UserGroup } from '../types.ts';
 import { PlusIcon, EditIcon, TrashIcon } from './Icons.tsx';
@@ -113,7 +112,7 @@ const GroupManager: React.FC<GroupManagerProps> = ({ feature, users, userGroups,
     };
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             {isModalOpen && <GroupModal group={editingGroup} users={users} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>

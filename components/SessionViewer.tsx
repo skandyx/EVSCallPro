@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { Feature, AgentSession, User } from '../types.ts';
 import { InformationCircleIcon } from './Icons.tsx';
@@ -67,7 +66,7 @@ const SessionViewer: React.FC<SessionViewerProps> = ({ feature, agentSessions, u
     }, [filteredSessions]);
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>
                 <p className="mt-2 text-lg text-slate-600">{feature.description}</p>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { Campaign, Contact, SavedScript } from '../types.ts';
 import { ArrowLeftIcon, UserCircleIcon, ChartBarIcon, WrenchScrewdriverIcon, TrashIcon } from './Icons.tsx';
@@ -39,7 +38,7 @@ const CampaignDetailView: React.FC<CampaignDetailViewProps> = ({ campaign, scrip
     );
 
     return (
-        <div className="space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6">
             <header>
                 <button onClick={onBack} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-2 mb-4">
                     <ArrowLeftIcon className="w-5 h-5" />

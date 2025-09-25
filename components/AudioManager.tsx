@@ -254,7 +254,7 @@ const AudioManager: React.FC<AudioManagerProps> = ({ feature, audioFiles, onSave
     };
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             {isModalOpen && <AudioModal audioFile={editingFile} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
             {/* The audio element is hidden but present in the DOM for playback control */}
             <audio ref={audioRef} />

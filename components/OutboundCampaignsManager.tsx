@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { Feature, Campaign, User, SavedScript, QualificationGroup, Contact } from '../types.ts';
 import { PlusIcon, EditIcon, TrashIcon, ArrowUpTrayIcon } from './Icons.tsx';
@@ -213,7 +212,7 @@ const OutboundCampaignsManager: React.FC<OutboundCampaignsManagerProps> = ({
     }
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             {isModalOpen && (
                 <CampaignModal
                     campaign={editingCampaign}

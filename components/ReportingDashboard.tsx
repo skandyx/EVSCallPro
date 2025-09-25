@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Feature, CallHistoryRecord, User, Campaign, Qualification, AgentSession } from '../types.ts';
 import { ArrowUpTrayIcon, TimeIcon, PhoneIcon, ChartBarIcon } from './Icons.tsx';
@@ -570,7 +568,7 @@ const ReportingDashboard: React.FC<ReportingDashboardProps> = ({ feature, callHi
     }
 
     return (
-         <div className="space-y-6">
+         <div className="max-w-7xl mx-auto space-y-6">
             <header className="flex justify-between items-start">
                 <div>
                     <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>

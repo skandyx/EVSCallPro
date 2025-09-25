@@ -125,7 +125,7 @@ const TrunkManager: React.FC<TrunkManagerProps> = ({ feature, trunks, onSaveTrun
     };
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             {isModalOpen && <TrunkModal trunk={editingTrunk} onSave={handleSave} onClose={() => setIsModalOpen(false)} />}
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>

@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import type { Feature, IvrFlow, IvrNode } from '../types.ts';
 import IvrDesigner from './IvrDesigner.tsx';
@@ -69,7 +67,7 @@ const IvrFeature: React.FC<IvrFeatureProps> = ({
     }
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             <header>
                 <h1 className="text-4xl font-bold text-slate-900 tracking-tight">{feature.title}</h1>
                 <p className="mt-2 text-lg text-slate-600">{feature.description}</p>

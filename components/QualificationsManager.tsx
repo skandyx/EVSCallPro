@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import type { Feature, Qualification, QualificationGroup } from '../types.ts';
 import { PlusIcon, EditIcon, TrashIcon, ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './Icons.tsx';
@@ -267,7 +265,7 @@ const QualificationsManager: React.FC<QualificationsManagerProps> = ({ feature, 
     };
     
     return (
-        <div className="space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8">
             {isGroupModalOpen && <GroupEditModal 
                 group={editingGroup} 
                 allQualifications={qualifications} 
