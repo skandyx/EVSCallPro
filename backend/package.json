@@ -17,7 +17,7 @@
   "author": "EVS",
   "license": "ISC",
   "dependencies": {
-    "asteriskagi": "^0.1.2",
+    "asteriskagi": "^1.2.2",
     "asterisk-manager": "^0.1.16",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
