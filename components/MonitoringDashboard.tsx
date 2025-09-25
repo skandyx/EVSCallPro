@@ -6,7 +6,7 @@ interface MonitoringDashboardProps {
     systemLogs: SystemLog[];
     versionInfo: VersionInfo;
     connectivityServices: ConnectivityService[];
-    apiCall: (url: string, method: string) => Promise<any>;
+    apiCall: any; // AxiosInstance
 }
 
 type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN';
@@ -122,7 +122,8 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({ systemLogs, v
     const fetchStats = useCallback(async () => {
         try {
             const startTime = performance.now();
-            const data = await apiCall('/api/system-stats', 'GET');
+            const response = await apiCall.get('/system/stats');
+            const data = response.data;
             const endTime = performance.now();
 
             const apiLatency = Math.round(endTime - startTime);

@@ -4,7 +4,7 @@ import { DatabaseIcon, PlayIcon, InformationCircleIcon, CheckIcon, XMarkIcon } f
 
 interface DatabaseManagerProps {
     feature: Feature;
-    apiCall: (url: string, method: string, body?: any) => Promise<any>;
+    apiCall: any; // AxiosInstance
 }
 
 const PREDEFINED_QUERIES = [
@@ -33,8 +33,8 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
     useEffect(() => {
         const fetchSchema = async () => {
             try {
-                const schemaData = await apiCall('/api/db-schema', 'GET');
-                setSchema(schemaData);
+                const response = await apiCall.get('/system/db-schema');
+                setSchema(response.data);
             } catch (err) {
                 setError("Impossible de charger le schéma de la base de données.");
             } finally {
@@ -60,10 +60,10 @@ const DatabaseManager: React.FC<DatabaseManagerProps> = ({ feature, apiCall }) =
         setResults(null);
 
         try {
-            const data = await apiCall('/api/db-query', 'POST', { query, readOnly: isReadOnly });
-            setResults(data);
+            const response = await apiCall.post('/system/db-query', { query, readOnly: isReadOnly });
+            setResults(response.data);
         } catch (err: any) {
-            setError(err.message || "Une erreur est survenue.");
+            setError(err.response?.data?.message || err.message || "Une erreur est survenue.");
         } finally {
             setIsLoading(false);
         }
