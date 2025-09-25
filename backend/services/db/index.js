@@ -14,7 +14,7 @@ module.exports = {
     ...require('./media.queries'),
     ...require('./planning.queries'),
     ...require('./note.queries'),
-    // Add other query modules here as they are created
+    ...require('./pbx.queries'),
     
     // A function to get all contacts for the application data dump.
     // In a real large-scale app, this would be paginated or avoided.

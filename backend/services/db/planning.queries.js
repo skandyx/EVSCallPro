@@ -22,7 +22,19 @@ const savePlanningEvent = async (event, id) => {
 const deletePlanningEvent = async (id) => await pool.query('DELETE FROM planning_events WHERE id=$1', [id]);
 
 const getActivityTypes = async () => (await pool.query('SELECT * FROM activity_types ORDER BY name')).rows.map(keysToCamel);
-const getPersonalCallbacks = async () => (await pool.query('SELECT * FROM personal_callbacks')).rows.map(keysToCamel);
+const getPersonalCallbacks = async () => {
+    const query = `
+        SELECT 
+            pc.*,
+            CONCAT(c.first_name, ' ', c.last_name) as contact_name,
+            c.phone_number as contact_number
+        FROM personal_callbacks pc
+        JOIN contacts c ON pc.contact_id = c.id
+        ORDER BY pc.scheduled_time;
+    `;
+     const res = await pool.query(query);
+     return res.rows.map(keysToCamel);
+};
 
 module.exports = {
     getPlanningEvents,
