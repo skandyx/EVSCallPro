@@ -76,7 +76,10 @@ const App: React.FC = () => {
 
     const handleSaveOrUpdate = async (dataType: string, data: any, endpoint?: string) => {
         try {
-            const isNew = data.id.toString().startsWith('new-') || data.id.toString().startsWith('group-') || data.id.toString().startsWith('qg-') || data.id.toString().startsWith('site-') || data.id.toString().startsWith('trunk-') || data.id.toString().startsWith('did-');
+            // FIX: The logic to detect a new item was incomplete and missed several ID prefixes.
+            // This has been updated to be a comprehensive check against all known prefixes for new items,
+            // ensuring that a POST request is correctly sent for creation, fixing the "save failed" bug.
+            const isNew = ['new-', 'group-', 'qg-', 'site-', 'trunk-', 'did-', 'campaign-', 'script-', 'qual-', 'ivr-flow-', 'audio-', 'plan-'].some(prefix => data.id.toString().startsWith(prefix));
             const url = endpoint || `/${dataType.toLowerCase()}`;
 
             const response = isNew
@@ -93,10 +96,12 @@ const App: React.FC = () => {
         }
     };
     
-    const handleDelete = async (dataType: string, id: string) => {
+    // FIX: Corrected the signature and implementation of the `handleDelete` function to accept an optional `endpoint` parameter. This resolves errors where it was called with three arguments instead of the expected two, ensuring that API calls for deletion are made to the correct custom endpoints when provided.
+    const handleDelete = async (dataType: string, id: string, endpoint?: string) => {
         if (window.confirm("Êtes-vous sûr de vouloir supprimer cet élément ?")) {
             try {
-                await apiClient.delete(`/${dataType.toLowerCase()}/${id}`);
+                const url = endpoint || `/${dataType.toLowerCase()}`;
+                await apiClient.delete(`${url}/${id}`);
                 await fetchApplicationData();
                 showAlert('Suppression réussie !', 'success');
             } catch (error) {
@@ -157,17 +162,17 @@ const App: React.FC = () => {
             onImportContacts: handleImportContacts,
             onSaveQualification: (q: Qualification) => handleSaveOrUpdate('qualifications', q),
             onDeleteQualification: (id: string) => handleDelete('qualifications', id),
-            onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => handleSaveOrUpdate('qualification-groups', { ...group, assignedQualIds }),
-            onDeleteQualificationGroup: (id: string) => handleDelete('qualification-groups', id),
+            onSaveQualificationGroup: (group: QualificationGroup, assignedQualIds: string[]) => handleSaveOrUpdate('qualification-groups', { ...group, assignedQualIds }, '/qualification-groups/groups'),
+            onDeleteQualificationGroup: (id: string) => handleDelete('qualification-groups', id, '/qualification-groups/groups'),
             onSaveOrUpdateIvrFlow: (flow: IvrFlow) => handleSaveOrUpdate('ivr-flows', flow),
             onDeleteIvrFlow: (id: string) => handleDelete('ivr-flows', id),
             onDuplicateIvrFlow: async (id: string) => { await apiClient.post(`/ivr-flows/${id}/duplicate`); await fetchApplicationData(); },
             onSaveAudioFile: (file: AudioFile) => handleSaveOrUpdate('audio-files', file),
             onDeleteAudioFile: (id: string) => handleDelete('audio-files', id),
-            onSaveTrunk: (trunk: Trunk) => handleSaveOrUpdate('trunks', trunk),
-            onDeleteTrunk: (id: string) => handleDelete('trunks', id),
-            onSaveDid: (did: Did) => handleSaveOrUpdate('dids', did),
-            onDeleteDid: (id: string) => handleDelete('dids', id),
+            onSaveTrunk: (trunk: Trunk) => handleSaveOrUpdate('trunks', trunk, '/telephony/trunks'),
+            onDeleteTrunk: (id: string) => handleDelete('trunks', id, '/telephony/trunks'),
+            onSaveDid: (did: Did) => handleSaveOrUpdate('dids', did, '/telephony/dids'),
+            onDeleteDid: (id: string) => handleDelete('dids', id, '/telephony/dids'),
             onSaveSite: (site: Site) => handleSaveOrUpdate('sites', site),
             onDeleteSite: (id: string) => handleDelete('sites', id),
             onSavePlanningEvent: (event: PlanningEvent) => handleSaveOrUpdate('planning-events', event),
