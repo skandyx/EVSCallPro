@@ -1,7 +1,30 @@
+
 const express = require('express');
 const router = express.Router();
 const db = require('../services/db');
 
+/**
+ * @openapi
+ * tags:
+ *   - name: Sites
+ *     description: Gestion des sites physiques.
+ */
+
+/**
+ * @openapi
+ * /sites:
+ *   post:
+ *     summary: Crée un nouveau site.
+ *     tags: [Sites]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/Site' }
+ *     responses:
+ *       201:
+ *         description: Site créé.
+ */
 router.post('/', async (req, res) => {
     try {
         const newSite = await db.saveSite(req.body);
@@ -11,6 +34,26 @@ router.post('/', async (req, res) => {
     }
 });
 
+/**
+ * @openapi
+ * /sites/{id}:
+ *   put:
+ *     summary: Met à jour un site.
+ *     tags: [Sites]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/Site' }
+ *     responses:
+ *       200:
+ *         description: Site mis à jour.
+ */
 router.put('/:id', async (req, res) => {
     try {
         const updatedSite = await db.saveSite(req.body, req.params.id);
@@ -20,6 +63,21 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+/**
+ * @openapi
+ * /sites/{id}:
+ *   delete:
+ *     summary: Supprime un site.
+ *     tags: [Sites]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       204:
+ *         description: Site supprimé.
+ */
 router.delete('/:id', async (req, res) => {
     try {
         await db.deleteSite(req.params.id);

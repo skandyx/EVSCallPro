@@ -1,7 +1,30 @@
+
 const express = require('express');
 const router = express.Router();
 const db = require('../services/db');
 
+/**
+ * @openapi
+ * tags:
+ *   - name: Planning
+ *     description: Gestion des plannings agents.
+ */
+
+/**
+ * @openapi
+ * /planning-events:
+ *   post:
+ *     summary: Crée un nouvel événement de planning.
+ *     tags: [Planning]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/PlanningEvent' }
+ *     responses:
+ *       201:
+ *         description: Événement créé.
+ */
 router.post('/', async (req, res) => {
     try {
         const newEvent = await db.savePlanningEvent(req.body);
@@ -11,6 +34,26 @@ router.post('/', async (req, res) => {
     }
 });
 
+/**
+ * @openapi
+ * /planning-events/{id}:
+ *   put:
+ *     summary: Met à jour un événement de planning.
+ *     tags: [Planning]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/PlanningEvent' }
+ *     responses:
+ *       200:
+ *         description: Événement mis à jour.
+ */
 router.put('/:id', async (req, res) => {
     try {
         const updatedEvent = await db.savePlanningEvent(req.body, req.params.id);
@@ -20,6 +63,21 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+/**
+ * @openapi
+ * /planning-events/{id}:
+ *   delete:
+ *     summary: Supprime un événement de planning.
+ *     tags: [Planning]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       204:
+ *         description: Événement supprimé.
+ */
 router.delete('/:id', async (req, res) => {
     try {
         await db.deletePlanningEvent(req.params.id);
