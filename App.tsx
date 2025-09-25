@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Feature, User, FeatureId, ModuleVisibility, SavedScript, Campaign, Contact, UserGroup, Site, Qualification, QualificationGroup, IvrFlow, AudioFile, Trunk, Did, BackupLog, BackupSchedule, AgentSession, CallHistoryRecord, SystemLog, VersionInfo, ConnectivityService, ActivityType, PlanningEvent, SystemConnectionSettings, ContactNote, PersonalCallback } from './types.ts';
 import { features } from './data/features.ts';
@@ -76,12 +77,27 @@ const App: React.FC = () => {
 
     const handleSaveOrUpdate = async (dataType: string, data: any, endpoint?: string) => {
         try {
-            // FIX: The logic to detect a new item was incomplete and missed several ID prefixes.
-            // This has been updated to be a comprehensive check against all known prefixes for new items,
-            // ensuring that a POST request is correctly sent for creation, fixing the "save failed" bug.
-            const isNew = ['new-', 'group-', 'qg-', 'site-', 'trunk-', 'did-', 'campaign-', 'script-', 'qual-', 'ivr-flow-', 'audio-', 'plan-'].some(prefix => data.id.toString().startsWith(prefix));
-            const url = endpoint || `/${dataType.toLowerCase()}`;
+            const CLIENT_ID_PREFIXES = ['new-', 'group-', 'qg-', 'site-', 'trunk-', 'did-', 'campaign-', 'script-', 'qual-', 'ivr-flow-', 'audio-', 'plan-'];
+            const isClientGeneratedId = CLIENT_ID_PREFIXES.some(prefix => data.id.toString().startsWith(prefix));
 
+            // A special map because some `dataType` values (for endpoints) don't match `allData` keys (for state).
+            const dataTypeToStateKey: { [key: string]: keyof typeof allData } = {
+                'users': 'users', 'user-groups': 'userGroups', 'scripts': 'savedScripts',
+                'campaigns': 'campaigns', 'qualifications': 'qualifications', 'qualification-groups': 'qualificationGroups',
+                'ivr-flows': 'ivrFlows', 'audio-files': 'audioFiles', 'trunks': 'trunks',
+                'dids': 'dids', 'sites': 'sites', 'planning-events': 'planningEvents'
+            };
+
+            const collectionKey = dataTypeToStateKey[dataType];
+            const collection = collectionKey ? allData[collectionKey] : [];
+            const itemExistsInState = Array.isArray(collection) ? collection.some((item: any) => item.id === data.id) : false;
+            
+            // An item is truly new if it has a client-generated ID format AND it doesn't already exist in our state.
+            // This correctly handles editing an item whose ID was originally generated on the client.
+            const isNew = isClientGeneratedId && !itemExistsInState;
+
+            const url = endpoint || `/${dataType.toLowerCase()}`;
+            
             const response = isNew
                 ? await apiClient.post(url, data)
                 : await apiClient.put(`${url}/${data.id}`, data);
