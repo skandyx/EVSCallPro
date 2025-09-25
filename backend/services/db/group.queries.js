@@ -2,7 +2,18 @@ const pool = require('./connection');
 const { keysToCamel } = require('./utils');
 
 const getUserGroups = async () => {
-    const res = await pool.query('SELECT * FROM user_groups ORDER BY name');
+    // This query now correctly joins with the members table to get the full group object
+    const query = `
+        SELECT
+            ug.id,
+            ug.name,
+            COALESCE(ARRAY_AGG(ugm.user_id) FILTER (WHERE ugm.user_id IS NOT NULL), '{}') as member_ids
+        FROM user_groups ug
+        LEFT JOIN user_group_members ugm ON ug.id = ugm.group_id
+        GROUP BY ug.id
+        ORDER BY ug.name;
+    `;
+    const res = await pool.query(query);
     return res.rows.map(keysToCamel);
 };
 
@@ -34,8 +45,7 @@ const saveUserGroup = async (group, id) => {
         const toRemove = [...currentMemberIds].filter(userId => !desiredMemberIds.has(userId));
 
         if (toRemove.length > 0) {
-            const placeholders = toRemove.map((_, i) => `$${i + 2}`).join(',');
-            await client.query(`DELETE FROM user_group_members WHERE group_id = $1 AND user_id IN (${placeholders})`, [groupId, ...toRemove]);
+            await client.query(`DELETE FROM user_group_members WHERE group_id = $1 AND user_id = ANY($2::text[])`, [groupId, toRemove]);
         }
 
         if (toAdd.length > 0) {
@@ -45,7 +55,11 @@ const saveUserGroup = async (group, id) => {
         }
         
         await client.query('COMMIT');
-        return keysToCamel(savedGroup);
+        
+        const finalGroup = keysToCamel(savedGroup);
+        finalGroup.memberIds = group.memberIds || [];
+        
+        return finalGroup;
     } catch (e) {
         await client.query('ROLLBACK');
         console.error("Error in saveUserGroup transaction:", e);

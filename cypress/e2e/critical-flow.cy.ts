@@ -1,7 +1,7 @@
-// Fix: Replaced the triple-slash directive with a type-only import.
-// This resolves issues where TypeScript fails to find Cypress's global type
-// definitions, ensuring that `describe`, `it`, and `cy` are correctly typed.
-import type {} from 'cypress';
+// Fix: Replaced the type-only import with a triple-slash directive to include Cypress's global type
+// definitions, ensuring that `describe`, `it`, and `cy` are correctly typed and
+// resolving the "Cannot find name" errors.
+/// <reference types="cypress" />
 
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {

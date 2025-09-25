@@ -127,6 +127,10 @@ app.use('/api/dids', require('./routes/telephony.js'));
 app.use('/api/sites', require('./routes/sites.js'));
 app.use('/api/planning-events', require('./routes/planning.js'));
 app.use('/api/contacts', require('./routes/contacts.js'));
+// Add new routes
+app.use('/api/system', require('./routes/system.js'));
+app.use('/api/audio-files', require('./routes/audio.js'));
+
 
 // --- SPECIAL SYSTEM ROUTES ---
 /**
