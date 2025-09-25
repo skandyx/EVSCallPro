@@ -31,7 +31,8 @@ const getUserById = async (id) => {
     return res.rows.length > 0 ? keysToCamel(res.rows[0]) : null;
 };
 
-const createUser = async (user, groupIds) => {
+const createUser = async (userData) => {
+    const { groupIds, ...user } = userData;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -75,7 +76,8 @@ const createUser = async (user, groupIds) => {
     }
 };
 
-const updateUser = async (userId, user, groupIds) => {
+const updateUser = async (userId, userData) => {
+    const { groupIds, ...user } = userData;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');

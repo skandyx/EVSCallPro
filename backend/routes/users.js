@@ -25,8 +25,8 @@ const db = require('../services/db');
  */
 router.post('/', async (req, res) => {
     try {
-        const { groupIds, ...user } = req.body;
-        const newUser = await db.createUser(user, groupIds);
+        // Simplification : on passe le corps de la requête directement à la fonction de la base de données.
+        const newUser = await db.createUser(req.body);
         res.status(201).json(newUser);
     } catch (error) {
         console.error('Error creating user:', error);
@@ -61,8 +61,8 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     try {
-        const { groupIds, ...user } = req.body;
-        const updatedUser = await db.updateUser(req.params.id, user, groupIds);
+        // Simplification : on passe le corps de la requête directement à la fonction de la base de données.
+        const updatedUser = await db.updateUser(req.params.id, req.body);
         res.json(updatedUser);
     } catch (error) {
         console.error('Error updating user:', error);
