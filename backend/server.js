@@ -18,7 +18,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const { AGI } = require('agi-async');
+const Agi = require('asteriskagi');
 const agiHandler = require('./agi-handler.js');
 const db = require('./services/db');
 const path = require('path');
@@ -124,16 +124,16 @@ app.get('*', (req, res) => {
 
 // --- AGI SERVER ---
 const agiPort = parseInt(process.env.AGI_PORT || '4573', 10);
-const agiServer = new AGI(agiHandler, { port: agiPort });
 
-agiServer.on('error', (err) => {
-    console.error(`[AGI] Failed to start AGI server on port ${agiPort}. Is the port already in use?`, err);
-    process.exit(1);
-});
+// The agi-handler is an async function that receives the AGI context.
+// 'asteriskagi' library will create a new context for each incoming call.
+const agiServer = new Agi(agiHandler);
 
-agiServer.on('listening', () => {
-    console.log(`[AGI] server listening on port ${agiPort}`);
-});
+agiServer.start(agiPort);
+console.log(`[AGI] server listening on port ${agiPort}`);
+
+// The 'asteriskagi' library doesn't have a built-in error event for server start,
+// so we rely on the process crashing if the port is in use, which is standard for Node.js servers.
 
 
 // --- WEBSOCKET & AMI ---
