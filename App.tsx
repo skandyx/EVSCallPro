@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Feature, User, FeatureId, ModuleVisibility, SavedScript, Campaign, Contact, UserGroup, Site, Qualification, QualificationGroup, IvrFlow, AudioFile, Trunk, Did, BackupLog, BackupSchedule, AgentSession, CallHistoryRecord, SystemLog, VersionInfo, ConnectivityService, ActivityType, PlanningEvent, SystemConnectionSettings, ContactNote, PersonalCallback } from './types.ts';
 import { features } from './data/features.ts';
@@ -131,6 +130,26 @@ const App: React.FC = () => {
        await handleSaveOrUpdate('users', { ...user, groupIds });
     };
 
+    const handleBulkUsers = async (users: User[], successMessage: string) => {
+        try {
+            await apiClient.post('/users/bulk', { users });
+            await fetchApplicationData();
+            showAlert(successMessage, 'success');
+        } catch (error) {
+            console.error(`Failed to bulk create users:`, error);
+            showAlert(`Échec de la création en masse.`, 'error');
+            throw error;
+        }
+    };
+    
+    const handleGenerateUsers = async (users: User[]) => {
+        await handleBulkUsers(users, `${users.length} utilisateurs générés avec succès.`);
+    };
+
+    const handleImportUsers = async (users: User[]) => {
+        await handleBulkUsers(users, `${users.length} utilisateurs importés avec succès.`);
+    };
+
     const handleImportContacts = async (campaignId: string, contacts: Contact[], deduplicationConfig: { enabled: boolean; fieldIds: string[] }) => {
         try {
             await apiClient.post(`/campaigns/${campaignId}/contacts`, { contacts, deduplicationConfig });
@@ -168,6 +187,8 @@ const App: React.FC = () => {
             currentUser,
             onSaveUser: handleSaveUser,
             onDeleteUser: (id: string) => handleDelete('users', id),
+            onGenerateUsers: handleGenerateUsers,
+            onImportUsers: handleImportUsers,
             onSaveUserGroup: (group: UserGroup) => handleSaveOrUpdate('user-groups', group),
             onDeleteUserGroup: (id: string) => handleDelete('user-groups', id),
             onSaveOrUpdateScript: (script: SavedScript) => handleSaveOrUpdate('scripts', script),

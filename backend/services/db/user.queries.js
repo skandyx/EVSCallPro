@@ -156,10 +156,48 @@ const deleteUser = async (id) => {
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
 };
 
+const createUsersBulk = async (users) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const createdUsers = [];
+        for (const user of users) {
+            // Note: bulk/import does not pass groupIds or campaignIds, so we don't handle them here.
+            const userQuery = `
+                INSERT INTO users (id, login_id, extension, first_name, last_name, email, "role", is_active, password_hash, site_id, mobile_number, use_mobile_as_station)
+                VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                RETURNING id, login_id, first_name, last_name, email, "role", is_active, site_id;
+            `;
+            const res = await client.query(userQuery, [
+                user.id,
+                user.loginId,
+                user.firstName,
+                user.lastName,
+                user.email || null,
+                user.role || 'Agent',
+                'isActive' in user ? user.isActive : true, // Default to true
+                user.password, // This is required
+                user.siteId || null,
+                user.mobileNumber || null,
+                'useMobileAsStation' in user ? user.useMobileAsStation : false // Default to false
+            ]);
+            createdUsers.push(res.rows[0]);
+        }
+        await client.query('COMMIT');
+        return createdUsers.map(keysToCamel);
+    } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+    } finally {
+        client.release();
+    }
+};
+
 module.exports = {
     getUsers,
     getUserById,
     createUser,
     updateUser,
     deleteUser,
+    createUsersBulk,
 };

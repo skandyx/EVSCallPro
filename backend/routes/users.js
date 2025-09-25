@@ -5,6 +5,40 @@ const db = require('../services/db');
 
 /**
  * @openapi
+ * /users/bulk:
+ *   post:
+ *     summary: Crée plusieurs utilisateurs en masse.
+ *     tags: [Utilisateurs]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               users:
+ *                 type: array
+ *                 items: { $ref: '#/components/schemas/User' }
+ *     responses:
+ *       201:
+ *         description: Utilisateurs créés.
+ */
+router.post('/bulk', async (req, res) => {
+    try {
+        const { users } = req.body;
+        if (!Array.isArray(users) || users.length === 0) {
+            return res.status(400).json({ error: 'Un tableau d\'utilisateurs est requis.' });
+        }
+        const createdUsers = await db.createUsersBulk(users);
+        res.status(201).json(createdUsers);
+    } catch (error) {
+        console.error('Error creating users in bulk:', error);
+        res.status(500).json({ error: 'Échec de la création des utilisateurs en masse.' });
+    }
+});
+
+/**
+ * @openapi
  * /users:
  *   post:
  *     summary: Crée un nouvel utilisateur.

@@ -1,6 +1,5 @@
 /// <reference types="cypress" />
 
-// Fix: Moved the triple-slash directive to the top of the file to ensure Cypress's global type definitions are correctly recognized by TypeScript, resolving errors related to `describe`, `it`, and `cy` being undefined.
 describe('Critical Application Flow', () => {
   it('should load the login page, log in as an admin, and see the dashboard', () => {
     // Visit the root URL
