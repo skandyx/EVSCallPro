@@ -121,7 +121,7 @@ app.use('/api/user-groups', require('./routes/groups.js'));
 app.use('/api/campaigns', require('./routes/campaigns.js'));
 app.use('/api/scripts', require('./routes/scripts.js'));
 app.use('/api/qualifications', require('./routes/qualifications.js'));
-app.use('/api/qualification-groups', require('./routes/qualifications.js'));
+app.use('/api/qualification-groups', require('./routes/qualification-groups.js'));
 app.use('/api/ivr-flows', require('./routes/ivr.js'));
 app.use('/api/trunks', require('./routes/telephony.js'));
 app.use('/api/dids', require('./routes/telephony.js'));

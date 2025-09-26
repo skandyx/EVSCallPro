@@ -5,23 +5,24 @@ const db = require('../services/db');
 
 /**
  * @openapi
- * /qualifications:
+ * /qualification-groups:
  *   post:
- *     summary: Crée une nouvelle qualification.
+ *     summary: Crée un nouveau groupe de qualifications.
  *     tags: [Qualifications]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
- *           schema: { $ref: '#/components/schemas/Qualification' }
+ *           schema: { $ref: '#/components/schemas/QualificationGroup' }
  *     responses:
  *       201:
- *         description: Qualification créée.
+ *         description: Groupe créé.
  */
 router.post('/', async (req, res) => {
     try {
-        const newQual = await db.saveQualification(req.body);
-        res.status(201).json(newQual);
+        const { assignedQualIds, ...group } = req.body;
+        const newGroup = await db.saveQualificationGroup(group, assignedQualIds);
+        res.status(201).json(newGroup);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -29,9 +30,9 @@ router.post('/', async (req, res) => {
 
 /**
  * @openapi
- * /qualifications/{id}:
+ * /qualification-groups/{id}:
  *   put:
- *     summary: Met à jour une qualification.
+ *     summary: Met à jour un groupe de qualifications.
  *     tags: [Qualifications]
  *     parameters:
  *       - in: path
@@ -42,15 +43,16 @@ router.post('/', async (req, res) => {
  *       required: true
  *       content:
  *         application/json:
- *           schema: { $ref: '#/components/schemas/Qualification' }
+ *           schema: { $ref: '#/components/schemas/QualificationGroup' }
  *     responses:
  *       200:
- *         description: Qualification mise à jour.
+ *         description: Groupe mis à jour.
  */
 router.put('/:id', async (req, res) => {
     try {
-        const updatedQual = await db.saveQualification(req.body, req.params.id);
-        res.json(updatedQual);
+        const { assignedQualIds, ...group } = req.body;
+        const updatedGroup = await db.saveQualificationGroup(group, assignedQualIds, req.params.id);
+        res.json(updatedGroup);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -58,9 +60,9 @@ router.put('/:id', async (req, res) => {
 
 /**
  * @openapi
- * /qualifications/{id}:
+ * /qualification-groups/{id}:
  *   delete:
- *     summary: Supprime une qualification.
+ *     summary: Supprime un groupe de qualifications.
  *     tags: [Qualifications]
  *     parameters:
  *       - in: path
@@ -69,11 +71,11 @@ router.put('/:id', async (req, res) => {
  *         schema: { type: string }
  *     responses:
  *       204:
- *         description: Qualification supprimée.
+ *         description: Groupe supprimé.
  */
 router.delete('/:id', async (req, res) => {
     try {
-        await db.deleteQualification(req.params.id);
+        await db.deleteQualificationGroup(req.params.id);
         res.status(204).send();
     } catch (err) {
         res.status(500).json({ error: err.message });
